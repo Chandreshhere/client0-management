@@ -63,7 +63,7 @@ export function Header({ onOpenSearch, onOpenMobileNav }: { onOpenSearch: () => 
 
         {tabs ? (
           <div className="col-span-3 row-start-2 min-w-0 lg:col-span-1 lg:col-start-2 lg:row-start-1">
-            <div className="scrollbar-none -my-2 overflow-x-auto py-2" data-lenis-prevent>
+            <div className="scrollbar-none -my-2 overflow-x-auto py-2">
               <PillNav items={tabs.items} activeHref={tabs.active} ariaLabel="Section" layoutKey={tabs.key} />
             </div>
           </div>

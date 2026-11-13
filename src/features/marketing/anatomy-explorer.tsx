@@ -103,7 +103,7 @@ export function AnatomyExplorer({ entries, total, without }: { entries: OrganEnt
 
       {/* picker */}
       <div className="order-1 flex flex-col lg:order-2 lg:col-span-7">
-        <div className="-mx-4 overflow-x-auto px-4 pb-1 scrollbar-none sm:-mx-6 sm:px-6 md:-mx-8 md:px-8 lg:mx-0 lg:h-full lg:overflow-visible lg:px-0 lg:pb-0" data-lenis-prevent>
+        <div className="-mx-4 overflow-x-auto px-4 pb-1 scrollbar-none sm:-mx-6 sm:px-6 md:-mx-8 md:px-8 lg:mx-0 lg:h-full lg:overflow-visible lg:px-0 lg:pb-0">
           <div role="group" aria-label="Organ models" className="flex w-max snap-x snap-mandatory gap-3 lg:grid lg:h-full lg:w-full lg:grid-cols-4 lg:grid-rows-3 lg:gap-4">
             {entries.map((e, i) => {
               const on = e.kind === entry.kind;

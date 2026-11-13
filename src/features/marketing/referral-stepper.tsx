@@ -85,7 +85,7 @@ export function ReferralStepper() {
   return (
     <div className="rounded-card bg-surface p-2">
       <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
-        <div className="-mx-1 overflow-x-auto px-1 scrollbar-none" data-lenis-prevent>
+        <div className="-mx-1 overflow-x-auto px-1 scrollbar-none">
           <Segmented
             variant="tray"
             size="sm"

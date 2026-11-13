@@ -66,7 +66,7 @@ export function OwnerRail({
       <SectionLabel className="mb-0" actions={<span className="text-xs text-muted tabular">{totalOpen} open</span>}>
         <span id={`owners-${layout}`}>Open tasks by owner</span>
       </SectionLabel>
-      <div className="scrollbar-none -mx-1 overflow-x-auto px-1" data-lenis-prevent>
+      <div className="scrollbar-none -mx-1 overflow-x-auto px-1">
         <Segmented
           ariaLabel="Whose tasks"
           size="sm"
@@ -81,7 +81,7 @@ export function OwnerRail({
           ]}
         />
       </div>
-      <div className={cn(layout === "strip" && "scrollbar-none -mx-4 overflow-x-auto px-4 pb-1 lg:-mx-6 lg:px-6 xl:mx-0 xl:px-0")} data-lenis-prevent={layout === "strip" ? true : undefined}>
+      <div className={cn(layout === "strip" && "scrollbar-none -mx-4 overflow-x-auto px-4 pb-1 lg:-mx-6 lg:px-6 xl:mx-0 xl:px-0")}>
         <PeopleList
           className={cn(layout === "strip" && "flex-row [&>li]:w-[232px] [&>li]:shrink-0")}
           selected={selected}

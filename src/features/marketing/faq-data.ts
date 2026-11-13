@@ -80,3 +80,11 @@ const ALL: Record<string, Faq> = {
 
 export const LANDING_FAQ: Faq[] = [ALL.what, ALL.shared, ALL.anatomy, ALL.setup, ALL.monthly, ALL.abha, ALL.residency, ALL.dpdp, ALL.demo, ALL.portal];
 export const PRICING_FAQ: Faq[] = [ALL.setup, ALL.monthly, ALL.five, ALL.shared, ALL.portal, ALL.residency, ALL.try];
+
+/** Landing FAQ grouped for the topic index beside the list; every id is in LANDING_FAQ. */
+export const LANDING_FAQ_TOPICS = [
+  { label: "Product and workflow", ids: ["what", "shared", "anatomy", "portal"] },
+  { label: "Plans and pricing", ids: ["setup", "monthly"] },
+  { label: "Data, privacy and ABDM", ids: ["abha", "residency", "dpdp"] },
+  { label: "The live demo", ids: ["demo"] },
+] as const;

@@ -381,7 +381,7 @@ export function TimelineList({ year, events, activeSystem, onOpenEvent }: { year
   return (
     <div className="pr-3">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="scrollbar-none -mx-1 max-w-full overflow-x-auto px-1" data-lenis-prevent>
+        <div className="scrollbar-none -mx-1 max-w-full overflow-x-auto px-1">
         <Segmented
           size="sm"
           variant="tray"
@@ -403,7 +403,7 @@ export function TimelineList({ year, events, activeSystem, onOpenEvent }: { year
       {grouped.length === 0 ? (
         <EmptyState title={`No events match in ${year}`} description="Try another body system or event type." />
       ) : (
-        <div data-lenis-prevent className="scrollbar-thin max-h-[620px] overflow-y-auto pr-1">
+        <div className="scrollbar-thin max-h-[620px] overflow-y-auto pr-1">
           <AnimatePresence initial={false}>
             {grouped.map((g) => (
               <div key={g.m} className="mb-4">

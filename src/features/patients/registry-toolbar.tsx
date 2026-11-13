@@ -149,7 +149,7 @@ export function RegistryToolbar({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
-        <div data-lenis-prevent className="scrollbar-none -mx-4 -my-1 min-w-0 overflow-x-auto px-4 py-1 lg:-mx-0 lg:px-0">
+        <div className="scrollbar-none -mx-4 -my-1 min-w-0 overflow-x-auto px-4 py-1 lg:-mx-0 lg:px-0">
           <Segmented items={scopes} value={scope} onChange={onScope} ariaLabel="Saved views" />
         </div>
         <Segmented
@@ -187,7 +187,7 @@ export function RegistryToolbar({
           aria-label="Search patients by name, clinic number or concern"
           className="w-full shrink-0 @[880px]:w-[300px]"
         />
-        <div data-lenis-prevent className="scrollbar-none -mx-4 -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto px-4 py-1 lg:mx-0 lg:px-0">
+        <div className="scrollbar-none -mx-4 -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto px-4 py-1 lg:mx-0 lg:px-0">
           {facets.map((f) => (
             <FacetMenu key={f.key} facet={f} selected={filters[f.key] as string[]} onChange={(v) => onFilter(f.key, v)} />
           ))}

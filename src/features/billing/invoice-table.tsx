@@ -31,7 +31,7 @@ export function InvoiceTable({
 }) {
   return (
     <>
-      <div data-lenis-prevent className="scrollbar-thin relative hidden overflow-x-auto rounded-card bg-surface md:block">
+      <div className="scrollbar-thin relative hidden overflow-x-auto rounded-card bg-surface md:block">
         <table className="w-full min-w-[880px] text-sm">
           <caption className="sr-only">Invoices</caption>
           <thead>

@@ -42,7 +42,7 @@ export function SlotPicker({
   return (
     <div className="flex flex-col gap-4">
       <LayoutGroup id={`${uid}-days`}>
-        <div role="radiogroup" aria-label="Day" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none" data-lenis-prevent>
+        <div role="radiogroup" aria-label="Day" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
           {BOOKING_DAYS.map((d) => {
             const iso = istIso(d, "12:00");
             const active = d === day;

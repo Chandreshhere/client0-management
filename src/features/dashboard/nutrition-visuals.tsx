@@ -57,7 +57,7 @@ export function PlanTargets({ authorId, defaultPlanId, className }: { authorId: 
     <section aria-labelledby="plan-targets" className={className}>
       <SectionLabel
         actions={
-          <div className="-mr-1 max-w-full overflow-x-auto" data-lenis-prevent>
+          <div className="-mr-1 max-w-full overflow-x-auto">
             <Segmented
               size="sm"
               variant="tray"

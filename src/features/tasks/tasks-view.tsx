@@ -191,7 +191,7 @@ function StaffTasks() {
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
               <SearchInput className="w-full lg:w-[280px] lg:shrink-0" placeholder="Search tasks, patients, sources" aria-label="Search tasks" value={query} onChange={(e) => setQuery(e.target.value)} />
-              <div className="scrollbar-none -mx-4 flex min-w-0 items-center gap-2 overflow-x-auto px-4 py-1 lg:mx-0 lg:flex-wrap lg:overflow-x-visible lg:px-0" data-lenis-prevent>
+              <div className="scrollbar-none -mx-4 flex min-w-0 items-center gap-2 overflow-x-auto px-4 py-1 lg:mx-0 lg:flex-wrap lg:overflow-x-visible lg:px-0">
                 <FilterMenu label="Patient" value={patient === "all" ? "All" : (patientById(patient)?.name ?? "—")} active={patient !== "all"} contentClassName="w-[280px]">
                   <DropdownRadioGroup value={patient} onValueChange={setPatient}>
                     <DropdownRadioItem value="all">All patients</DropdownRadioItem>
@@ -226,7 +226,7 @@ function StaffTasks() {
             <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-6">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="w-14 shrink-0 text-xs text-muted lg:w-auto">Priority</span>
-                <div className="scrollbar-none -mr-4 min-w-0 overflow-x-auto pr-4 lg:mr-0 lg:overflow-x-visible lg:pr-0" data-lenis-prevent>
+                <div className="scrollbar-none -mr-4 min-w-0 overflow-x-auto pr-4 lg:mr-0 lg:overflow-x-visible lg:pr-0">
                   <ChipGroup
                     ariaLabel="Filter by priority"
                     className="flex-nowrap [&>button]:shrink-0 [&>button]:whitespace-nowrap"
@@ -238,7 +238,7 @@ function StaffTasks() {
               </div>
               <div className="flex min-w-0 items-center gap-2">
                 <span className="w-14 shrink-0 text-xs text-muted lg:w-auto">Status</span>
-                <div className="scrollbar-none -mr-4 min-w-0 overflow-x-auto pr-4 lg:mr-0 lg:overflow-x-visible lg:pr-0" data-lenis-prevent>
+                <div className="scrollbar-none -mr-4 min-w-0 overflow-x-auto pr-4 lg:mr-0 lg:overflow-x-visible lg:pr-0">
                   <ChipGroup
                     ariaLabel="Filter by status"
                     className="flex-nowrap [&>button]:shrink-0 [&>button]:whitespace-nowrap"

@@ -30,7 +30,7 @@ export function PatientSwitcher({ value, onChange, className, label = "Synthetic
 
   return (
     <LayoutGroup id={group}>
-      <div className={cn("-mx-4 overflow-x-auto px-4 scrollbar-none sm:mx-0 sm:px-0", className)} data-lenis-prevent>
+      <div className={cn("-mx-4 overflow-x-auto px-4 scrollbar-none sm:mx-0 sm:px-0", className)}>
         <div role="radiogroup" aria-label={label} className="flex w-max gap-1 rounded-full bg-sunken p-1">
           {PROOF_PATIENTS.map((p, i) => {
             const on = p.patient.id === value;

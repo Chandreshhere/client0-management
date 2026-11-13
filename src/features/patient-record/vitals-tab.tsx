@@ -332,7 +332,7 @@ function MeasuresTable({ measures }: { measures: VitalMeasure[] }) {
   const dates = Array.from(new Set(measures.flatMap((s) => s.points.map((p) => p.d)))).sort().reverse();
   return (
     <Card padded={false}>
-      <div className="scrollbar-thin relative overflow-x-auto" data-lenis-prevent>
+      <div className="scrollbar-thin relative overflow-x-auto">
         <table className="w-full min-w-[560px] border-separate border-spacing-0 text-sm">
           <caption className="sr-only">Vital signs by date. Self-reported values are labelled.</caption>
           <thead>

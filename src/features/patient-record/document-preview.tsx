@@ -184,7 +184,7 @@ function PreviewBody({ doc, patient, side, beside, onClose }: { doc: RecordDocum
               <p className="max-w-[44ch] text-xs text-muted">You can still classify this document, check its dates and route it to the right reviewer.</p>
             </div>
           ) : (
-            <div data-lenis-prevent className="flex flex-col gap-4 rounded-inner bg-sunken p-4">
+            <div className="flex flex-col gap-4 rounded-inner bg-sunken p-4">
               {Array.from({ length: Math.min(doc.pages, 3) }, (_, i) => (
                 <FauxPage key={i} doc={doc} patient={patient} page={i + 1} values={i === 0 ? event?.values : undefined} summary={i === 0 ? event?.summary ?? doc.summary : undefined} sourceRef={event?.source} />
               ))}

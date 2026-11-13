@@ -85,7 +85,7 @@ export function AttendanceChart({ s, classes, highlightId, height = 200, emptyTe
   const hi = sessions.findIndex((c) => c.id === highlightId);
   return (
     <div className={className}>
-      <div className="scrollbar-none -mx-1 overflow-x-auto px-1" data-lenis-prevent>
+      <div className="scrollbar-none -mx-1 overflow-x-auto px-1">
         <div style={{ minWidth: Math.max(0, sessions.length * 52) }}>
           <BarChart
             categories={sessions.map((c) => sessionLabel(c, true))}
@@ -103,7 +103,7 @@ export function AttendanceChart({ s, classes, highlightId, height = 200, emptyTe
           <span className="group-open:hidden">Show as table</span>
           <span className="hidden group-open:inline">Hide table</span>
         </summary>
-        <div className="mt-3 overflow-x-auto" data-lenis-prevent>
+        <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[480px] text-left text-xs">
             <thead>
               <tr className="text-muted">

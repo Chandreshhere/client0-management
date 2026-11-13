@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
+import { cn } from "@/lib/cn";
 
 /** Hairline "or" divider between the email form and alternative sign-in methods. */
-export function AuthDivider({ children }: { children: ReactNode }) {
+export function AuthDivider({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className="my-6 flex items-center gap-3 text-xs text-muted">
+    <div className={cn("my-6 flex items-center gap-3 text-xs text-muted", className)}>
       <span className="h-px flex-1 bg-line" aria-hidden="true" />
       {children}
       <span className="h-px flex-1 bg-line" aria-hidden="true" />

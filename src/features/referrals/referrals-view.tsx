@@ -157,7 +157,7 @@ function StaffReferrals() {
 
       <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
         {clinician ? (
-        <div className="scrollbar-none -mx-4 overflow-x-auto px-4 lg:-mx-6 lg:px-6 xl:mx-0 xl:mt-1 xl:shrink-0 xl:px-0" data-lenis-prevent>
+        <div className="scrollbar-none -mx-4 overflow-x-auto px-4 lg:-mx-6 lg:px-6 xl:mx-0 xl:mt-1 xl:shrink-0 xl:px-0">
           <Segmented
             ariaLabel="Whose referrals"
             value={scope}
@@ -171,7 +171,7 @@ function StaffReferrals() {
           />
         </div>
         ) : null}
-        <div className="scrollbar-none -mx-4 flex min-w-0 items-center gap-2 overflow-x-auto px-4 py-1 lg:-mx-6 lg:px-6 xl:mx-0 xl:flex-wrap xl:overflow-x-visible xl:px-0" data-lenis-prevent>
+        <div className="scrollbar-none -mx-4 flex min-w-0 items-center gap-2 overflow-x-auto px-4 py-1 lg:-mx-6 lg:px-6 xl:mx-0 xl:flex-wrap xl:overflow-x-visible xl:px-0">
           <FilterMenu label="Stage" value={stage === "all" ? "All" : REFERRAL_STAGE_LABEL[stage]} active={stage !== "all"} contentClassName="w-[300px]">
             <DropdownRadioGroup value={stage} onValueChange={(v) => setStage(v as ReferralStage | "all")}>
               <DropdownRadioItem value="all">All stages</DropdownRadioItem>

@@ -290,7 +290,7 @@ export function NutritionPlans() {
                   </Dropdown>
                 </div>
               </div>
-              <div className="scrollbar-none -mx-6 overflow-x-auto px-6" data-lenis-prevent>
+              <div className="scrollbar-none -mx-6 overflow-x-auto px-6">
                 <Segmented
                   ariaLabel="Plan status"
                   size="sm"

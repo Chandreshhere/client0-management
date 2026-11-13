@@ -99,7 +99,7 @@ function Body({
         <div className="mt-6 flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <span className="text-sm text-ink">Participation</span>
-            <div className="scrollbar-none -mx-1 overflow-x-auto px-1" data-lenis-prevent>
+            <div className="scrollbar-none -mx-1 overflow-x-auto px-1">
               <Segmented
                 ariaLabel="Participation"
                 size="sm"

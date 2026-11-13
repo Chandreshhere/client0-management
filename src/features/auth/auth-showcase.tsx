@@ -85,14 +85,14 @@ const rise = (delay: number) => ({
 
 export function AuthShowcase() {
   return (
-    <div className="relative flex h-full flex-col justify-between overflow-hidden rounded-card bg-primary p-8 text-white">
+    <div className="relative flex h-full flex-col justify-between overflow-hidden rounded-card bg-primary p-8 text-white short:p-6">
       <div>
         <Pill tone="instances-light" className="text-white">
           Prototype · synthetic patients
         </Pill>
       </div>
 
-      <div aria-hidden="true" className="flex flex-1 items-center py-8">
+      <div aria-hidden="true" className="flex flex-1 items-center py-8 short:py-4">
         {patient && referral ? (
           <>
             <Stage />
@@ -105,7 +105,7 @@ export function AuthShowcase() {
         ) : null}
       </div>
 
-      <p className="max-w-[26ch] text-[32px] font-light leading-[1.1] tracking-[-0.02em] text-white">
+      <p className="max-w-[26ch] text-[32px] font-light leading-[1.1] tracking-[-0.02em] text-white short:text-[26px]">
         One patient record, shared by the doctor, the nutritionist and the yoga instructor.
       </p>
     </div>

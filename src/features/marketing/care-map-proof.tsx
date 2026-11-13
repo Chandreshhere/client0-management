@@ -675,7 +675,7 @@ function CompactProof({ pp, record, events, event, active, year, setSelected, fo
         </div>
 
         {record.systems.length > 1 ? (
-          <div className="-mx-1 overflow-x-auto px-1 scrollbar-none" data-lenis-prevent>
+          <div className="-mx-1 overflow-x-auto px-1 scrollbar-none">
             <Segmented
               variant="tray"
               size="sm"

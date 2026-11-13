@@ -170,7 +170,7 @@ export function CollectionsCard({ session }: { session: PaymentEvent[] }) {
           <CaretDown size={14} className={cn("transition-transform duration-300", table && "rotate-180")} aria-hidden="true" />
         </button>
         {table ? (
-          <div data-lenis-prevent className="scrollbar-thin mt-3 overflow-x-auto">
+          <div className="scrollbar-thin mt-3 overflow-x-auto">
             <table className="w-full min-w-[420px] text-sm">
               <caption className="sr-only">Collections per day, {range}</caption>
               <thead>

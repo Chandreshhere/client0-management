@@ -175,7 +175,7 @@ function JourneyInner({ patient }: { patient: Patient }) {
             { value: "programmes", label: "Nutrition & movement" },
           ]}
         />
-        <div className="scrollbar-none max-w-full overflow-x-auto" data-lenis-prevent>
+        <div className="scrollbar-none max-w-full overflow-x-auto">
           <Segmented
           size="sm"
           variant="tray"

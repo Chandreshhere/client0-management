@@ -99,7 +99,7 @@ export function LogReadingModal({ open, onOpenChange, initialKind = "bp" }: { op
         }
       >
         <form id="log-reading-form" onSubmit={submit} noValidate className="flex flex-col gap-4">
-          <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none" data-lenis-prevent>
+          <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none">
             <Segmented<ReadingKind>
               ariaLabel="What are you logging?"
               value={kind}

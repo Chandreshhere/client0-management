@@ -448,7 +448,7 @@ function FeatureMatrix({ current }: { current: PlanId }) {
   return (
     <div className="overflow-hidden rounded-card bg-surface">
       {/* relative: keeps absolutely-positioned sr-only text inside the scroller (no page overflow) */}
-      <div data-lenis-prevent className="scrollbar-thin relative overflow-x-auto">
+      <div className="scrollbar-thin relative overflow-x-auto">
         <table className="w-full border-separate border-spacing-0 text-sm">
           <caption className="sr-only">Features included in each plan</caption>
           <thead>

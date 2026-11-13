@@ -51,7 +51,7 @@ export function DocTable({
   return (
     <>
       {/* md+: table */}
-      <div data-lenis-prevent className="scrollbar-thin relative hidden overflow-x-auto rounded-card bg-surface md:block">
+      <div className="scrollbar-thin relative hidden overflow-x-auto rounded-card bg-surface md:block">
         <table className="w-full min-w-[960px] text-sm">
           <caption className="sr-only">Documents — {tab === "mine" ? "your documents" : DOC_STATUS_LABEL[tab]}</caption>
           <thead>

@@ -387,7 +387,7 @@ function AuditWorkspace() {
             </Button>
           ) : null}
         </div>
-        <div className="scrollbar-none -mx-4 overflow-x-auto px-4 py-1 lg:-mx-6 lg:px-6" data-lenis-prevent>
+        <div className="scrollbar-none -mx-4 overflow-x-auto px-4 py-1 lg:-mx-6 lg:px-6">
           <ChipGroup<AuditCategory>
             ariaLabel="Category"
             className="w-max flex-nowrap"

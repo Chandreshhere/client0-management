@@ -57,7 +57,7 @@ export function ReadingsPanel({ readings, onLog }: { readings: LoggedReading[]; 
       className="h-full"
     >
       <div className="flex flex-col gap-4 rounded-inner bg-surface p-4">
-        <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none" data-lenis-prevent>
+        <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none">
           <Segmented<ReadingKind> ariaLabel="Measurement to chart" value={metricId} onChange={setMetricId} variant="tray" size="sm" items={CHART_METRICS} />
         </div>
         <AnimatePresence mode="wait" initial={false}>
@@ -95,7 +95,7 @@ export function ReadingsPanel({ readings, onLog }: { readings: LoggedReading[]; 
             {points.length > 1 ? (
               <details className="mt-3 text-xs text-muted">
                 <summary className="cursor-pointer select-none text-ink-2 hover:text-ink">Show as a table</summary>
-                <div className="mt-2 max-h-48 overflow-y-auto rounded-[12px] bg-canvas" data-lenis-prevent>
+                <div className="mt-2 max-h-48 overflow-y-auto rounded-[12px] bg-canvas">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="text-muted">

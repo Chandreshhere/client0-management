@@ -138,7 +138,7 @@ export function DocumentsView() {
 
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
         {!isPatient ? (
-          <div className="scrollbar-none -mx-4 overflow-x-auto px-4 py-1 lg:-mx-6 lg:px-6 xl:mx-0 xl:shrink-0 xl:px-0" data-lenis-prevent>
+          <div className="scrollbar-none -mx-4 overflow-x-auto px-4 py-1 lg:-mx-6 lg:px-6 xl:mx-0 xl:shrink-0 xl:px-0">
             <Segmented ariaLabel="Document queue" value={tab} onChange={setTab} className="w-max" items={DOC_STATUSES.map((s) => ({ value: s, label: DOC_STATUS_LABEL[s], count: counts[s] }))} />
           </div>
         ) : null}
@@ -155,7 +155,7 @@ export function DocumentsView() {
       {typeOptions.length > 1 || types.length ? (
         <div className="-mt-2 flex min-w-0 items-center gap-2">
           <span className="shrink-0 text-xs text-muted">Type</span>
-          <div className="scrollbar-none -mr-4 min-w-0 overflow-x-auto pr-4 lg:mr-0 lg:overflow-x-visible lg:pr-0" data-lenis-prevent>
+          <div className="scrollbar-none -mr-4 min-w-0 overflow-x-auto pr-4 lg:mr-0 lg:overflow-x-visible lg:pr-0">
             <ChipGroup ariaLabel="Filter by document type" className="flex-nowrap lg:flex-wrap [&>button]:shrink-0 [&>button]:whitespace-nowrap" value={types} onChange={setTypes} options={typeOptions} />
           </div>
         </div>

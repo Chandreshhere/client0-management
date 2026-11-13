@@ -99,18 +99,15 @@ export function SiteHeader() {
   };
 
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-50 px-4 transition-[padding] duration-500 [transition-timing-function:var(--ease-spring)] sm:px-6 md:px-8 lg:px-12 xl:px-16",
-        compact ? "pt-2" : "pt-4",
-      )}
-    >
+    // The header keeps one in-flow height (80px) in both states, so compacting never moves the
+    // page below it; only the capsule inside changes (offset via transform, not padding).
+    <header className="pointer-events-none sticky top-0 z-50 h-20 px-4 [contain:layout] sm:px-6 md:px-8 lg:px-12 xl:px-16">
       <div
         className={cn(
-          "mx-auto flex items-center gap-2 rounded-full pl-4 pr-2 transition-[max-width,height,background-color,box-shadow] duration-500 [transition-timing-function:var(--ease-spring)] md:pl-6",
+          "pointer-events-auto mx-auto flex items-center gap-2 rounded-full pl-4 pr-2 transition-[max-width,height,background-color,box-shadow,transform] duration-500 [transition-timing-function:var(--ease-spring)] md:pl-6",
           compact
-            ? "h-14 max-w-[1104px] bg-surface/[0.97] shadow-[inset_0_0_0_1px_var(--color-line),0_16px_40px_-28px_rgb(33_38_34/0.35)] backdrop-saturate-150"
-            : "h-16 max-w-[1312px] bg-transparent",
+            ? "h-14 max-w-[1104px] translate-y-2 bg-surface/[0.97] shadow-[inset_0_0_0_1px_var(--color-line),0_16px_40px_-28px_rgb(33_38_34/0.35)]"
+            : "h-16 max-w-[1312px] translate-y-4 bg-transparent",
         )}
       >
         <Logo href="/" className="shrink-0" />

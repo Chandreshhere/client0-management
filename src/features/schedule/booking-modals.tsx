@@ -121,7 +121,7 @@ function RescheduleForm({ booking, onClose, onDone }: { booking: Booking; onClos
 
         <div>
           <p className="text-sm text-ink">Day</p>
-          <div role="radiogroup" aria-label="Day" className="scrollbar-none -mx-1 mt-2 flex gap-1 overflow-x-auto px-1 pb-1" data-lenis-prevent>
+          <div role="radiogroup" aria-label="Day" className="scrollbar-none -mx-1 mt-2 flex gap-1 overflow-x-auto px-1 pb-1">
             {days.map((d) => {
               const n = slotsFor(d).length;
               const active = d === date;

@@ -137,7 +137,7 @@ export function RecordPaymentModal({ invoice, onClose, onRecorded }: { invoice: 
               <span className="text-sm text-ink" id="pay-method-label">
                 Method
               </span>
-              <div className="scrollbar-none -mx-1 overflow-x-auto px-1 py-1" data-lenis-prevent>
+              <div className="scrollbar-none -mx-1 overflow-x-auto px-1 py-1">
                 <Segmented
                   ariaLabel="Payment method"
                   variant="tray"

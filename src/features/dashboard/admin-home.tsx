@@ -173,7 +173,7 @@ export function AdminHome() {
                   <span className="group-open:hidden">Show as table</span>
                   <span className="hidden group-open:inline">Hide table</span>
                 </summary>
-                <div className="mt-3 overflow-x-auto" data-lenis-prevent>
+                <div className="mt-3 overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <caption className="sr-only">Appointments by hour and discipline, today</caption>
                     <thead className="text-muted">
@@ -450,7 +450,7 @@ function DuplicateDialog({
           </>
         }
       >
-        <div className="overflow-x-auto" data-lenis-prevent>
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[440px] text-left text-sm">
             <caption className="sr-only">Identity fields compared</caption>
             <thead>

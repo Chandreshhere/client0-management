@@ -330,7 +330,7 @@ function WeekAttendancePanel({ saved }: { saved: Record<string, Mark> }) {
             <span className="group-open:hidden">Show as table</span>
             <span className="hidden group-open:inline">Hide table</span>
           </summary>
-          <div className="mt-3 overflow-x-auto" data-lenis-prevent>
+          <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[320px] text-left text-xs">
               <caption className="sr-only">Attendance per studio session this week</caption>
               <thead className="text-muted">

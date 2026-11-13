@@ -112,10 +112,9 @@ export function RegistryBrowse({
         {visible.length ? (
           <LayoutGroup id="registry-browse">
             <ul
-              data-lenis-prevent
               onKeyDown={onListKey}
               aria-describedby="browse-keys"
-              className="scrollbar-none relative flex min-h-0 snap-x gap-1 overflow-x-auto overscroll-contain @[880px]:scrollbar-thin @[880px]:flex-1 @[880px]:snap-none @[880px]:flex-col @[880px]:overflow-y-auto @[880px]:overflow-x-hidden"
+              className="scrollbar-none relative flex min-h-0 snap-x gap-1 overflow-x-auto @[880px]:scrollbar-thin @[880px]:flex-1 @[880px]:snap-none @[880px]:flex-col @[880px]:overflow-y-auto @[880px]:overflow-x-hidden"
             >
               <AnimatePresence initial={false} mode="popLayout">
                 {visible.map((r) => {

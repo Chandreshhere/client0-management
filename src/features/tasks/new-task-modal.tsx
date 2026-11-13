@@ -126,7 +126,7 @@ export function NewTaskModal({ open, onOpenChange, onCreated }: { open: boolean;
             <span className="text-sm text-ink" id="new-task-priority">
               Priority
             </span>
-            <div className="scrollbar-none overflow-x-auto" data-lenis-prevent>
+            <div className="scrollbar-none overflow-x-auto">
               <Segmented
                 ariaLabel="Priority"
                 size="sm"

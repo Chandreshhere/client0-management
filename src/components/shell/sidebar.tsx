@@ -91,7 +91,7 @@ export function NavBody({ collapsed, onNavigate }: { collapsed: boolean; onNavig
   const recent = role === "patient" ? [] : PATIENTS.filter((p) => ["p-kabir", "p-aditi", "p-arun"].includes(p.id));
 
   return (
-    <div data-lenis-prevent className={cn("scrollbar-none min-h-0 flex-1 overflow-y-auto pb-4", collapsed ? "px-2" : "px-3")}>
+    <div className={cn("scrollbar-none min-h-0 flex-1 overflow-y-auto pb-4", collapsed ? "px-2" : "px-3")}>
       {role !== "patient" ? <BranchSwitcher collapsed={collapsed} /> : null}
       <LayoutGroup id="sidebar-nav">
         {sections.map((section) => (

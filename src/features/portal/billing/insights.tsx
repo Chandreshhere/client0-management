@@ -231,7 +231,7 @@ export function PackageBurnDown() {
 
       <details className="text-xs text-muted">
         <summary className="cursor-pointer select-none text-ink-2 hover:text-ink">Show as a table</summary>
-        <div className="mt-2 max-h-56 overflow-y-auto rounded-[12px] bg-canvas" data-lenis-prevent>
+        <div className="mt-2 max-h-56 overflow-y-auto rounded-[12px] bg-canvas">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="text-muted">

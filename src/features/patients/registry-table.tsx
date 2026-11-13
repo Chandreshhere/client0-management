@@ -48,7 +48,7 @@ export function RegistryTable({
   const headerState = pageSelected === 0 ? false : pageSelected === rows.length ? true : "indeterminate";
 
   return (
-    <div data-lenis-prevent className="scrollbar-thin relative max-h-[max(480px,calc(100dvh-208px))] overflow-auto overscroll-contain">
+    <div className="scrollbar-thin relative max-h-[max(480px,calc(100dvh-208px))] overflow-auto">
       <table className="w-full min-w-[1000px] table-fixed border-separate border-spacing-0 text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead>

@@ -111,7 +111,7 @@ export function YearScrubber({
           const s = Math.max(first, Math.min(years[n - 1] - span, y));
           onChange([s, s + span]);
         }}
-        className="relative h-12 min-w-0 flex-1 touch-none select-none rounded-full bg-surface outline-none focus-visible:outline-2 focus-visible:outline-primary"
+        className="relative h-12 min-w-0 flex-1 touch-pan-y select-none rounded-full bg-surface outline-none focus-visible:outline-2 focus-visible:outline-primary"
       >
         <motion.div
           className="absolute inset-y-1 z-[1] cursor-grab rounded-full bg-charcoal active:cursor-grabbing"
@@ -160,7 +160,7 @@ export function MonthStrip({
   className?: string;
 }) {
   return (
-    <div data-lenis-prevent className={cn("scrollbar-none flex items-center gap-2 overflow-x-auto", className)} role="tablist" aria-label="Months">
+    <div className={cn("scrollbar-none flex items-center gap-2 overflow-x-auto", className)} role="tablist" aria-label="Months">
       {months.map((m) => {
         const on = m.key === active;
         return (

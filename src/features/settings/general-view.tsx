@@ -434,7 +434,7 @@ function BranchCard({ branch, canEdit }: { branch: ReturnType<typeof useRooms>[n
               </p>
               {unrecorded ? <p className="text-xs text-muted">{unrecorded} with no condition recorded yet</p> : null}
             </div>
-            <ul data-lenis-prevent className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1" aria-label={`${branch.name} patients by primary body system`}>
+            <ul className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1" aria-label={`${branch.name} patients by primary body system`}>
               {mix.map((g) => (
                 <li key={g.organ} className="shrink-0">
                   <Tip label={`${g.system} · ${g.patients.map((p) => p.name).join(", ")}`}>

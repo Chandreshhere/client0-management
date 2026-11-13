@@ -84,7 +84,7 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
   const team = (["doctor", "nutritionist", "yoga", "coordinator"] as const).map((k) => patient.careTeam[k]).filter((id): id is string => !!id);
 
   return (
-    <aside aria-label={`Context for ${patient.name}`} data-lenis-prevent className={cn("scrollbar-thin flex min-h-0 flex-col gap-2 overflow-y-auto rounded-card bg-sunken p-2", className)}>
+    <aside aria-label={`Context for ${patient.name}`} className={cn("scrollbar-thin flex min-h-0 flex-col gap-2 overflow-y-auto rounded-card bg-sunken p-2", className)}>
       {/* identity */}
       <div className="flex items-center gap-3 rounded-inner bg-surface p-3">
         <Avatar src={patient.avatar} name={patient.name} size="md" />

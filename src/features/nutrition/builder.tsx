@@ -253,7 +253,7 @@ function Builder({ plan, plans, logs }: { plan: PlanRecord; plans: PlanRecord[];
         <div className="flex min-w-0 flex-col gap-4">
           <section aria-label="Plan day against targets">
             <SectionLabel actions={<span className="text-xs text-muted tabular">{sum.items} items · 6 slots</span>}>Day vs targets</SectionLabel>
-            <div className="scrollbar-none -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 @[640px]:mx-0 @[640px]:grid @[640px]:grid-cols-3 @[640px]:overflow-visible @[640px]:px-0" data-lenis-prevent>
+            <div className="scrollbar-none -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 @[640px]:mx-0 @[640px]:grid @[640px]:grid-cols-3 @[640px]:overflow-visible @[640px]:px-0">
               <MacroTiles slots={plan.slots} targets={targets} tileClassName="w-[78%] shrink-0 snap-start @[640px]:w-auto" />
             </div>
             <p className="mt-2 text-xs text-muted">
@@ -467,7 +467,7 @@ function StatusFlow({ status, actions }: { status: PlanRecord["status"]; actions
   return (
     <div className="flex flex-col gap-2 rounded-card bg-surface p-2 sm:flex-row sm:items-center sm:justify-between">
       <LayoutGroup id="plan-status-flow">
-        <ol aria-label="Plan status" className="scrollbar-none flex items-center gap-1 overflow-x-auto" data-lenis-prevent>
+        <ol aria-label="Plan status" className="scrollbar-none flex items-center gap-1 overflow-x-auto">
           {STEPS.map((s, i) => {
             const active = i === idx;
             const done = i < idx;

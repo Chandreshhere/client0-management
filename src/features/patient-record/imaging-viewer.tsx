@@ -223,7 +223,7 @@ function Viewport({ study, kind }: { study: Study; kind: NonNullable<Study["kind
       </div>
 
       <div className="flex flex-col gap-3">
-        <div className="scrollbar-none -mx-1 overflow-x-auto px-1" data-lenis-prevent>
+        <div className="scrollbar-none -mx-1 overflow-x-auto px-1">
           <Segmented ariaLabel="Window preset" size="sm" variant="tray" value={preset} onChange={applyPreset} items={PRESETS.map((p) => ({ value: p.id, label: p.label }))} />
         </div>
         <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">

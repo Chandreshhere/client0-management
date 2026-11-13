@@ -123,9 +123,8 @@ function NotesWorkspace({
       <div className="grid grid-cols-1 items-start gap-6 @[1080px]:grid-cols-[minmax(340px,392px)_minmax(0,1fr)]">
         <aside
           aria-label="Patient context"
-          data-lenis-prevent
           className={cn(
-            "scrollbar-thin min-w-0 @[1080px]:sticky @[1080px]:top-[104px] @[1080px]:block @[1080px]:max-h-[calc(100dvh-120px)] @[1080px]:overflow-y-auto @[1080px]:overscroll-contain @[1080px]:rounded-card @[1080px]:pb-10",
+            "scrollbar-thin min-w-0 @[1080px]:sticky @[1080px]:top-[104px] @[1080px]:block @[1080px]:max-h-[calc(100dvh-120px)] @[1080px]:overflow-y-auto @[1080px]:rounded-card @[1080px]:pb-10",
             // Fade the bottom edge so it reads as a pane that scrolls on its own.
             "@[1080px]:[mask-image:linear-gradient(to_bottom,black_calc(100%-40px),transparent)]",
             pane === "context" ? "block" : "hidden",

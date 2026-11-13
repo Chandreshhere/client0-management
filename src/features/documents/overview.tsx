@@ -47,7 +47,7 @@ export function ImagingStrip({ docs, role, userId, onOpen, className }: { docs: 
           Imaging studies · {docs.length}
         </span>
       </SectionLabel>
-      <ul className="scrollbar-none -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 xl:grid-cols-[repeat(auto-fill,minmax(264px,1fr))]" data-lenis-prevent>
+      <ul className="scrollbar-none -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 xl:grid-cols-[repeat(auto-fill,minmax(264px,1fr))]">
         {docs.map((d) => (
           <ImagingCard key={d.id} doc={d} role={role} userId={userId} onOpen={onOpen} />
         ))}

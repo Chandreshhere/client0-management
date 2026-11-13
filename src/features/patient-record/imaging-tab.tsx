@@ -111,7 +111,7 @@ function ImagingBody({ patientId, system, onSystem }: { patientId: string; syste
 
   return (
     <div className="flex flex-col gap-6">
-      <section aria-label="Studies by modality — number of studies, latest render" className="scrollbar-thin -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 @[640px]:mx-0 @[640px]:px-0" data-lenis-prevent>
+      <section aria-label="Studies by modality — number of studies, latest render" className="scrollbar-thin -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 @[640px]:mx-0 @[640px]:px-0">
         {modalities.map((m) => (
           <MediaStatCard
             key={m.name}
@@ -142,7 +142,7 @@ function ImagingBody({ patientId, system, onSystem }: { patientId: string; syste
       </section>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="scrollbar-none -mx-4 min-w-0 overflow-x-auto px-4 @[640px]:mx-0 @[640px]:px-0" data-lenis-prevent>
+        <div className="scrollbar-none -mx-4 min-w-0 overflow-x-auto px-4 @[640px]:mx-0 @[640px]:px-0">
           <Segmented<string>
             ariaLabel="Body system"
             value={system}

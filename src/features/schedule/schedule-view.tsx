@@ -497,7 +497,7 @@ function Diary() {
 
         {/* who and where: one filter row that scopes the strip, the overview and the diary */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="scrollbar-none -mx-1 max-w-full overflow-x-auto px-1 py-0.5" data-lenis-prevent>
+          <div className="scrollbar-none -mx-1 max-w-full overflow-x-auto px-1 py-0.5">
             <ChipGroup
               ariaLabel="Disciplines shown"
               className="flex-nowrap rounded-full bg-surface p-1"

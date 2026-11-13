@@ -105,7 +105,7 @@ export function OrganCarousel({
           </IconButton>
         </div>
       </div>
-      <div ref={ref} data-lenis-prevent className="scrollbar-none -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
+      <div ref={ref} className="scrollbar-none -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
         {items.map((it) => {
           const active = it.kind === selected;
           return (

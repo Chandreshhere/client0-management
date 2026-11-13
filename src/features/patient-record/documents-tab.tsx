@@ -185,7 +185,7 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
             </div>
             <MonthBars buckets={buckets} value={month} onChange={setMonth} />
           </section>
-          <div className="scrollbar-none -mx-4 min-w-0 overflow-x-auto px-4 @[640px]:mx-0 @[640px]:overflow-visible @[640px]:px-0" data-lenis-prevent>
+          <div className="scrollbar-none -mx-4 min-w-0 overflow-x-auto px-4 @[640px]:mx-0 @[640px]:overflow-visible @[640px]:px-0">
             <ChipGroup<TypeChip>
               ariaLabel="Document type"
               variant="dark"
@@ -200,7 +200,7 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
             />
           </div>
           <div className="flex flex-col gap-3 @[1040px]:flex-row @[1040px]:items-center @[1040px]:justify-between">
-            <div className="scrollbar-none -mx-4 min-w-0 overflow-x-auto px-4 @[640px]:mx-0 @[640px]:px-0" data-lenis-prevent>
+            <div className="scrollbar-none -mx-4 min-w-0 overflow-x-auto px-4 @[640px]:mx-0 @[640px]:px-0">
               <Segmented<StatusFilter> ariaLabel="Status" size="sm" value={status} onChange={setStatus} items={statusItems} />
             </div>
             <div className="grid grid-cols-1 gap-2 @[640px]:flex @[640px]:items-center">
@@ -303,7 +303,7 @@ function LagText({ doc }: { doc: RecordDocument }) {
 function DocTable({ docs, statusOf, onOpen, freshId }: RowProps) {
   return (
     <Card padded={false} className="hidden @[880px]:block">
-      <div className="scrollbar-thin relative overflow-x-auto" data-lenis-prevent>
+      <div className="scrollbar-thin relative overflow-x-auto">
         <table className="w-full min-w-[900px] table-fixed border-separate border-spacing-0 text-sm">
           <caption className="sr-only">Documents. Report date and uploaded date are separate columns.</caption>
           <colgroup>

@@ -50,7 +50,7 @@ export function WeekBoard({
   nameOf: (ev: DiaryEvent) => string;
 }) {
   return (
-    <div data-lenis-prevent className="scrollbar-thin relative overflow-x-auto">
+    <div className="scrollbar-thin relative overflow-x-auto">
       <table className="w-full min-w-[1000px] table-fixed border-separate border-spacing-1">
         <caption className="sr-only">Bookings by practitioner for the week</caption>
         <colgroup>

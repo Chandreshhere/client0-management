@@ -73,7 +73,7 @@ function PickerBody({ target, preference, onPickFood, onPickCustom }: { target: 
       <div className="flex flex-col gap-4">
         <SearchInput id="food-search" aria-label="Search foods" placeholder="Search idli, dal, paneer, ragi…" value={query} onChange={(e) => setQuery(e.target.value)} />
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="scrollbar-none -mx-1 overflow-x-auto px-1" data-lenis-prevent>
+          <div className="scrollbar-none -mx-1 overflow-x-auto px-1">
             <Segmented
               ariaLabel="Diet filter"
               size="sm"

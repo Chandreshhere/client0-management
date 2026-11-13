@@ -84,7 +84,6 @@ export function TimeGrid({
     <motion.div
       ref={scrollRef}
       layoutScroll
-      data-lenis-prevent
       className="scrollbar-thin relative overflow-auto rounded-b-inner"
       style={{ height: "max(440px, calc(100dvh - 344px))" }}
     >

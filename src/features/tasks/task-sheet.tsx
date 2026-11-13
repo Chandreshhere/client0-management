@@ -141,7 +141,7 @@ function TaskSheetBody({ task }: { task: CareTask }) {
 
         <section className="mt-6">
           <h3 className="text-xs text-muted">Status</h3>
-          <div className="scrollbar-none mt-2 overflow-x-auto" data-lenis-prevent>
+          <div className="scrollbar-none mt-2 overflow-x-auto">
             <Segmented
               ariaLabel="Task status"
               size="sm"

@@ -69,7 +69,7 @@ export function HandoffStrip({ referrals, stage, onStage, className }: { referra
         subtitle="By the next handoff · typical time = median of handoffs already made · pick one to filter"
         action={<CountChip>{open} open</CountChip>}
       />
-      <ol data-lenis-prevent className="scrollbar-none -mx-2 flex snap-x snap-mandatory gap-2 overflow-x-auto px-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 xl:grid-cols-4">
+      <ol className="scrollbar-none -mx-2 flex snap-x snap-mandatory gap-2 overflow-x-auto px-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 xl:grid-cols-4">
         {stats.map((s, i) => {
           const pressed = stage === s.from;
           const late = s.waiting.filter((w) => w.wait !== "on-time").length;

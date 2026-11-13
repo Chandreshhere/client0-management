@@ -235,7 +235,7 @@ function PanelMatrix({ group, selected, onSelect, metaFor, patientId }: { group:
           {dates.length} report dates · {group.analytes.length} analytes · select a row to chart it
         </p>
       </div>
-      <div className="scrollbar-thin relative overflow-x-auto pb-2" data-lenis-prevent>
+      <div className="scrollbar-thin relative overflow-x-auto pb-2">
         <table className="w-full min-w-[520px] border-separate border-spacing-0 text-sm">
           <caption className="sr-only">{group.name} results by report date. Select an analyte row to chart it.</caption>
           <thead>
@@ -327,7 +327,7 @@ function ResultList({ group, selected, onSelect, metaFor, patientId }: { group: 
           {group.analytes.length} {group.analytes.length === 1 ? "test" : "tests"} · {group.analytes.reduce((n, a) => n + a.points.length, 0)} reports · select a row to chart it
         </p>
       </div>
-      <div className="scrollbar-thin relative overflow-x-auto pb-2" data-lenis-prevent>
+      <div className="scrollbar-thin relative overflow-x-auto pb-2">
         <table className="w-full min-w-[560px] border-separate border-spacing-0 text-sm">
           <caption className="sr-only">{group.name} results: latest and previous value per test.</caption>
           <thead>
@@ -510,7 +510,7 @@ function AnalyteCard({ analyte, metaFor, patientId }: { analyte: LabAnalyte; met
           </div>
         )
       ) : (
-        <div className="scrollbar-thin relative -mx-6 overflow-x-auto px-6" data-lenis-prevent>
+        <div className="scrollbar-thin relative -mx-6 overflow-x-auto px-6">
           <table className="w-full min-w-[420px] text-sm">
             <caption className="sr-only">{analyte.name} results</caption>
             <thead>

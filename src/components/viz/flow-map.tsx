@@ -188,9 +188,8 @@ export function FlowMap({
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerCancel={onUp}
-      data-lenis-prevent-wheel
       className={cn(
-        "relative cursor-grab touch-none select-none overflow-hidden rounded-card bg-canvas outline-none active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-primary",
+        "relative cursor-grab touch-pan-y select-none overflow-hidden rounded-card bg-canvas outline-none active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-primary",
         "bg-[radial-gradient(circle,rgb(33_38_34/0.07)_1px,transparent_1.2px)] [background-size:24px_24px]",
         className,
       )}

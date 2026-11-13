@@ -118,7 +118,7 @@ export function FoodLogs() {
       <div className="grid grid-cols-1 gap-6 @[1080px]:grid-cols-[minmax(0,1fr)_minmax(340px,392px)]">
         <section aria-label="Food log entries" className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="scrollbar-none -mx-1 min-w-0 overflow-x-auto px-1" data-lenis-prevent>
+            <div className="scrollbar-none -mx-1 min-w-0 overflow-x-auto px-1">
               <Segmented
                 ariaLabel="Review status"
                 size="sm"

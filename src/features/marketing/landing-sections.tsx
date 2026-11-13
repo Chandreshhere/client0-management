@@ -1,7 +1,8 @@
 import { PlanCards } from "@/features/pricing/plan-cards";
 import { cn } from "@/lib/cn";
 import { ArrowLink } from "./cta";
-import { LANDING_FAQ } from "./faq-data";
+import { LANDING_FAQ, LANDING_FAQ_TOPICS } from "./faq-data";
+import { FaqTopics } from "./faq-topics";
 import { FaqList } from "./faq";
 import { Section, SectionIntro } from "./section";
 import s from "./motion.module.css";
@@ -27,12 +28,16 @@ export function FaqSection() {
   return (
     <Section id="faq" nav="faq" labelledBy="faq-title">
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-8">
-        <div className={cn("lg:col-span-4", s.reveal)}>
+        <div className={cn("lg:sticky lg:top-28 lg:col-span-4 lg:self-start", s.reveal)}>
           <span className="inline-flex h-8 items-center rounded-full px-3 text-xs text-muted shadow-[inset_0_0_0_1px_var(--color-line-strong)]">FAQ</span>
           <h2 id="faq-title" className="mt-6 max-w-[16ch] text-[32px] font-light leading-[1.06] tracking-[-0.028em] text-ink md:text-[44px]">
             What do clinic owners ask before switching?
           </h2>
           <p className="mt-4 max-w-[40ch] text-base leading-relaxed text-muted">Straight answers, including the parts that are still on the roadmap.</p>
+          <FaqTopics topics={LANDING_FAQ_TOPICS} />
+          <ArrowLink href="/demo" className="mt-8 hidden lg:inline-flex">
+            Still deciding? Open the live demo
+          </ArrowLink>
         </div>
         <FaqList items={LANDING_FAQ} className="lg:col-span-8" />
       </div>

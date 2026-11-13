@@ -58,7 +58,7 @@ export function ThreadList({
       <div className="flex flex-col gap-2 p-2">
         <SearchInput placeholder={isPatient ? "Search your messages" : "Search people, subjects, messages"} aria-label="Search conversations" value={query} onChange={(e) => onQuery(e.target.value)} />
         {!isPatient ? (
-          <div className="scrollbar-none -mx-1 overflow-x-auto px-1" data-lenis-prevent>
+          <div className="scrollbar-none -mx-1 overflow-x-auto px-1">
             <Segmented
               ariaLabel="Conversation type"
               size="sm"
@@ -74,7 +74,7 @@ export function ThreadList({
           </div>
         ) : null}
       </div>
-      <ul data-lenis-prevent className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto md:pb-1">
+      <ul className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto md:pb-1">
         {threads.map((t) => (
           <li key={t.id}>
             <ThreadRow thread={t} selected={t.id === selectedId} implicit={!selectedId && t.id === defaultId} onSelect={() => onSelect(t.id)} viewerId={viewerId} isPatient={isPatient} />

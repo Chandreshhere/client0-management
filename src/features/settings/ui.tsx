@@ -154,7 +154,7 @@ export function SaveState({ status, className }: { status: SaveStatus; className
 /** Table wrapper: white card, horizontal scroll inside (never the page), Lenis-safe. */
 export function TableCard({ children, className, minWidth = 960 }: { children: ReactNode; className?: string; minWidth?: number }) {
   return (
-    <div data-lenis-prevent className={cn("scrollbar-thin relative overflow-x-auto rounded-card bg-surface", className)}>
+    <div className={cn("scrollbar-thin relative overflow-x-auto rounded-card bg-surface", className)}>
       <div style={{ minWidth }}>{children}</div>
     </div>
   );

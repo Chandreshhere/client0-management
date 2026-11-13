@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Short desktop windows (laptop screen minus browser chrome): tighter rhythm on one-screen layouts. */
+@custom-variant short (@media (min-width: 1024px) and (max-height: 760px));
+
 /*
  * Carelane design tokens.
  * Source: doc/explanantion.md §6 (background, surface, primary, text, muted, border, 24px radius)

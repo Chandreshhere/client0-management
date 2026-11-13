@@ -366,7 +366,7 @@ function RemindersPanel({ prefs, onChange }: { prefs: Prefs; onChange: (fn: (p: 
   return (
     <Panel icon={<Bell />} title="Reminders" subtitle={channels ? `By ${channels}` : "Reminders are off — no channel chosen"} className="h-full">
       <div className="flex flex-col gap-4 rounded-inner bg-surface p-4">
-        <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none" data-lenis-prevent>
+        <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none">
           <Segmented<Lead> ariaLabel="Remind me" value={prefs.lead} onChange={(v) => onChange((p) => ({ ...p, lead: v }))} variant="tray" size="sm" items={(Object.keys(LEAD_LABEL) as Lead[]).map((l) => ({ value: l, label: LEAD_LABEL[l] }))} />
         </div>
         <label className="flex items-start justify-between gap-4">

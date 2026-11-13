@@ -207,7 +207,7 @@ function BillingWorkspace() {
       ) : null}
 
       <div ref={listRef} className="flex scroll-mt-28 flex-col gap-3">
-        <div className="scrollbar-none -mx-4 overflow-x-auto px-4 py-1 lg:-mx-6 lg:px-6" data-lenis-prevent>
+        <div className="scrollbar-none -mx-4 overflow-x-auto px-4 py-1 lg:-mx-6 lg:px-6">
           <Segmented
             ariaLabel="Invoice status"
             value={view}

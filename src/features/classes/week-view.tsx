@@ -66,7 +66,7 @@ export function ClassesWeek() {
         title="Classes this week"
         description="Group classes and one-to-one sessions, 9–14 Nov. The lesson plan is shared; attendance, precautions, observations and packages stay individual."
         actions={
-          <div className="scrollbar-none -mx-1 max-w-full overflow-x-auto px-1" data-lenis-prevent>
+          <div className="scrollbar-none -mx-1 max-w-full overflow-x-auto px-1">
             <Segmented
               ariaLabel="Instructor"
               size="md"

@@ -8,9 +8,8 @@ import type { Role } from "@/data/types";
 import { ROLE_ORDER } from "@/data/staff";
 import { COOKIE_ROLE, setCookie } from "@/lib/cookies";
 import { Button } from "@/components/ui/button";
-import { Group, GroupHeader, Inset } from "@/components/ui/card";
+import { Group, Inset } from "@/components/ui/card";
 import { Checkbox, Field, Input } from "@/components/ui/input";
-import { PageHeader } from "@/components/ui/misc";
 import { Segmented } from "@/components/ui/segmented";
 import { Avatar } from "@/components/ui/avatar";
 import { useToast } from "@/components/ui/toast";
@@ -110,9 +109,11 @@ export function LoginForm() {
 
   return (
     <div>
-      <PageHeader title="Welcome back" description="Sign in to your clinic workspace." />
+      {/* Sized to fit the whole sign-in, demo accounts included, in one laptop screen. */}
+      <h1 className="text-[40px] font-light leading-[1.05] tracking-[-0.028em] text-ink short:text-[32px]">Welcome back</h1>
+      <p className="mt-2 text-sm text-muted">Sign in to your clinic workspace.</p>
 
-      <form ref={formRef} noValidate onSubmit={onSubmit} className="mt-8 flex flex-col gap-4" aria-label="Sign in">
+      <form ref={formRef} noValidate onSubmit={onSubmit} className="mt-6 flex flex-col gap-3 short:mt-4 short:gap-2" aria-label="Sign in">
         <Field label="Email" error={show("email")}>
           {(p) => (
             <Input
@@ -154,12 +155,12 @@ export function LoginForm() {
             Forgot password?
           </Link>
         </div>
-        <Button type="submit" variant="primary" size="lg" loading={status === "saving"} className="mt-2 w-full" data-testid="login-submit">
+        <Button type="submit" variant="primary" size="lg" loading={status === "saving"} className="mt-1 w-full" data-testid="login-submit">
           {status === "saving" ? "Signing in…" : "Sign in"}
         </Button>
       </form>
 
-      <AuthDivider>or continue with</AuthDivider>
+      <AuthDivider className="my-4 short:my-3">or continue with</AuthDivider>
       <div className="grid grid-cols-2 gap-2">
         <Button variant="secondary" leading={<GoogleLogo weight="bold" />} aria-label="Continue with Google" onClick={() => sso("Google")} data-testid="sso-google">
           Google
@@ -169,9 +170,32 @@ export function LoginForm() {
         </Button>
       </div>
 
-      <Group className="mt-8">
-        <GroupHeader icon={<UserSwitch />} title="Demo accounts" subtitle="Fills the form with a synthetic person" />
-        <Inset className="flex flex-col gap-4">
+      {/* One compact card: its header row becomes the picked person, so picking never adds height. */}
+      <Group className="mt-6 short:mt-4">
+        <Inset className="flex flex-col gap-3 p-3 short:gap-2">
+          <div className="flex min-h-9 items-center gap-3" aria-live="polite">
+            {identity ? (
+              <>
+                <Avatar src={identity.avatar} name={identity.name} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-ink">{identity.name}</p>
+                  <p className="truncate text-xs text-muted">
+                    {identity.label} workspace · in {joinList(identity.plans)}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sunken text-ink-2 [&_svg]:size-4" aria-hidden="true">
+                  <UserSwitch />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-ink">Demo accounts</p>
+                  <p className="truncate text-xs text-muted">Fills the form with a synthetic person</p>
+                </div>
+              </>
+            )}
+          </div>
           <Segmented<Role | "none">
             size="sm"
             ariaLabel="Demo account role"
@@ -180,19 +204,6 @@ export function LoginForm() {
             items={ROLE_ORDER.map((r) => ({ value: r, label: demoIdentity(r).label }))}
             className="flex-wrap"
           />
-          {identity ? (
-            <div className="flex items-center gap-3" aria-live="polite">
-              <Avatar src={identity.avatar} name={identity.name} size="md" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-ink">{identity.name}</p>
-                <p className="truncate text-xs text-muted">
-                  {identity.label} workspace · in {joinList(identity.plans)}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-muted">No role picked — you&apos;ll keep the demo role you used last.</p>
-          )}
         </Inset>
       </Group>
     </div>
