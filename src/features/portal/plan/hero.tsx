@@ -63,38 +63,40 @@ export function PlanHero({ system, conditionId, onSelectCondition }: { system: P
         <Pill tone="instances">{pluralize(system.conditions.length, "condition")}</Pill>
       </div>
 
-      <div className="relative mx-auto aspect-square w-full max-w-[460px]">
-        <div aria-hidden="true" className="absolute inset-[3%] rounded-full bg-white/45 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.95),0_40px_80px_-40px_rgb(33_38_34/0.22)]" />
-        <div aria-hidden="true" className="absolute inset-[17%] rounded-full bg-white/55 shadow-[inset_0_0_0_1px_rgb(255_255_255)]" />
-        <OrganCanvas shape={system.organ} tone="light" label={`3D illustration of the ${system.organLabel.toLowerCase()} — your ${system.area.toLowerCase()} record`} className="absolute inset-[5%]" />
+      <div className="relative mx-auto w-full max-w-[460px]">
+        <div className="relative aspect-square w-full">
+          <div aria-hidden="true" className="absolute inset-[3%] rounded-full bg-white/45 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.95),0_40px_80px_-40px_rgb(33_38_34/0.22)]" />
+          <div aria-hidden="true" className="absolute inset-[17%] rounded-full bg-white/55 shadow-[inset_0_0_0_1px_rgb(255_255_255)]" />
+          <OrganCanvas shape={system.organ} tone="light" label={`3D illustration of the ${system.organLabel.toLowerCase()} — your ${system.area.toLowerCase()} record`} className="absolute inset-[5%]" />
 
-        {system.conditions.map((c, i) => {
-          const a = anchors[i % anchors.length];
-          const active = c.id === cond?.id;
-          return (
-            <Tip key={c.id} label={<span><span className="block">{c.name}</span><span className="text-white/70">{CONDITION_STATUS_PLAIN[c.status]}</span></span>}>
-              <button
-                type="button"
-                onClick={() => onSelectCondition(c.id)}
-                aria-pressed={active}
-                aria-label={`${c.name} — ${CONDITION_STATUS_PLAIN[c.status]}`}
-                className="group absolute z-[2] flex size-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full"
-                style={{ left: `${a.x}%`, top: `${a.y}%` }}
-              >
-                <span className="absolute inset-0 rounded-full bg-white/50 animate-pulse-ring" aria-hidden="true" />
-                <span
-                  className={cn(
-                    "relative size-3.5 rounded-full shadow-[0_2px_8px_rgb(0_0_0/0.18)] ring-[3px] transition-transform duration-300 [transition-timing-function:var(--ease-spring)] group-hover:scale-125",
-                    active ? "scale-110 bg-charcoal ring-white" : "bg-white ring-white/60",
-                  )}
-                />
-              </button>
-            </Tip>
-          );
-        })}
+          {system.conditions.map((c, i) => {
+            const a = anchors[i % anchors.length];
+            const active = c.id === cond?.id;
+            return (
+              <Tip key={c.id} label={<span><span className="block">{c.name}</span><span className="text-white/70">{CONDITION_STATUS_PLAIN[c.status]}</span></span>}>
+                <button
+                  type="button"
+                  onClick={() => onSelectCondition(c.id)}
+                  aria-pressed={active}
+                  aria-label={`${c.name} — ${CONDITION_STATUS_PLAIN[c.status]}`}
+                  className="group absolute z-[2] flex size-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full"
+                  style={{ left: `${a.x}%`, top: `${a.y}%` }}
+                >
+                  <span className="absolute inset-0 rounded-full bg-white/50 animate-pulse-ring" aria-hidden="true" />
+                  <span
+                    className={cn(
+                      "relative size-3.5 rounded-full shadow-[0_2px_8px_rgb(0_0_0/0.18)] ring-[3px] transition-transform duration-300 [transition-timing-function:var(--ease-spring)] group-hover:scale-125",
+                      active ? "scale-110 bg-charcoal ring-white" : "bg-white ring-white/60",
+                    )}
+                  />
+                </button>
+              </Tip>
+            );
+          })}
 
+        </div>
         {cond ? (
-          <GlassCard className="absolute bottom-[2%] left-0 z-[3] w-[min(272px,78%)] p-4">
+          <GlassCard className="relative z-[3] -mt-12 w-full p-4 sm:absolute sm:bottom-[2%] sm:left-0 sm:mt-0 sm:w-[min(272px,78%)]">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div key={cond.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.1 } }} transition={snappy}>
                 <p className="flex items-center gap-1.5 text-xs text-muted">

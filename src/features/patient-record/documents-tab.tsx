@@ -24,6 +24,7 @@ import { RecordFrame } from "./record-frame";
 import { DOC_STATUS_TONE, DocumentPreview, dueText, useEffectiveStatus } from "./document-preview";
 import { UploadDialog } from "./upload-dialog";
 import { baseDocuments, recordOf } from "./record-model";
+import { MonthBars, monthBuckets } from "./month-bars";
 
 const TYPE_ICON: Record<DocType, ReactNode> = {
   "Lab report": <TestTube />,
@@ -72,6 +73,7 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
   const [query, setQuery] = useState("");
   const [types, setTypes] = useState<DocType[]>([]);
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [month, setMonth] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("report-desc");
   const [openId, setOpenId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -86,17 +88,22 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
     if (doc || upload) window.history.replaceState(null, "", window.location.pathname);
   }, [params]);
 
+  const buckets = useMemo(() => monthBuckets(docs.map((d) => ({ reportDate: d.reportDate, awaiting: statusOf(d) === "awaiting-review" }))), [docs, statusOf]);
+  const inMonth = (d: RecordDocument) => !month || (month === "earlier" ? d.reportDate.slice(0, 7) < buckets[1].key : d.reportDate.startsWith(month));
+
   const q = query.trim().toLowerCase();
   const shown = useMemo(() => {
     const list = docs.filter(
       (d) =>
+        inMonth(d) &&
         (types.length === 0 || types.includes(d.type)) &&
         (status === "all" || statusOf(d) === status) &&
         (!q || [d.title, d.source, d.uploadedBy, d.type, d.summary ?? ""].some((s) => s.toLowerCase().includes(q))),
     );
     const key = (d: RecordDocument) => (sort === "upload-desc" ? d.uploadedAt : d.reportDate);
     return list.sort((a, b) => (sort === "report-asc" ? key(a).localeCompare(key(b)) : key(b).localeCompare(key(a))));
-  }, [docs, types, status, q, sort, statusOf]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- inMonth derives from month + buckets
+  }, [docs, types, status, q, sort, statusOf, month, buckets]);
 
   const count = (s: DocStatus) => docs.filter((d) => statusOf(d) === s).length;
   const statusItems: { value: StatusFilter; label: string; count: number }[] = [
@@ -111,12 +118,14 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
     { value: "all", label: "All types", count: docs.length },
     ...presentTypes.map((t) => ({ value: t, label: TYPE_PLURAL[t], count: docs.filter((d) => d.type === t).length })),
   ];
-  const filtered = q !== "" || types.length > 0 || status !== "all";
+  const filtered = q !== "" || types.length > 0 || status !== "all" || month !== null;
   const clear = () => {
     setQuery("");
     setTypes([]);
     setStatus("all");
+    setMonth(null);
   };
+  const selectedBucket = buckets.find((b) => b.key === month);
   const openDoc = docs.find((d) => d.id === openId) ?? null;
   const first = patient.name.split(" ")[0];
 
@@ -156,6 +165,26 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
+          <section aria-labelledby="by-month-heading" className="rounded-card bg-surface p-4 @[640px]:p-6">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h2 id="by-month-heading" className="text-sm text-ink">
+                  Reports by month
+                </h2>
+                <p className="text-xs text-muted">
+                  By report date · {buckets[1].long} – {buckets[buckets.length - 1].long}, older reports under “Earlier” · <span className="inline-block size-1.5 translate-y-[-1px] rounded-full bg-warning align-middle" aria-hidden="true" /> awaiting review
+                </p>
+              </div>
+              {selectedBucket ? (
+                <button type="button" onClick={() => setMonth(null)} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-charcoal px-3 text-xs text-white">
+                  {selectedBucket.long} · {selectedBucket.count}
+                  <span aria-hidden="true">×</span>
+                  <span className="sr-only">Clear month filter</span>
+                </button>
+              ) : null}
+            </div>
+            <MonthBars buckets={buckets} value={month} onChange={setMonth} />
+          </section>
           <div className="scrollbar-none -mx-4 min-w-0 overflow-x-auto px-4 @[640px]:mx-0 @[640px]:overflow-visible @[640px]:px-0" data-lenis-prevent>
             <ChipGroup<TypeChip>
               ariaLabel="Document type"

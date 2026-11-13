@@ -298,33 +298,37 @@ function QueueCard({
         <StageFlow variant="primary" label="Today's check-ins by stage" stages={queueStages(queue)} />
       </div>
 
-      <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <ul className="flex flex-col gap-2" aria-label="Patients in the queue">
-          <AnimatePresence initial={false} mode="popLayout">
-            {active.length === 0 ? (
-              <motion.li key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="rounded-inner bg-surface p-4 text-sm text-muted">
-                The queue is empty.
-              </motion.li>
-            ) : (
-              active.map((q) => <QueueRow key={q.apptId} entry={q} onAdvance={onAdvance} />)
-            )}
-          </AnimatePresence>
-        </ul>
-        <figure className="flex flex-col rounded-inner p-4 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.22)]">
-          <figcaption className="text-xs text-white/90">
-            Today&apos;s {branchAppointments.length} appointments at {BRANCH.name}, by visit type · bubble area = count
+      <ul className="flex flex-col gap-2" aria-label="Patients in the queue">
+        <AnimatePresence initial={false} mode="popLayout">
+          {active.length === 0 ? (
+            <motion.li key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="rounded-inner bg-surface p-4 text-sm text-muted">
+              The queue is empty.
+            </motion.li>
+          ) : (
+            active.map((q) => <QueueRow key={q.apptId} entry={q} onAdvance={onAdvance} />)
+          )}
+        </AnimatePresence>
+      </ul>
+
+      <figure className="grid grid-cols-1 items-center gap-4 rounded-inner p-4 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.22)] md:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+        <BubbleChart title={`Today's ${branchAppointments.length} appointments by visit type`} items={VISIT_MIX} height={230} className="mx-auto max-w-[320px]" />
+        <div className="min-w-0">
+          <figcaption className="text-sm text-white">
+            Today&apos;s {branchAppointments.length} appointments at {BRANCH.name}, by visit type
           </figcaption>
-          <BubbleChart title={`Today's ${branchAppointments.length} appointments by visit type`} items={VISIT_MIX} height={190} className="my-auto py-2" />
-          <ul className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-white/90" aria-hidden="true">
+          <p className="mt-1 text-xs text-white/90">
+            Bubble area = number of appointments · includes {missed.filter((a) => a.status === "cancelled").length} cancelled and {missed.filter((a) => a.status === "no-show").length} no-show
+          </p>
+          <ul className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-xs text-white/90">
             {VISIT_MIX.map((v) => (
-              <li key={v.id} className="flex justify-between gap-2">
+              <li key={v.id} className="flex justify-between gap-2 border-b border-white/20 pb-2">
                 <span className="truncate">{v.label}</span>
                 <span className="tabular text-white">{v.value}</span>
               </li>
             ))}
           </ul>
-        </figure>
-      </div>
+        </div>
+      </figure>
 
       <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 p-4 pt-2">
         <p className="text-xs text-white/90">Expected next</p>

@@ -117,7 +117,7 @@ export function ReadingVisuals() {
         <Group>
           <GroupHeader
             title="Organs"
-            subtitle="Each patient's lead body system, from their conditions"
+            subtitle="Lead body system, from conditions"
             href="/patients?view=browse"
             actionLabel="Browse patients with their organs"
           />

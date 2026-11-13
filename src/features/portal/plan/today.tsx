@@ -104,9 +104,9 @@ function Row({ item, done, bpToday, onLogBp }: { item: TodayItem; done: boolean;
         )}
       </span>
       <span className="min-w-0">
-        <span className={cn("flex items-center gap-1.5 text-sm transition-colors duration-200", done && !locked && item.kind !== "log" ? "text-muted line-through" : "text-ink")}>
-          <Icon size={16} className="shrink-0 text-muted" aria-hidden="true" />
-          <span className="min-w-0 truncate">{item.label}</span>
+        <span className={cn("flex items-start gap-1.5 text-sm transition-colors duration-200 sm:items-center", done && !locked && item.kind !== "log" ? "text-muted line-through" : "text-ink")}>
+          <Icon size={16} className="mt-0.5 shrink-0 text-muted sm:mt-0" aria-hidden="true" />
+          <span className="min-w-0 sm:truncate">{item.label}</span>
         </span>
         <span className="block text-xs text-muted">
           {item.kind === "log" && bpToday

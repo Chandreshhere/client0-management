@@ -263,23 +263,22 @@ function Waitlist() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[264px_minmax(0,1fr)]">
-        {/* ref 5: practitioner list with request counts — also a filter */}
-        <section aria-labelledby="wl-people" className="flex flex-col gap-3 rounded-card bg-sunken p-2 xl:self-start">
-          <div className="flex items-baseline justify-between gap-2 px-2 pt-2">
-            <h2 id="wl-people" className="text-sm text-ink">
-              Requested practitioners
-            </h2>
-            <span className="text-xs text-muted">open requests</span>
-          </div>
-          {people.length ? (
-            <PeopleList className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1" people={people} selected={who ?? undefined} onSelect={(id) => setWho((cur) => (cur === id ? null : id))} />
-          ) : (
-            <p className="px-2 pb-2 text-xs text-muted">No open requests.</p>
-          )}
-          <p className="px-2 pb-2 text-xs text-muted">{who ? "Showing one practitioner's requests — select again to show everyone." : "Select someone to see only their requests."}</p>
-        </section>
+      {/* ref 5: who the open requests are waiting for, with counts — also a filter for the table */}
+      <section aria-labelledby="wl-people" className="flex flex-col gap-2 rounded-card bg-surface p-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-2 pt-2">
+          <h2 id="wl-people" className="text-sm text-ink">
+            Requested practitioners <span className="text-muted">· open requests each</span>
+          </h2>
+          <p className="text-xs text-muted">{who ? "Showing one practitioner's requests — select them again to show everyone." : "Select someone to see only their requests."}</p>
+        </div>
+        {people.length ? (
+          <PeopleList className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4" people={people} selected={who ?? undefined} onSelect={(id) => setWho((cur) => (cur === id ? null : id))} />
+        ) : (
+          <p className="px-2 pb-2 text-xs text-muted">No open requests.</p>
+        )}
+      </section>
 
+      <div className="flex flex-col gap-4">
         <Card padded={false} className="min-w-0 overflow-hidden">
           {rows.length === 0 ? (
             <EmptyState
@@ -301,7 +300,7 @@ function Waitlist() {
           ) : (
             <>
               {/* desktop table */}
-              <div className="hidden overflow-x-auto md:block" data-lenis-prevent>
+              <div className="relative hidden overflow-x-auto md:block" data-lenis-prevent>
                 <table className="w-full min-w-[880px] text-left text-sm">
                   <caption className="sr-only">Waitlist</caption>
                   <thead>
@@ -479,9 +478,7 @@ function MatchCell({ m, discipline }: { m: WaitMatch; discipline: WaitEntry["dis
     <span className="flex items-start gap-2">
       <Clock size={16} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
       <span className="min-w-0">
-        <span className="block text-ink-2">
-          {m.title} full · {m.capacity}/{m.capacity}
-        </span>
+        <span className="block text-ink-2">Class full · {m.capacity} of {m.capacity}</span>
         <span className="block text-xs text-muted">{m.others ? `${m.others} other ${m.others === 1 ? "class has" : "classes have"} places` : "No other class has places"}</span>
       </span>
     </span>

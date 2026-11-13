@@ -21,6 +21,8 @@ export type FlowChip = {
   label: string;
   /** "35 min", "in 10 min" … */
   sub?: string;
+  /** who / where, e.g. "Dr. Ananya Rao · Consult 1" */
+  meta?: string;
   /** visible words for the tone, never colour alone */
   tone?: "warning" | "danger";
   kind: "token" | "time" | "done";
@@ -39,7 +41,8 @@ const ICONS: Record<FlowKey, ComponentType<IconProps>> = {
   completed: CheckCircle,
 };
 
-const MAX_CHIPS = 4;
+/** Chips shown per station before "+N more" (booked times are short, so more fit). */
+const MAX_CHIPS: Record<FlowKey, number> = { expected: 6, arrived: 4, waiting: 4, "in-session": 4, checkout: 4, completed: 4 };
 
 export function StageFlow({
   stations,
@@ -62,7 +65,7 @@ export function StageFlow({
         const Icon = ICONS[st.key];
         const filled = st.count > 0;
         const last = i === stations.length - 1;
-        const shown = st.chips.slice(0, MAX_CHIPS);
+        const shown = st.chips.slice(0, MAX_CHIPS[st.key]);
         const more = st.chips.length - shown.length;
         return (
           <li key={st.key} className="relative flex gap-4 pb-6 md:flex-col md:gap-3 md:pb-0">
@@ -90,7 +93,7 @@ export function StageFlow({
               </p>
               {st.note ? <p className="-mt-1 truncate text-xs text-muted">{st.note}</p> : null}
               {shown.length ? (
-                <ul className="flex flex-wrap gap-1.5">
+                <ul className={cn("flex gap-1.5", shown.some((c) => c.meta) ? "flex-col items-start" : "flex-wrap")}>
                   {shown.map((c) => (
                     <li key={c.id} className="max-w-full">
                       <button
@@ -99,24 +102,28 @@ export function StageFlow({
                         aria-label={`${c.title}. Show on the board`}
                         onClick={() => onChip(st.key, c.id)}
                         className={cn(
-                          "inline-flex h-7 max-w-full items-center gap-2 rounded-full pl-1 pr-3 text-xs outline-none transition-[box-shadow,transform] duration-200 hover:-translate-y-px focus-visible:shadow-[0_0_0_2px_var(--color-primary)]",
+                          "flex max-w-full flex-col items-start gap-0.5 text-left text-xs outline-none transition-[box-shadow,transform] duration-200 hover:-translate-y-px focus-visible:shadow-[0_0_0_2px_var(--color-primary)]",
+                          c.meta ? "rounded-[14px] py-1 pl-1 pr-3" : c.sub ? "rounded-full py-1 pl-1 pr-3" : "rounded-full p-1",
                           c.kind === "done" ? "bg-sunken text-muted" : "bg-sunken text-ink-2 hover:bg-sunken-2",
                         )}
                       >
-                        <span
-                          className={cn(
-                            "inline-flex h-5 shrink-0 items-center rounded-full px-2 font-mono text-[11px] tabular",
-                            c.kind === "token" ? "bg-charcoal text-white" : c.kind === "done" ? "bg-surface text-muted" : "bg-surface text-ink",
-                          )}
-                        >
-                          {c.label}
-                        </span>
-                        {c.sub ? (
-                          <span className={cn("inline-flex min-w-0 items-center gap-1 truncate", c.tone === "danger" ? "text-danger" : c.tone === "warning" ? "text-warning" : "")}>
-                            {c.tone ? <Timer size={12} aria-hidden="true" className="shrink-0" /> : null}
-                            {c.sub}
+                        <span className="flex min-w-0 max-w-full items-center gap-2">
+                          <span
+                            className={cn(
+                              "inline-flex h-5 shrink-0 items-center rounded-full px-2 font-mono text-[11px] tabular",
+                              c.kind === "token" ? "bg-charcoal text-white" : c.kind === "done" ? "bg-surface text-muted" : "bg-surface text-ink",
+                            )}
+                          >
+                            {c.label}
                           </span>
-                        ) : null}
+                          {c.sub ? (
+                            <span className={cn("inline-flex min-w-0 items-center gap-1 truncate", c.tone === "danger" ? "text-danger" : c.tone === "warning" ? "text-warning" : "")}>
+                              {c.tone ? <Timer size={12} aria-hidden="true" className="shrink-0" /> : null}
+                              {c.sub}
+                            </span>
+                          ) : null}
+                        </span>
+                        {c.meta ? <span className="max-w-full truncate pl-1 text-[11px] text-muted">{c.meta}</span> : null}
                       </button>
                     </li>
                   ))}
@@ -129,7 +136,7 @@ export function StageFlow({
                   ) : null}
                 </ul>
               ) : (
-                <p className="text-xs text-faint">{st.key === "expected" ? "Everyone has arrived" : "None"}</p>
+                <p className="text-xs text-muted">{st.key === "expected" ? "Everyone has arrived" : "None"}</p>
               )}
               {st.key === "expected" && notSeen.count > 0 ? (
                 <button

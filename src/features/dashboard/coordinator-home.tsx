@@ -107,6 +107,20 @@ function buildStalled(): Stalled[] {
         dueAt: r.dueBy,
         next: { kind: "link", label: "Book first visit", href: "/schedule?new=1" },
       });
+    } else if (r.stage === "booked" && minutesUntil(r.dueBy) < 0) {
+      // Booked, past its due date and never marked completed (sessions may be under way).
+      const to = staffById(r.toId);
+      const pkg = PACKAGES.find((x) => x.patientId === r.patientId);
+      out.push({
+        id: `ref-${r.id}`,
+        patientId: r.patientId,
+        reason: `Booked with ${DISCIPLINE_LABEL[r.toDiscipline].toLowerCase()}, never marked completed`,
+        track: { referral: r.stage },
+        stopped: `Booked ${shortDate(r.stageDates.booked ?? r.requestedAt)} · was due ${shortDate(r.dueBy)}${pkg ? ` · ${pkg.used} of ${pkg.total} sessions used` : ""}`,
+        ownerId: r.toId,
+        dueAt: r.dueBy,
+        next: { kind: "nudge", label: `Nudge ${to?.name.split(" ")[0]}` },
+      });
     }
   }
   // Overdue reviews: care-team patients with no next visit (excluding completed programmes).

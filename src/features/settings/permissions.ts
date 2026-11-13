@@ -217,6 +217,8 @@ export interface AccessReview {
 }
 
 const team = (id: string) => careTeamOf(id).length;
+/** Dr. Sana Qureshi's active patients (a completed programme needs no cover). */
+const COVERED = careTeamOf("s-sana").filter((p) => p.status !== "completed").length;
 const IND = patientsAtBranch("indiranagar").length;
 const HSR = patientsAtBranch("hsr").length;
 
@@ -235,15 +237,24 @@ export const ACCESS_REVIEWS: AccessReview[] = [
     id: "ar-sana", staffId: "s-sana", patientScope: `Care team for ${team("s-sana")} patients`, patientCount: team("s-sana"),
     sections: ["Consultation notes", "Reports & documents", "Prescriptions", "Movement precautions"], lastReviewed: "2026-10-01",
     flag: {
-      title: "On leave until 18 Nov",
-      detail: "The account stayed active during leave — Rekha Iyengar's session guidance was changed today at 08:45. Confirm if she's covering remotely; otherwise suspend until she's back.",
-      revokeLabel: "Suspend until 18 Nov",
-      revokeResult: "Suspended until 18 Nov — sign-in blocked, care-team access kept for her return",
+      title: "On leave until 18 Nov — sign-in still open",
+      detail: "Dr. Vikram Iyer is covering her patients, so her account doesn't need to be active while she's away. A dormant clinical login is a common way in — suspend it until she's back.",
+      revokeLabel: "Suspend sign-in until 18 Nov",
+      revokeResult: "Sign-in suspended until 18 Nov — care-team access kept for her return",
     },
   },
   { id: "ar-neha", staffId: "s-neha", patientScope: "All branches · identity, diary and billing", patientCount: PATIENTS.length, sections: ["Identity & contact", "Appointments & diary", "Invoices & payments", "Document routing"], lastReviewed: "2026-10-01" },
   { id: "ar-ananya", staffId: "s-ananya", patientScope: `Care team for ${team("s-ananya")} patients · clinical lead`, patientCount: team("s-ananya"), sections: ["Consultation notes", "Reports & documents", "Prescriptions", "Grant clinical access"], lastReviewed: "2026-10-01" },
-  { id: "ar-vikram", staffId: "s-vikram", patientScope: `Care team for ${team("s-vikram")} patients`, patientCount: team("s-vikram"), sections: ["Consultation notes", "Reports & documents", "Prescriptions"], lastReviewed: "2026-10-01" },
+  {
+    id: "ar-vikram", staffId: "s-vikram", patientScope: `Care team for ${team("s-vikram")} patients + temporary cover for ${COVERED} of Dr. Sana Qureshi's`, patientCount: team("s-vikram") + COVERED,
+    sections: ["Consultation notes", "Reports & documents", "Prescriptions"], lastReviewed: "2026-10-01",
+    flag: {
+      title: "Temporary cover ends 18 Nov",
+      detail: `Granted 10 Nov and approved by the clinical lead, so he can act for Dr. Sana Qureshi's ${COVERED} active patients (he updated Rekha Iyengar's SpO₂ floor this morning). Confirm it should lapse on 18 Nov.`,
+      revokeLabel: "End cover now",
+      revokeResult: "Cover ended early — Dr. Sana Qureshi's patients have no covering doctor until 18 Nov",
+    },
+  },
   { id: "ar-meera", staffId: "s-meera", patientScope: `Care team for ${team("s-meera")} patients`, patientCount: team("s-meera"), sections: ["Nutrition plans", "Reports & documents", "Self-reported logs"], lastReviewed: "2026-10-01" },
   { id: "ar-rohan", staffId: "s-rohan", patientScope: `Care team for ${team("s-rohan")} patients`, patientCount: team("s-rohan"), sections: ["Nutrition plans", "Reports & documents", "Self-reported logs"], lastReviewed: "2026-10-01" },
   { id: "ar-kavya", staffId: "s-kavya", patientScope: `Care team for ${team("s-kavya")} patients`, patientCount: team("s-kavya"), sections: ["Session plans", "Approved precautions", "Attendance"], lastReviewed: "2026-10-01" },

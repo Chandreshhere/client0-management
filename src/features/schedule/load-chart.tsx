@@ -179,7 +179,7 @@ export function ChartTable({ caption, head, rows }: { caption: string; head: str
         <span className="group-open/table:hidden">Show as table</span>
         <span className="hidden group-open/table:inline">Hide table</span>
       </summary>
-      <div className="mt-3 overflow-x-auto" data-lenis-prevent>
+      <div className="relative mt-3 overflow-x-auto" data-lenis-prevent>
         <table className="w-full min-w-[320px] text-left tabular">
           <caption className="sr-only">{caption}</caption>
           <thead>

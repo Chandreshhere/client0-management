@@ -122,7 +122,8 @@ function QueueBoard() {
   const freeNow = useMemo(() => PRACTITIONERS.filter((s) => availabilityNow(s, events).free), [events]);
 
   // Visit flow stations, in the order a visit moves through the desk.
-  const chipFor = (b: Booking, stage: Stage): FlowChip => {
+  const chipFor = (b: Booking, stage: Stage): FlowChip => ({ ...stageChip(b, stage), meta: `${staffById(b.staffId)?.name ?? "Practitioner"} · ${b.room}` });
+  const stageChip = (b: Booking, stage: Stage): FlowChip => {
     const token = tokenOr(b);
     const who = queueDisplay ? token : `${token}, ${nameFor(b)}`;
     if (stage === "arrived" || stage === "waiting") {
@@ -143,7 +144,6 @@ function QueueBoard() {
       chips: expected.map((b) => ({
         id: b.id,
         label: hhmm(minOf(b.start)),
-        sub: queueDisplay ? b.room : nameFor(b).split(" ")[0],
         kind: "time",
         title: `${hhmm(minOf(b.start))}: ${queueDisplay ? b.room : `${nameFor(b)} with ${staffById(b.staffId)?.name}`}`,
       })),

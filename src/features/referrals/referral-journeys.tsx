@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import { CalendarCheck, Check, Clock, Handshake, Hourglass, PaperPlaneTilt, SealCheck, WarningOctagon } from "@phosphor-icons/react";
 import type { ReferralStage } from "@/data/types";
@@ -76,13 +76,22 @@ export function ReferralJourneys({ referrals, onOpen }: { referrals: CareReferra
   const layout = useMemo(() => buildJourneys(referrals), [referrals]);
   const [hot, setHot] = useState<string | null>(null);
   const wide = useWide();
-  // The flow map measures its own width after mount; hand it the focus point once it has, so
-  // "today" lands where intended instead of being placed against a default width.
-  const [measured, setMeasured] = useState(false);
+  // The flow map measures its own width with a ResizeObserver after mount. Observe the same
+  // element: both observers are notified in one batch, so the focus point ("today") arrives
+  // together with the real width instead of being placed against the map's default width.
+  const mapKey = referrals.map((r) => r.id).join(",");
+  const wrap = useRef<HTMLDivElement>(null);
+  const [measuredKey, setMeasuredKey] = useState<string | null>(null);
+  const measured = measuredKey === mapKey;
   useEffect(() => {
-    const id = window.setTimeout(() => setMeasured(true), 80);
-    return () => window.clearTimeout(id);
-  }, []);
+    const el = wrap.current?.firstElementChild;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => {
+      if (e.contentRect.width > 0) setMeasuredKey(mapKey);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mapKey]);
   const byId = useMemo(() => new Map(referrals.map((r) => [r.id, r])), [referrals]);
   const open = referrals.filter((r) => layout.states[r.id]?.pending).length;
 
@@ -121,9 +130,9 @@ export function ReferralJourneys({ referrals, onOpen }: { referrals: CareReferra
         </p>
       </div>
 
-      <div className={cn("transition-opacity duration-300", measured ? "opacity-100" : "opacity-0")}>
+      <div ref={wrap} className={cn("transition-opacity duration-300", measured ? "opacity-100" : "opacity-0")}>
       <FlowMap
-        key={referrals.map((r) => r.id).join(",")}
+        key={mapKey}
         label={`Referral journeys: ${referrals.length} referrals across the nutrition, medical and movement lanes`}
         nodes={nodes}
         edges={edges}
