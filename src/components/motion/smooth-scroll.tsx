@@ -40,6 +40,14 @@ function LenisBridge() {
     lenis?.scrollTo(0, { immediate: true, force: true });
   }, [pathname, lenis]);
 
+  // Smooth wheel scrolling only on capable desktops; everyone else gets native scrolling.
+  useEffect(() => {
+    if (!lenis) return;
+    const nav = navigator as Navigator & { deviceMemory?: number };
+    const weak = !window.matchMedia("(pointer: fine)").matches || (nav.hardwareConcurrency ?? 4) < 8 || (nav.deviceMemory !== undefined && nav.deviceMemory < 8);
+    if (weak) lenis.options.smoothWheel = false;
+  }, [lenis]);
+
   useEffect(() => {
     if (!lenis) return;
     const body = document.body;

@@ -109,7 +109,7 @@ export function SiteHeader() {
         className={cn(
           "mx-auto flex items-center gap-2 rounded-full pl-4 pr-2 transition-[max-width,height,background-color,box-shadow] duration-500 [transition-timing-function:var(--ease-spring)] md:pl-6",
           compact
-            ? "h-14 max-w-[1104px] bg-surface/80 shadow-[inset_0_0_0_1px_var(--color-line),0_16px_40px_-28px_rgb(33_38_34/0.35)] backdrop-blur-xl backdrop-saturate-150"
+            ? "h-14 max-w-[1104px] bg-surface/[0.97] shadow-[inset_0_0_0_1px_var(--color-line),0_16px_40px_-28px_rgb(33_38_34/0.35)] backdrop-saturate-150"
             : "h-16 max-w-[1312px] bg-transparent",
         )}
       >

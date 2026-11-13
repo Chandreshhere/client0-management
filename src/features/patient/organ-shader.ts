@@ -285,12 +285,12 @@ void main(){
   ro.xz=ry*ro.xz; rd.xz=ry*rd.xz;
   ro.yz=rx*ro.yz; rd.yz=rx*rd.yz;
   float t=0.,minD=1e3,tMin=0.; bool hit=false;
-  for(int i=0;i<110;i++){
+  for(int i=0;i<72;i++){
     vec3 p=ro+rd*t;
     float d=map(p).x;
     if(d<minD){minD=d;tMin=t;}
     if(d<.001){hit=true;break;}
-    t+=d*.66;
+    t+=d*.8;
     if(t>7.)break;
   }
   float px=1.6/uRes.y*tMin;
@@ -311,7 +311,7 @@ void main(){
   float fres=pow(1.-clamp(dot(n,v),0.,1.),3.);
   float spec=pow(max(dot(n,H),0.),44.)*.52+pow(max(dot(n,H),0.),230.)*.65;
   float ao=0.;
-  for(int k=1;k<5;k++){float h=.04*float(k);ao+=(h-map(p+n*h).x)/h*(.5/float(k));}
+  for(int k=1;k<3;k++){float h=.06*float(k);ao+=(h-map(p+n*h).x)/h*(.5/float(k));}
   ao=clamp(1.-ao*.9,.28,1.);
   vec3 col=alb*(.32+.82*wrap)*ao;
   col+=alb*mix(vec3(.9,.92,1.)*.16,vec3(.22,.36,1.)*.42,uBounce)*bounce;

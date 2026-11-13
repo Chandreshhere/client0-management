@@ -200,16 +200,16 @@ function Viewport({ study, kind }: { study: Study; kind: NonNullable<Study["kind
           </div>
         </div>
 
-        <span className="pointer-events-none absolute left-3 top-3 inline-flex h-7 items-center rounded-full bg-black/55 px-3 text-xs text-white shadow-[inset_0_0_0_1px_rgb(255_255_255/0.28)] backdrop-blur-sm">
+        <span className="pointer-events-none absolute left-3 top-3 inline-flex h-7 items-center rounded-full bg-black/55 px-3 text-xs text-white shadow-[inset_0_0_0_1px_rgb(255_255_255/0.28)]">
           Illustrative render — not diagnostic
         </span>
-        <span className="pointer-events-none absolute right-3 top-3 rounded-md bg-black/55 px-1.5 py-0.5 font-mono text-[11px] text-white/85 tabular backdrop-blur-sm">{Math.round(view.zoom * 100)}%</span>
-        <span className="pointer-events-none absolute bottom-3 left-3 hidden rounded-md bg-black/55 px-2 py-1 font-mono text-[11px] leading-4 text-white/85 backdrop-blur-sm sm:block">
+        <span className="pointer-events-none absolute right-3 top-3 rounded-md bg-black/55 px-1.5 py-0.5 font-mono text-[11px] text-white/85 tabular">{Math.round(view.zoom * 100)}%</span>
+        <span className="pointer-events-none absolute bottom-3 left-3 hidden rounded-md bg-black/55 px-2 py-1 font-mono text-[11px] leading-4 text-white/85 sm:block">
           {MODALITY[kind].short} · {formatDate(study.date)}
           <br />
           {source}
         </span>
-        <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/45 p-1 backdrop-blur-sm">
+        <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/45 p-1">
           <IconButton label="Zoom out" size="sm" variant="outline-light" onClick={() => zoomBy(0.8)} disabled={view.zoom <= ZOOM_MIN}>
             <MagnifyingGlassMinus />
           </IconButton>

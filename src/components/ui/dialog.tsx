@@ -15,7 +15,7 @@ export const DialogTrigger = D.Trigger;
 export const DialogClose = D.Close;
 
 function Overlay() {
-  return <D.Overlay className="anim-overlay fixed inset-0 z-[60] bg-[rgb(20_24_21/0.32)] backdrop-blur-[2px]" />;
+  return <D.Overlay className="anim-overlay fixed inset-0 z-[60] bg-[rgb(20_24_21/0.32)]" />;
 }
 
 export function ModalContent({

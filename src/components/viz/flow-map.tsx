@@ -249,7 +249,7 @@ export function FlowMap({
       </div>
 
       {rows?.map((r) => (
-        <div key={r.label} data-flow-ui title={r.hint} className="pointer-events-none absolute left-3 z-[3] -translate-y-1/2 rounded-full bg-canvas/95 px-3 py-1 text-[11px] text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)] backdrop-blur" style={{ top: r.y * zoom + pan.y }}>
+        <div key={r.label} data-flow-ui title={r.hint} className="pointer-events-none absolute left-3 z-[3] -translate-y-1/2 rounded-full bg-canvas/95 px-3 py-1 text-[11px] text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)]" style={{ top: r.y * zoom + pan.y }}>
           {r.label}
         </div>
       ))}
@@ -289,7 +289,7 @@ export function FlowMap({
       </div>
 
       {minimap ? (
-        <div data-flow-ui className="absolute bottom-3 left-3 hidden rounded-[18px] bg-[rgb(120_126_122/0.55)] p-2 shadow-pop backdrop-blur-md sm:block">
+        <div data-flow-ui className="absolute bottom-3 left-3 hidden rounded-[18px] bg-[rgb(120_126_122/0.55)] p-2 shadow-pop sm:block">
           <div
             className="relative cursor-pointer overflow-hidden rounded-[12px]"
             style={{ width: MW, height: MH }}

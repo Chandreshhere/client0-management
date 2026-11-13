@@ -33,7 +33,7 @@ export function Header({ onOpenSearch, onOpenMobileNav }: { onOpenSearch: () => 
   return (
     <header
       className={cn(
-        "sticky top-0 z-20 bg-canvas/85 backdrop-blur-md transition-shadow duration-300 supports-[backdrop-filter]:bg-canvas/70",
+        "sticky top-0 z-20 bg-canvas/[0.97] transition-shadow duration-300",
         scrolled && "shadow-[0_1px_0_var(--color-line)]",
       )}
     >

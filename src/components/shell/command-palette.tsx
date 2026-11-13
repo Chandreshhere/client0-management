@@ -33,7 +33,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
-        <D.Overlay className="anim-overlay fixed inset-0 z-[80] bg-[rgb(20_24_21/0.32)] backdrop-blur-[2px]" />
+        <D.Overlay className="anim-overlay fixed inset-0 z-[80] bg-[rgb(20_24_21/0.32)]" />
         <D.Content className="anim-modal fixed left-1/2 top-[12vh] z-[81] w-[min(640px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-card bg-surface shadow-pop outline-none">
           <D.Title className="sr-only">Search Carelane</D.Title>
           <D.Description className="sr-only">Search patients and pages, or run a quick action.</D.Description>

@@ -712,7 +712,7 @@ function CompactProof({ pp, record, events, event, active, year, setSelected, fo
             />
           ) : null}
           {featured ? (
-            <div className="absolute inset-x-4 bottom-4 z-[2] flex items-center justify-between gap-2 rounded-full bg-white/15 py-1 pl-4 pr-1 backdrop-blur-sm">
+            <div className="absolute inset-x-4 bottom-4 z-[2] flex items-center justify-between gap-2 rounded-full bg-white/15 py-1 pl-4 pr-1">
               <span className="min-w-0 truncate text-xs">
                 {featured.name} · <span className="text-white/70">{featured.status}</span>
               </span>

@@ -42,7 +42,7 @@ export function OrganHero({
 }) {
   return (
     <div className={cn("relative aspect-square w-full", className)} role="group" aria-label={label}>
-      <div aria-hidden="true" className="absolute inset-[6%] rounded-full bg-white/35 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.9),0_40px_80px_-40px_rgb(33_38_34/0.25)] backdrop-blur-[2px]" />
+      <div aria-hidden="true" className="absolute inset-[6%] rounded-full bg-white/35 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.9),0_40px_80px_-40px_rgb(33_38_34/0.25)]" />
       <div aria-hidden="true" className="absolute inset-[18%] rounded-full bg-white/45 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.95)]" />
       <div className="absolute inset-[4%] flex items-center justify-center [animation:organ-float_7s_ease-in-out_infinite]">
         <OrganImage kind={kind} variant="color" className="h-[92%] w-[92%] drop-shadow-[0_30px_40px_rgba(140,20,30,0.25)]" alt={label} />
@@ -69,7 +69,7 @@ export function OrganHero({
 /** Frosted floating card used on top of organ heroes (ref 3 "Heart Rate 120 bpm"). */
 export function GlassCard({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cn("rounded-[20px] bg-white/70 p-3 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.9),0_20px_40px_-20px_rgb(33_38_34/0.3)] backdrop-blur-xl", className)}>{children}</div>
+    <div className={cn("rounded-[20px] bg-white/90 p-3 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.9),0_20px_40px_-20px_rgb(33_38_34/0.3)]", className)}>{children}</div>
   );
 }
 

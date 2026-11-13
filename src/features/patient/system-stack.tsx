@@ -89,7 +89,7 @@ export function SystemStack({
           </div>
         </div>
         {/* Organ: outside the clipped card so it can overflow under the glass card, like the reference. */}
-        <OrganCanvas shape={sys.organ} label={`3D illustration of the ${sys.organ} — ${sys.name} system`} className="pointer-events-none absolute left-[9%] top-[54px] z-[2] h-[236px] w-[236px]" />
+        <OrganCanvas live shape={sys.organ} label={`3D illustration of the ${sys.organ} — ${sys.name} system`} className="pointer-events-none absolute left-[9%] top-[54px] z-[2] h-[236px] w-[236px]" />
 
         <FeaturedCondition key={featured.id} conditionId={featured.id} onOpen={onOpenCondition} hovered={hoveredCondition === featured.id} onHover={onHoverCondition} />
 
