@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+/*
+ * Carelane design tokens.
+ * Source: doc/explanantion.md §6 (background, surface, primary, text, muted, border, 24px radius)
+ * plus the reference dashboard (charcoal selected pills, recessed grey groups, cobalt focal card).
+ * Muted text is darkened from the doc's #687069 to #5F6760 so it keeps ≥4.5:1 contrast on the
+ * recessed grey surfaces as well as on white.
+ */
+
+@theme inline {
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+@theme static {
+  --color-canvas: #f2f3f1;
+  --color-surface: #ffffff;
+  --color-sunken: #e8eae6;
+  --color-sunken-2: #dfe2dd;
+  --color-line: #e3e6e1;
+  --color-line-strong: #d2d6d0;
+  --color-ink: #212622;
+  --color-ink-2: #3b423c;
+  --color-muted: #5f6760;
+  --color-faint: #8d948e;
+  --color-charcoal: #212622;
+
+  --color-primary: #075dff;
+  --color-primary-hover: #004fe0;
+  --color-primary-soft: #e7efff;
+  --color-primary-soft-2: #d4e2ff;
+  --color-primary-ink: #0b44b8;
+
+  /* Discipline categorical palette — fixed order, validated (dataviz validate_palette.js, all-pairs,
+     light): Medical, Nutrition, Movement. Operations is neutral ("other"). Always label in text. */
+  --color-medical: #075dff;
+  --color-nutrition: #119a69;
+  --color-movement: #e8622c;
+  --color-ops: #8d948e;
+
+  --color-success: #17834a;
+  --color-success-soft: #e3f3e9;
+  --color-warning: #9a5a00;
+  --color-warning-soft: #fff1d9;
+  --color-danger: #c62d25;
+  --color-danger-soft: #fce7e5;
+
+  /* Type scale: display (page titles), title (focal card titles). Body uses Tailwind sm/xs. */
+  --text-display: 2.75rem;
+  --text-display--line-height: 1.04;
+  --text-display--letter-spacing: -0.028em;
+  --text-title: 1.625rem;
+  --text-title--line-height: 1.12;
+  --text-title--letter-spacing: -0.015em;
+
+  --radius-card: 24px;
+  --radius-inner: 16px;
+  --radius-control: 14px;
+
+  --shadow-pop: 0 24px 64px -20px rgb(33 38 34 / 0.24), 0 4px 16px -4px rgb(33 38 34 / 0.08);
+  --shadow-lift: 0 16px 40px -16px rgb(33 38 34 / 0.18);
+  --shadow-glass: 0 24px 80px -12px rgb(4 22 64 / 0.45);
+
+  /* Spring curves sampled from k=300/c=30/m=1 and k=520/c=30/m=1 (see README → Motion). */
+  --ease-spring: linear(0, 0.035, 0.104, 0.1991, 0.3031, 0.4003, 0.4991, 0.5891, 0.6636, 0.7327, 0.7912, 0.8366, 0.8766, 0.9068, 0.9325, 0.9525, 0.9669, 0.9785, 0.9871, 0.9929, 0.9972, 1.0001, 1.0019, 1.003, 1.0035, 1.0036, 1.0033, 1.0026, 1.0019, 1.001, 1.0004, 1);
+  --ease-spring-pop: linear(0, 0.0539, 0.1678, 0.3009, 0.4523, 0.597, 0.725, 0.8316, 0.9153, 0.9732, 1.0167, 1.0437, 1.0577, 1.062, 1.0596, 1.0536, 1.0451, 1.0357, 1.0266, 1.0184, 1.0116, 1.0064, 1.0023, 0.9994, 0.9975, 0.9965, 0.9962, 0.9966, 0.9977, 0.9987, 0.9995, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+
+  --animate-pulse-ring: pulse-ring 2.4s var(--ease-out-quart) infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 0.7; }
+    80%, 100% { transform: scale(2.2); opacity: 0; }
+  }
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    background: var(--color-canvas);
+  }
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    font-feature-settings: "ss01" on;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: rgb(7 93 255 / 0.18);
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-faint);
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Reference-range band used behind vital-sign waves (diagonal hatch from the reference). */
+  .bg-hatch {
+    background-image: repeating-linear-gradient(135deg, rgb(33 38 34 / 0.1) 0 1px, transparent 1px 6px);
+  }
+  .bg-hatch-light {
+    background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.22) 0 1px, transparent 1px 6px);
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+  .glass-dark {
+    background: rgb(40 44 48 / 0.62);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    backdrop-filter: blur(24px) saturate(140%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      inset 0 0 0 1px rgb(255 255 255 / 0.06),
+      var(--shadow-glass);
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--color-sunken) 0%, var(--color-canvas) 50%, var(--color-sunken) 100%);
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Overlay motion (Radix data-state driven, spring curves) ---------- */
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pop-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: scale(0.98); }
+}
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes overlay-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes modal-in {
+  from { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes modal-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translate3d(0, 6px, 0) scale(0.99); }
+}
+@keyframes sheet-in-right { from { transform: translate3d(104%, 0, 0); } to { transform: none; } }
+@keyframes sheet-out-right { from { transform: none; } to { transform: translate3d(104%, 0, 0); } }
+@keyframes sheet-in-left { from { transform: translate3d(-104%, 0, 0); } to { transform: none; } }
+@keyframes sheet-out-left { from { transform: none; } to { transform: translate3d(-104%, 0, 0); } }
+
+.anim-pop {
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin, var(--radix-popover-content-transform-origin, var(--radix-select-content-transform-origin, var(--radix-tooltip-content-transform-origin, center))));
+}
+.anim-pop[data-state="open"],
+.anim-pop[data-state="delayed-open"],
+.anim-pop[data-state="instant-open"] {
+  animation: pop-in 360ms var(--ease-spring-pop) both;
+}
+.anim-pop[data-state="closed"] {
+  animation: pop-out 120ms ease-in both;
+}
+.anim-overlay[data-state="open"] { animation: overlay-in 240ms var(--ease-out-quart) both; }
+.anim-overlay[data-state="closed"] { animation: overlay-out 160ms ease-in both; }
+.anim-modal[data-state="open"] { animation: modal-in 480ms var(--ease-spring) both; }
+.anim-modal[data-state="closed"] { animation: modal-out 140ms ease-in both; }
+.anim-sheet-right[data-state="open"] { animation: sheet-in-right 560ms var(--ease-spring) both; }
+.anim-sheet-right[data-state="closed"] { animation: sheet-out-right 220ms var(--ease-out-quart) both; }
+.anim-sheet-left[data-state="open"] { animation: sheet-in-left 560ms var(--ease-spring) both; }
+.anim-sheet-left[data-state="closed"] { animation: sheet-out-left 220ms var(--ease-out-quart) both; }
+
+/* Timeline connector threads: draw in along their length (pathLength=1). */
+@keyframes connector-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.connector-path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: connector-draw 900ms var(--ease-out-quart) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .connector-path { stroke-dasharray: none; stroke-dashoffset: 0; animation: none; }
+}
+
+/* Organ hero gentle float (ref 3). Disabled under reduced motion by the global rule. */
+@keyframes organ-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -8px, 0); }
+}

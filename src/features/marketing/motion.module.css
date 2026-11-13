@@ -1,0 +1,144 @@
+/*
+ * Marketing motion. Rules:
+ * - Nothing is hidden without JS or before an element's scroll range starts. Scroll reveals use
+ *   CSS scroll-driven animations with fill-mode `forwards` only: before an element enters, it keeps
+ *   its normal (visible) style, so crawlers, full-page captures and old browsers see everything.
+ *   The jump to the first keyframe happens at `entry 0%`, when the element is still off-screen.
+ * - Reduced motion: every rule lives inside `prefers-reduced-motion: no-preference`.
+ * - Theme vars are referenced with fallbacks (unused Tailwind theme vars are tree-shaken).
+ */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 40px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0.5em, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes enter-block {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * Hero entrance (time-based, CSS only so it also runs without JS). --i staggers siblings.
+ * fill-mode `backwards`: hidden only during the short delay; once finished the animation stops
+ * applying, so inline transforms from motion (hover, magnetic) are never overridden.
+ */
+.word {
+  display: inline-block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .word {
+    animation: enter 1000ms var(--ease-spring, cubic-bezier(0.25, 1, 0.5, 1)) backwards;
+    animation-delay: calc(var(--i, 0) * 32ms);
+  }
+  .enter {
+    animation: enter-block 1100ms var(--ease-spring, cubic-bezier(0.25, 1, 0.5, 1)) backwards;
+    animation-delay: calc(240ms + var(--i, 0) * 90ms);
+  }
+}
+/*
+ * No time-based keyframes inside responsive show/hide containers (`hidden xl:grid`): any display
+ * toggle (e.g. a viewport resize) restarts them and they can be caught mid-way. Scroll-driven
+ * animations are immune — their progress comes from scroll position, not time.
+ */
+
+/*
+ * Scroll-linked reveals. Every range ends inside `entry`, so an element that is fully inside the
+ * viewport is always in its final state — whatever the viewport height (tall full-page captures,
+ * big monitors) and whatever the scroll position it was loaded at.
+ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal,
+    .revealTall,
+    .revealFade {
+      animation-name: rise;
+      animation-duration: auto;
+      animation-timing-function: var(--ease-out-quart, cubic-bezier(0.25, 1, 0.5, 1));
+      animation-fill-mode: forwards;
+      animation-timeline: view();
+      animation-range: entry 0% entry 100%;
+    }
+    /* Tall blocks finish once half of them has entered instead of waiting for their bottom edge. */
+    .revealTall {
+      animation-range: entry 0% entry 50%;
+    }
+    .revealFade {
+      animation-name: fade;
+      animation-range: entry 0% entry 60%;
+    }
+
+    /* Same reveal, desktop only — for cells that sit in a horizontal snap row on small screens. */
+    @media (min-width: 1024px) {
+      .revealLg {
+        animation-name: rise;
+        animation-duration: auto;
+        animation-timing-function: var(--ease-out-quart, cubic-bezier(0.25, 1, 0.5, 1));
+        animation-fill-mode: forwards;
+        animation-timeline: view();
+        animation-range: entry 0% entry 100%;
+      }
+    }
+
+    /* Threads that draw as their section scrolls in (paths use pathLength=1). */
+    .threadScope {
+      view-timeline: --threads block;
+    }
+    .threadDraw {
+      stroke-dasharray: 1 1;
+      animation-name: draw;
+      animation-duration: auto;
+      animation-timing-function: linear;
+      animation-fill-mode: forwards;
+      animation-timeline: --threads;
+      animation-range: entry 10% entry 100%;
+    }
+  }
+}
+
+/* Stepper thread fill and pulse rings use transforms only. */
+.pulse {
+  animation: var(--animate-pulse-ring, none);
+}

@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+._*
+.env*
+!.env.example
+
+# internal product brief — kept local (repository is public)
+/doc/
+# scratch helpers
+/scripts/_*
+
+# Vercel CLI link
+.vercel
