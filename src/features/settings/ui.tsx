@@ -83,7 +83,7 @@ export function FilterPill<T extends string>({
       </DropdownTrigger>
       <DropdownContent align="start" className="w-[260px]">
         <DropdownLabel>{label}</DropdownLabel>
-        <div data-lenis-prevent className="scrollbar-thin max-h-[min(420px,60dvh)] overflow-y-auto">
+        <div className="scrollbar-thin max-h-[min(420px,60dvh)] overflow-y-auto overscroll-contain">
           <DropdownRadioGroup value={value} onValueChange={(v) => onChange(v as T)}>
             {options.map((o) => (
               <DropdownRadioItem key={o.value} value={o.value} description={o.description}>
@@ -151,7 +151,7 @@ export function SaveState({ status, className }: { status: SaveStatus; className
   );
 }
 
-/** Table wrapper: white card, horizontal scroll inside (never the page), Lenis-safe. */
+/** Table wrapper: white card, horizontal scroll inside (never the page). */
 export function TableCard({ children, className, minWidth = 960 }: { children: ReactNode; className?: string; minWidth?: number }) {
   return (
     <div className={cn("scrollbar-thin relative overflow-x-auto rounded-card bg-surface", className)}>

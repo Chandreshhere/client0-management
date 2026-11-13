@@ -48,7 +48,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               />
               <kbd className="rounded-md bg-sunken px-1.5 py-0.5 font-mono text-[11px] text-muted">Esc</kbd>
             </div>
-            <Command.List data-lenis-prevent className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-2 [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted">
+            <Command.List className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-2 [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted overscroll-contain">
               <Command.Empty className="px-4 py-10 text-center text-sm text-muted">No matches for “{query}”.</Command.Empty>
 
               {staffRole ? (

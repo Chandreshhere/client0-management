@@ -57,7 +57,7 @@ function FacetMenu({ facet, selected, onChange }: { facet: Facet; selected: stri
           )}
         </button>
       </DropdownTrigger>
-      <DropdownContent align="start" data-lenis-prevent className="scrollbar-thin max-h-[min(440px,var(--radix-dropdown-menu-content-available-height))] w-[272px] overflow-auto">
+      <DropdownContent align="start" className="scrollbar-thin max-h-[min(440px,var(--radix-dropdown-menu-content-available-height))] w-[272px] overflow-auto overscroll-contain">
         {groups.map((g, gi) => (
           <div key={g || gi}>
             {gi > 0 ? <DropdownSeparator /> : null}

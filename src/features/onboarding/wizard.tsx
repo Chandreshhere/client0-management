@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, type Variants } from "motion/react";
-import { useLenis } from "lenis/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle, WarningCircle } from "@phosphor-icons/react";
 import { planById } from "@/data/plans";
@@ -22,6 +21,7 @@ import { ServicesStep } from "./steps/services-step";
 import { TeamStep } from "./steps/team-step";
 import { HoursStep } from "./steps/hours-step";
 import { ReviewStep } from "./steps/review-step";
+import { scrollToY } from "@/lib/scroll";
 
 const HINTS = ["Name, city, specialities", "Pricing and users", "Consultation types and fees", "Invites and workspaces", "Days, times and lunch", "Check and finish"];
 
@@ -38,7 +38,6 @@ const slide: Variants = {
  */
 export function OnboardingWizard() {
   const router = useRouter();
-  const lenis = useLenis();
   const { toast } = useToast();
   const [progress, setProgress] = useState<Progress | null>(null);
   const [saved, setSaved] = useState<boolean | null>(null);
@@ -77,8 +76,7 @@ export function OnboardingWizard() {
     setFromReview(Boolean(opts?.fromReview));
     focusHeading.current = true;
     setProgress((p) => (p ? { ...p, step: target, reached: Math.max(p.reached, target) } : p));
-    if (lenis) lenis.scrollTo(0, { duration: 0.6 });
-    else window.scrollTo({ top: 0 });
+    scrollToY(0);
   };
 
   const next = () => {

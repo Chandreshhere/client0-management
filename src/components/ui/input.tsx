@@ -112,7 +112,7 @@ export function Select({
       </S.Trigger>
       <S.Portal>
         <S.Content position="popper" sideOffset={6} collisionPadding={16} className="anim-pop z-[75] max-h-[min(360px,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[20px] bg-surface p-2 shadow-pop ring-1 ring-line">
-          <S.Viewport data-lenis-prevent>
+          <S.Viewport className="overscroll-contain">
             {options.map((o) => (
               <S.Item
                 key={o.value}

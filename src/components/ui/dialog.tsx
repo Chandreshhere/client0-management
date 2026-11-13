@@ -7,8 +7,8 @@ import { cn } from "@/lib/cn";
 
 /**
  * Modal and Sheet (side drawer) on Radix Dialog: focus trap, Esc to close, focus returns to
- * the trigger, scroll lock (Lenis is paused while locked — see SmoothScroll).
- * Scrollable bodies carry data-lenis-prevent so wheel scrolling stays native inside them.
+ * the trigger, scroll lock. Scrollable bodies contain their overscroll so the page behind
+ * never moves.
  */
 export const Dialog = D.Root;
 export const DialogTrigger = D.Trigger;
@@ -61,7 +61,7 @@ export function ModalContent({
           </D.Close>
         </header>
         {!description ? <D.Description className="sr-only">{typeof title === "string" ? title : "Dialog"}</D.Description> : null}
-        <div data-lenis-prevent className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-6 py-4 overscroll-contain">
           {children}
         </div>
         {footer ? <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-6 py-4">{footer}</footer> : null}
@@ -101,7 +101,7 @@ export function SheetContent({
             <X size={18} />
           </D.Close>
         </header>
-        <div data-lenis-prevent className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+        <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-6 pb-6 overscroll-contain">
           {children}
         </div>
         {footer ? <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-6 py-4">{footer}</footer> : null}

@@ -5,7 +5,7 @@ import { AnchorLink } from "./anchor-link";
 
 /**
  * Topic index beside the FAQ list: each row jumps to the first question of its topic and opens
- * it (a Lenis-handled jump skips the browser's own auto-expand of a closed <details>).
+ * it (a scripted jump skips the browser's own auto-expand of a closed <details>).
  */
 export function FaqTopics({ topics }: { topics: readonly { label: string; ids: readonly string[] }[] }) {
   return (

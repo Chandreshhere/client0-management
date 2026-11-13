@@ -11,7 +11,7 @@ export const metadata: Metadata = { robots: { index: false, follow: false } };
  * Split screen: the form column (logo top-left → "/", form centred at ≤400px) and, from lg up,
  * a cobalt showcase card inset 16px from the viewport's top, right and bottom edges.
  * From lg up the whole screen is exactly one viewport tall: the page itself never scrolls, and a
- * form taller than a short window scrolls inside its own column (Lenis hands it native scroll).
+ * form taller than a short window scrolls inside its own column.
  */
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (

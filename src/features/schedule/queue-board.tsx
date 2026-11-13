@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { useLenis } from "lenis/react";
 import {
   ArrowCounterClockwise,
   ArrowRight,
@@ -50,6 +49,7 @@ import { StaffOnly } from "./staff-only";
 import { displayName, useSchedule } from "./store";
 import { ApptStatus, DisciplineDot, IntakeBadge, TokenChip } from "./ui";
 import { WalkInModal } from "./walk-in-modal";
+import { scrollToElement } from "@/lib/scroll";
 
 const FLOW = ["arrived", "waiting", "in-session", "checkout", "completed"] as const;
 type Stage = (typeof FLOW)[number];
@@ -86,7 +86,6 @@ export function QueueView() {
 
 function QueueBoard() {
   const { bookings, events, patchBooking, restoreBooking, checkIn, person, queueDisplay, setQueueDisplay, callingId, setCallingId } = useSchedule();
-  const lenis = useLenis();
   const { toast } = useToast();
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [walkInSession, setWalkInSession] = useState(0);
@@ -180,11 +179,10 @@ function QueueBoard() {
     (selector: string, focus?: string) => {
       const el = document.querySelector<HTMLElement>(selector);
       if (!el) return;
-      if (lenis) lenis.scrollTo(el, { offset: -120 });
-      else el.scrollIntoView({ behavior: "smooth", block: "center" });
+      scrollToElement(el, 120);
       if (focus) window.setTimeout(() => document.querySelector<HTMLElement>(focus)?.focus({ preventScroll: true }), 450);
     },
-    [lenis],
+    [],
   );
 
   useEffect(() => {

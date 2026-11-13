@@ -48,7 +48,7 @@ sidebar locks, the workspace switcher and route gating). Plan names are placehol
 ## Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript 5.9 · Tailwind CSS 4 · Motion (spring physics) ·
-Lenis (smooth scroll) · Radix UI primitives · cmdk · Phosphor icons · Geist font.
+Radix UI primitives · cmdk · Phosphor icons · Geist font.
 Illustrated avatars: DiceBear "Notionists" by Zoish (CC0), generated once into
 `public/avatars/` by `scripts/generate-avatars.mjs`.
 

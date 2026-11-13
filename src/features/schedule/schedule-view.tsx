@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { useLenis } from "lenis/react";
 import { ArrowUpRight, CalendarBlank, CalendarPlus, EyeSlash, Info, Warning } from "@phosphor-icons/react";
 import { DISCIPLINE_LABEL } from "@/data/appointments";
 import { ChipGroup } from "@/components/viz/cards";
@@ -46,6 +45,7 @@ import { DisciplineLegend, HatchSwatch } from "./ui";
 import { WeekBoard } from "./week-board";
 import { WeekStrip } from "./week-strip";
 import { StaffOnly } from "./staff-only";
+import { scrollToElement } from "@/lib/scroll";
 
 type View = "day" | "week";
 
@@ -68,7 +68,6 @@ function Diary() {
   const { has } = usePlan();
   const { toast } = useToast();
   const { events, doubleIds, recentIds, privacy, setPrivacy, person, checkIn, patchBooking, restoreBooking, occupants, classSeats } = useSchedule();
-  const lenis = useLenis();
 
   const [date, setDate] = useState(() => validDate(sp.get("date")) ?? TODAY_KEY);
   const [view, setView] = useState<View>(() => (sp.get("view") === "week" ? "week" : "day"));
@@ -310,11 +309,9 @@ function Diary() {
   const gridRef = useRef<HTMLDivElement>(null);
   const reveal = useCallback(
     (el: HTMLElement | null, offset: number) => {
-      if (!el) return;
-      if (lenis) lenis.scrollTo(el, { offset });
-      else el.scrollIntoView({ behavior: "smooth", block: "start" });
+      scrollToElement(el, -offset);
     },
-    [lenis],
+    [],
   );
   const jumpTo = useCallback(
     (min: number) => {

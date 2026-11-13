@@ -85,7 +85,7 @@ export function PractitionerFilter({
         <DropdownItem onSelect={() => onChange(null)}>Everyone</DropdownItem>
         {selfId && allowedIds.includes(selfId) ? <DropdownItem onSelect={() => onChange([selfId])}>Only me</DropdownItem> : null}
         <DropdownSeparator />
-        <div data-lenis-prevent className="max-h-[320px] overflow-y-auto">
+        <div className="max-h-[320px] overflow-y-auto overscroll-contain">
           {all.map((s) => {
             const locked = !allowedIds.includes(s.id);
             const on = !locked && (selected === null || selected.includes(s.id));
@@ -144,7 +144,7 @@ export function RoomFilter({ selected, onChange }: { selected: string[]; onChang
         <CaretDown className="text-muted" aria-hidden="true" />
       </DropdownTrigger>
       <DropdownContent align="start" className="w-[260px]">
-        <div data-lenis-prevent className="max-h-[360px] overflow-y-auto">
+        <div className="max-h-[360px] overflow-y-auto overscroll-contain">
           {BRANCHES.map((b, i) => (
             <div key={b.id}>
               {i > 0 ? <DropdownSeparator /> : null}

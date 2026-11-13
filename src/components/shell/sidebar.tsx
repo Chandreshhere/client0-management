@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CaretDown, MapPin, SidebarSimple, Check, Question } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { snappy, spring } from "@/lib/motion";
@@ -90,8 +90,34 @@ export function NavBody({ collapsed, onNavigate }: { collapsed: boolean; onNavig
   const sections = NAV[role];
   const recent = role === "patient" ? [] : PATIENTS.filter((p) => ["p-kabir", "p-aditi", "p-arun"].includes(p.id));
 
+  // On short screens the nav scrolls (scrollbar hidden): fade its bottom edge while more items
+  // sit below, so a half-visible last row reads as "scroll for more", not as a clipping bug.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [moreBelow, setMoreBelow] = useState(false);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const update = () => setMoreBelow(el.scrollHeight - el.clientHeight - el.scrollTop > 4);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    Array.from(el.children).forEach((c) => ro.observe(c));
+    el.addEventListener("scroll", update, { passive: true });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener("scroll", update);
+    };
+  }, [collapsed, role]);
+
   return (
-    <div className={cn("scrollbar-none min-h-0 flex-1 overflow-y-auto pb-4", collapsed ? "px-2" : "px-3")}>
+    <div
+      ref={scrollRef}
+      className={cn(
+        "scrollbar-none min-h-0 flex-1 overflow-y-auto pb-4",
+        collapsed ? "px-2" : "px-3",
+        moreBelow && "[mask-image:linear-gradient(to_bottom,black_calc(100%-40px),transparent)]",
+      )}
+    >
       {role !== "patient" ? <BranchSwitcher collapsed={collapsed} /> : null}
       <LayoutGroup id="sidebar-nav">
         {sections.map((section) => (

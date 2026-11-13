@@ -41,7 +41,9 @@ export function BodyConditionCard({
     <Comp
       {...(onClick ? { type: "button" as const, onClick, "aria-pressed": !!active } : {})}
       className={cn(
-        "block w-full rounded-card bg-surface p-4 text-left transition-[box-shadow,transform] duration-300 [transition-timing-function:var(--ease-spring)]",
+        // flex column, top-aligned: a <button> otherwise centres its content vertically, so cards
+        // of one row (stretched to equal height) drifted out of line with each other.
+        "flex w-full flex-col justify-start rounded-card bg-surface p-4 text-left transition-[box-shadow,transform] duration-300 [transition-timing-function:var(--ease-spring)]",
         active ? "shadow-[inset_0_0_0_2px_var(--color-primary)]" : onClick ? "hover:-translate-y-0.5 hover:shadow-[inset_0_0_0_1px_var(--color-line-strong)]" : "",
         className,
       )}

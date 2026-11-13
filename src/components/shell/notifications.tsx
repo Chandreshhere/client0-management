@@ -85,7 +85,7 @@ export function Notifications() {
             ]}
           />
         </div>
-        <div data-lenis-prevent className="scrollbar-thin max-h-[420px] overflow-y-auto px-2 pb-2">
+        <div className="scrollbar-thin max-h-[420px] overflow-y-auto px-2 pb-2 overscroll-contain">
           {list.length === 0 ? (
             <EmptyState icon={<Bell />} title="You're all caught up" description="New reports, referrals and guidance changes that need you will appear here." />
           ) : (

@@ -1,22 +1,20 @@
 "use client";
 
-import { useLenis } from "lenis/react";
 import type { ComponentProps } from "react";
+import { scrollToElement } from "@/lib/scroll";
 
 /**
- * In-page link ("#pricing") that scrolls with Lenis and keeps the URL hash in sync.
- * Falls back to the browser's native jump when Lenis isn't running.
+ * In-page link ("#pricing") that glides to its section with native smooth scrolling, clear of the
+ * sticky header, and keeps the URL hash in sync. Without JavaScript it is a plain anchor jump.
  */
 export function AnchorLink({ href, onClick, ...props }: ComponentProps<"a"> & { href: `#${string}` }) {
-  const lenis = useLenis();
   return (
     <a
       href={href}
       onClick={(e) => {
         onClick?.(e);
-        if (e.defaultPrevented || !lenis) return;
+        if (e.defaultPrevented || !scrollToElement(href, 96)) return;
         e.preventDefault();
-        lenis.scrollTo(href, { offset: -96 });
         window.history.replaceState(null, "", href);
       }}
       {...props}

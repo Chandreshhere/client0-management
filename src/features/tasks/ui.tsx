@@ -131,7 +131,7 @@ export function FilterMenu({
         </button>
       </DropdownTrigger>
       <DropdownContent align="start" className={cn("w-[260px]", contentClassName)}>
-        <div data-lenis-prevent className="scrollbar-thin max-h-[min(420px,60dvh)] overflow-y-auto">
+        <div className="scrollbar-thin max-h-[min(420px,60dvh)] overflow-y-auto overscroll-contain">
           {children}
         </div>
       </DropdownContent>

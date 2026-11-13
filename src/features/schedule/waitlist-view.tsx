@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { useLenis } from "lenis/react";
 import { ArrowUpRight, CalendarBlank, CalendarCheck, CalendarPlus, Clock, DotsThree, HourglassMedium, ListPlus, Trash, Warning, X } from "@phosphor-icons/react";
 import { CLASSES } from "@/data/programs";
 import { DISCIPLINE_LABEL } from "@/data/appointments";
@@ -32,6 +31,7 @@ import { DisciplineDot } from "./ui";
 import { AddWaitlistModal, OfferSlotModal } from "./waitlist-modals";
 import { offerable, waitMatch, type WaitMatch } from "./waitlist-insights";
 import { WaitlistTimeline, type ListRow, type Outlook } from "./waitlist-timeline";
+import { scrollToElement } from "@/lib/scroll";
 
 type Sort = "priority" | "oldest" | "newest";
 
@@ -74,7 +74,6 @@ const requestedKey = (w: WaitEntry) => (w.staffIds.length === 1 ? w.staffIds[0] 
 
 function Waitlist() {
   const router = useRouter();
-  const lenis = useLenis();
   const { toast } = useToast();
   const { waitlist, person, patchWaitlist, removeWaitlist, restoreWaitlist, addBookings, occupants, takeClassSeat, classSeats } = useSchedule();
   const [disc, setDisc] = useState<CareDiscipline[]>([...CARE_DISCIPLINES]);
@@ -135,8 +134,7 @@ function Waitlist() {
   const revealRow = (id: string) => {
     const el = [...document.querySelectorAll<HTMLElement>(`[data-wait-row="${id}"]`)].find((x) => x.offsetParent !== null);
     if (!el) return;
-    if (lenis) lenis.scrollTo(el, { offset: -160 });
-    else el.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollToElement(el, 160);
     el.animate([{ backgroundColor: "var(--color-primary-soft)" }, { backgroundColor: "transparent" }], { duration: 1400, easing: "cubic-bezier(0.25, 1, 0.5, 1)" });
   };
 

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { useLenis } from "lenis/react";
 import { ArrowDown, ArrowUpRight, CalendarCheck, Hourglass, ShieldCheck, ShieldWarning, Warning } from "@phosphor-icons/react";
 import type { YogaClass } from "@/data/types";
 import { ORGAN_LABEL } from "@/data/anatomy";
@@ -25,6 +24,7 @@ import { TODAY_KEY, WEEK_CLASSES, WEEK_DAYS, attendanceRate, endOf, openIssues, 
 import { BOARD_FILTER_LABEL, matchesFilter, organMix, type BoardFilter } from "./insight";
 import { AttendanceChart, OrganStack, SeatDots, SeatLegend } from "./viz";
 import { useClasses } from "./store";
+import { scrollToElement } from "@/lib/scroll";
 
 /** /classes — the instructor's week (doc §2D): who is attending, and what guidance is needed first. */
 
@@ -33,7 +33,6 @@ const FILTERS: BoardFilter[] = ["review", "precautions", "waitlist", "absence", 
 export function ClassesWeek() {
   const s = useClasses();
   const { role, user } = useRole();
-  const lenis = useLenis();
   const [instructor, setInstructor] = useState<string>("all");
   const [filters, setFilters] = useState<BoardFilter[]>([]);
   const instructors = STAFF.filter((x) => x.role === "yoga");
@@ -147,14 +146,13 @@ export function ClassesWeek() {
             <a
               href={`#day-${TODAY_KEY}`}
               onClick={(e) => {
-                // Lenis's own anchor handling stops short on this long board (verified 13 Nov), so
-                // measure the live target position and keep the column clear of the sticky header.
+                // Glide to today's column, keeping it clear of the sticky header (its scroll-margin).
                 const el = document.getElementById(`day-${TODAY_KEY}`);
-                if (!lenis || !el) return;
+                if (!el) return;
                 e.preventDefault();
-                e.stopPropagation();
                 const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 96;
-                lenis.scrollTo(el.getBoundingClientRect().top + window.scrollY - margin);
+                scrollToElement(el, margin);
+                window.history.replaceState(null, "", `#day-${TODAY_KEY}`);
               }}
               className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface px-3 text-xs text-ink shadow-[inset_0_0_0_1px_var(--color-line)] transition-colors hover:bg-canvas @[1180px]:hidden"
             >

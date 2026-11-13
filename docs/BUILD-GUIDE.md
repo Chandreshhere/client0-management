@@ -67,8 +67,9 @@ Cookies: `cl_role` ∈ admin|doctor|nutritionist|yoga|frontdesk|coordinator|pati
   CSS transitions use `[transition-timing-function:var(--ease-spring)]` or `var(--ease-out-quart)`.
   Never `transition: all`. Purposeful motion: tab indicators (`Segmented`/`PillNav` already slide),
   list reorders (`layout`), drawers. Reduced motion is handled globally (MotionConfig + CSS).
-- **Lenis** smooth scroll is global. Any inner scroll container (table wrapper, list panel,
-  drawer body) needs `data-lenis-prevent`.
+- **Scrolling is native** (no smooth-scroll library). Programmatic jumps use `src/lib/scroll.ts`
+  (smooth, instant under reduced motion). Overlay scroll areas (menus, popovers, dialog bodies)
+  carry `overscroll-contain`; in-page scrollers don't, so the page keeps scrolling past them.
 - **Icons**: Phosphor only, `size={18|20}`, regular weight (fill for selected states).
 - Look at the reference: big light headings, rounded white/grey cards, circular white icon
   buttons with ↗ arrows, outline "N instances" chips, charcoal selected pills.
@@ -134,7 +135,7 @@ frontdesk; clinic = all seven. Pages should adapt to `useRole().role` where it m
 - Icon-only buttons use `IconButton label=`; inputs use `Field`; tables use `<th scope>`.
 - Keyboard: everything reachable; Radix handles menus/dialogs. Visible focus is global.
 - Check 1440×900 **and** 390×844. No horizontal page scroll on mobile: tables become stacked cards
-  or live in an `overflow-x-auto` wrapper with `data-lenis-prevent`.
+  or live in an `overflow-x-auto` wrapper.
 
 ## 8. Query-param entry points (the shell links to these — support them)
 

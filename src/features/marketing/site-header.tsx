@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useLenis } from "lenis/react";
 import { LayoutGroup, motion } from "motion/react";
 import { useEffect, useState, type MouseEvent } from "react";
 import { ArrowUpRight, List } from "@phosphor-icons/react";
@@ -13,6 +12,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/cn";
 import { snappy } from "@/lib/motion";
 import { CtaLink } from "./cta";
+import { scrollToElement } from "@/lib/scroll";
 
 /**
  * Public site header. Sticky; at the top it is a transparent bar, once the page scrolls it
@@ -32,7 +32,6 @@ const isNavId = (v: string | undefined): v is NavId => NAV.some((n) => n.id === 
 export function SiteHeader() {
   const pathname = usePathname();
   const isHome = pathname === "/";
-  const lenis = useLenis();
   const [compact, setCompact] = useState(false);
   const [spy, setSpy] = useState<NavId | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -76,12 +75,11 @@ export function SiteHeader() {
   const active: NavId | null = isHome ? spy : pathname.startsWith("/pricing") ? "pricing" : null;
   const hrefFor = (id: NavId) => (isHome ? `#${id}` : id === "pricing" ? "/pricing" : `/#${id}`);
 
-  // Same-page anchors: Lenis' anchor handler does the smooth scroll; stop the native jump and keep
-  // the URL in sync. Without Lenis the browser's own jump is left alone.
+  // Same-page anchors: glide with native smooth scrolling, clear of this header, and keep the
+  // URL in sync. If the section isn't found the browser's own jump is left alone.
   const onAnchor = (e: MouseEvent<HTMLAnchorElement>, id: NavId) => {
-    if (!lenis) return;
+    if (!scrollToElement(`#${id}`, 96)) return;
     e.preventDefault();
-    lenis.scrollTo(`#${id}`, { offset: -96 });
     window.history.replaceState(null, "", `#${id}`);
   };
 
@@ -90,12 +88,8 @@ export function SiteHeader() {
     if (!isHome) return;
     e.preventDefault();
     window.history.replaceState(null, "", `#${id}`);
-    // Wait for the sheet to release the scroll lock (Lenis restarts when it does).
-    window.setTimeout(() => {
-      const el = document.getElementById(id);
-      if (lenis) lenis.scrollTo(`#${id}`, { offset: -88 });
-      else el?.scrollIntoView();
-    }, 280);
+    // Wait for the sheet to release its scroll lock before scrolling the page.
+    window.setTimeout(() => scrollToElement(`#${id}`, 88), 280);
   };
 
   return (
