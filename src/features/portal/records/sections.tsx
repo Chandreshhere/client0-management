@@ -12,9 +12,10 @@ import { EmptyState } from "@/components/ui/misc";
 import { StatusBadge } from "@/components/ui/status";
 import { ChipGroup, MediaStatCard, SectionLabel } from "@/components/viz/cards";
 import { SparkValue, VitalTile, WaveSpark } from "@/components/viz/condition";
+import { MonthStrip } from "@/components/viz/timeline-scrubber";
 import { ScanThumb } from "@/features/patient/scan-thumb";
 import { IMAGING, STATUS_TEXT, SYSTEMS, authorName, labStatus, type ImagingStudy, type LabResult } from "../record";
-import { RangeGauge, StatusLine } from "../viz";
+import { DatedWell, RangeGauge, StatusLine } from "../viz";
 import { dayOfMonth, monthShort, shortDate, weekdayShort } from "../time";
 import { PENDING, ROW_KIND_LABEL, plainRange, type RecordRow, type RowKind } from "./data";
 
@@ -25,12 +26,18 @@ const PAGE = 8;
 // Visit notes, letters & prescriptions
 // ---------------------------------------------------------------------------------------------
 
+const monthName = (key: string, month: "short" | "long" = "short") =>
+  new Intl.DateTimeFormat("en-IN", { month, timeZone: "Asia/Kolkata" }).format(new Date(`${key}-15T12:00:00+05:30`));
+
 export function SummariesSection({ rows, scope, onOpen }: { rows: RecordRow[]; scope: string; onOpen: (r: RecordRow) => void }) {
   const kinds = (Object.keys(ROW_KIND_LABEL) as RowKind[]).filter((k) => rows.some((r) => r.kind === k));
   const [on, setOn] = useState<RowKind[]>([]);
+  const [month, setMonth] = useState("");
   const [all, setAll] = useState(false);
-  const shown = on.length ? rows.filter((r) => on.includes(r.kind)) : rows;
+  const byKind = on.length ? rows.filter((r) => on.includes(r.kind)) : rows;
+  const shown = month ? byKind.filter((r) => r.date.startsWith(month)) : byKind;
   const visible = all ? shown : shown.slice(0, PAGE);
+  const months = Array.from(new Set(byKind.map((r) => r.date.slice(0, 7)))).sort();
 
   return (
     <section aria-labelledby="rec-summaries" className="flex flex-col gap-3">
@@ -43,6 +50,7 @@ export function SummariesSection({ rows, scope, onOpen }: { rows: RecordRow[]; s
               value={on}
               onChange={(v) => {
                 setOn(v);
+                setMonth("");
                 setAll(false);
               }}
               options={kinds.map((k) => ({ value: k, label: ROW_KIND_LABEL[k], count: rows.filter((r) => r.kind === k).length }))}
@@ -53,6 +61,33 @@ export function SummariesSection({ rows, scope, onOpen }: { rows: RecordRow[]; s
       >
         <span id="rec-summaries">Visit notes, letters & prescriptions · {scope}</span>
       </SectionLabel>
+      {months.length > 1 ? (
+        <div className="flex flex-col gap-2">
+          <MonthStrip
+            active={month}
+            onSelect={(k) => {
+              setMonth((cur) => (cur === k ? "" : k));
+              setAll(false);
+            }}
+            months={months.map((k) => {
+              const inMonth = byKind.filter((r) => r.date.startsWith(k)).sort((a, b) => a.date.localeCompare(b.date));
+              return {
+                key: k,
+                label: `${monthName(k)} · ${inMonth.length}`,
+                items: inMonth.map((r) => {
+                  const Icon = KIND_ICON[r.kind];
+                  return { id: r.id, icon: <Icon />, label: `${ROW_KIND_LABEL[r.kind]} · ${r.title} · ${shortDate(`${r.date}T12:00:00+05:30`)}` };
+                }),
+              };
+            })}
+          />
+          <p className="text-xs text-muted">
+            {month
+              ? `Showing ${monthName(month, "long")} · ${pluralize(shown.length, "record")}. Tap the month again to show all.`
+              : "Each bubble is one released record that month (first four shown; icon = kind). Tap a month to show only its records."}
+          </p>
+        </div>
+      ) : null}
       {visible.length ? (
         <ul className="flex flex-col gap-2 rounded-card bg-sunken p-2">
           <AnimatePresence initial={false}>
@@ -64,7 +99,7 @@ export function SummariesSection({ rows, scope, onOpen }: { rows: RecordRow[]; s
           </AnimatePresence>
         </ul>
       ) : (
-        <EmptyState icon={<FileText />} title="Nothing released here yet" description="Try another year or body system." className="bg-sunken" />
+        <EmptyState icon={<FileText />} title="Nothing released here yet" description={month ? "Try another month, or tap the month again to show all." : "Try another year or body system."} className="bg-sunken" />
       )}
       {shown.length > PAGE ? (
         <Button variant="ghost" size="sm" className="self-start" onClick={() => setAll((v) => !v)} trailing={<CaretDown className={cn("transition-transform", all && "rotate-180")} />}>
@@ -126,10 +161,26 @@ export function LabsSection({ labs }: { labs: LabResult[] }) {
         </p>
       ) : null}
       {labs.length ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {labs.map((l) => (
-            <LabTile key={l.id} lab={l} />
-          ))}
+        <div className="flex flex-col gap-6">
+          {Array.from(new Set(labs.map((l) => l.panel))).map((panel) => {
+            const inPanel = labs.filter((l) => l.panel === panel);
+            const watch = inPanel.filter((l) => !["on", "none"].includes(labStatus(l))).length;
+            return (
+              <div key={panel} className="flex flex-col gap-3">
+                <p className="flex flex-wrap items-baseline gap-x-2 text-sm text-ink">
+                  {panel}
+                  <span className="text-xs text-muted">
+                    {pluralize(inPanel.length, "result")} · {watch ? `${watch} outside target` : "all on target"} · latest {shortDate(inPanel.map((l) => l.points.at(-1)!.date).sort().at(-1)!)}
+                  </span>
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {inPanel.map((l) => (
+                    <LabTile key={l.id} lab={l} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <EmptyState icon={<TestTube />} title="No lab results for this body system" className="bg-sunken" />
@@ -156,7 +207,9 @@ function LabTile({ lab }: { lab: LabResult }) {
         unit={lab.unit}
         chart={
           lab.points.length > 1 ? (
-            <WaveSpark values={values} label={`${lab.name}: ${lab.points.map((p) => `${fmtLab(lab, p.value)} on ${shortDate(p.date)}`).join(", ")}`} />
+            <DatedWell from={shortDate(first.date)} to={shortDate(last.date)}>
+              <WaveSpark values={values} label={`${lab.name}: ${lab.points.map((p) => `${fmtLab(lab, p.value)} on ${shortDate(p.date)}`).join(", ")}`} />
+            </DatedWell>
           ) : (
             <RangeGauge
               min={+(threshold * 0.6).toFixed(2)}

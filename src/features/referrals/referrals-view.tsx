@@ -26,6 +26,7 @@ import { ReferralSheet } from "./referral-sheet";
 import { BookModal } from "./book-modal";
 import { NewReferralModal } from "./new-referral-modal";
 import { ReferralJourneys } from "./referral-journeys";
+import { HandoffStrip } from "./handoff-strip";
 import { useReferralActions } from "./use-referral-actions";
 import { useReferrals, type CareReferral } from "./store";
 
@@ -151,6 +152,8 @@ function StaffReferrals() {
           />
         </StatButton>
       </section>
+
+      {view === "pipeline" && inScope.length ? <HandoffStrip referrals={inScope} stage={stage} onStage={setStage} /> : null}
 
       <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
         {clinician ? (

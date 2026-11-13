@@ -67,10 +67,10 @@ export function MediaStatCard({ value, label, media, onOpen, className, time }: 
     <div className={cn("relative isolate h-[132px] overflow-hidden rounded-card bg-charcoal text-white", className)}>
       <div className="absolute inset-y-0 right-0 w-[62%] opacity-90 [mask-image:linear-gradient(to_right,transparent,black_35%)]">{media}</div>
       <div className="relative z-[1] flex h-full flex-col justify-between p-4">
-        <span className="text-[11px] text-white/60 tabular">{time}</span>
+        <span className="pr-12 text-[11px] text-white/60 tabular">{time}</span>
         <span>
           <span className="block text-[32px] font-light leading-none tracking-[-0.02em] tabular">{value}</span>
-          <span className="mt-1 block max-w-[10ch] text-[11px] leading-tight text-white/70">{label}</span>
+          <span className="mt-1 block max-w-[14ch] text-[11px] leading-tight text-white/70">{label}</span>
         </span>
       </div>
       {onOpen ? (

@@ -148,7 +148,7 @@ function VitalsBody({ patient, record, measures, systemId, onSystem }: { patient
         {labs.length ? (
           <Card className="flex flex-wrap items-center justify-between gap-3">
             <p className="max-w-[56ch] text-sm text-muted">
-              {labs.map((l) => l.label).join(" and ")} {labs.length === 1 ? "is a lab result" : "are lab results"}: the tile shows one dot per report. Full results, flags and source reports are under Labs.
+              {labs.map((l) => l.label).join(" and ")} {labs.length === 1 ? "is a lab result" : "are lab results"}: {labs.length === 1 ? "its tile shows" : "their tiles show"} one dot per report, or a single report placed against its target. Full results, flags and source reports are under Labs.
             </p>
             <Button asChild variant="secondary" size="sm">
               <Link href={recordHref(patient.id, "labs")}>
@@ -187,10 +187,11 @@ function OrganFocus({ patient, record, system, lead, onSystem, switchable }: { p
       <div className="relative mx-auto mt-2 aspect-square w-full max-w-[300px]">
         <div aria-hidden="true" className="absolute inset-[8%] rounded-full bg-canvas" />
         <div aria-hidden="true" className="absolute inset-[22%] rounded-full bg-surface/70 shadow-[inset_0_0_0_1px_var(--color-line)]" />
-        <OrganCanvas shape={system.organ} tone="light" label={`3D illustration of the ${ORGAN_LABEL[system.organ].toLowerCase()} — organ for ${systemConditionText(record, system)}`} className="absolute inset-0" />
+        {/* lifted so the glass card below overlaps the disc rim, never the organ itself */}
+        <OrganCanvas shape={system.organ} tone="light" label={`3D illustration of the ${ORGAN_LABEL[system.organ].toLowerCase()} — organ for ${systemConditionText(record, system)}`} className="absolute inset-x-[4%] -top-[2%] bottom-[10%]" />
       </div>
       {lead && latest ? (
-        <GlassCard className="-mt-10 relative z-[1]">
+        <GlassCard className="-mt-6 relative z-[1]">
           <p className="truncate text-[11px] text-muted">
             {lead.label} · {SOURCE_SHORT[lead.source]} · {fmtShort(latest.d)}
           </p>

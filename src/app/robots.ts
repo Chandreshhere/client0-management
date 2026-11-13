@@ -20,6 +20,8 @@ const PRIVATE = [
   "/settings",
   "/portal",
   "/onboarding",
+  "/help",
+  "/kit",
 ];
 
 export default function robots(): MetadataRoute.Robots {

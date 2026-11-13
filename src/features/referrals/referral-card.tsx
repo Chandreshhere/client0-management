@@ -13,6 +13,8 @@ import { Tip } from "@/components/ui/tooltip";
 import { Dropdown, DropdownContent, DropdownItem, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
 import { PRIORITY_LABEL } from "@/features/tasks/task-meta";
 import { DisciplineTag, PersonInline } from "@/features/tasks/ui";
+import { OrganTag } from "@/features/tasks/organ-glyph";
+import { referralSystem, referralSystemLabel } from "./system";
 import { STAGE_ACTION, dueText, permissionFor, referralState, stopSummary, type ReferralState } from "./meta";
 import { ReferralStepper } from "./stepper";
 import { useReferralActions } from "./use-referral-actions";
@@ -24,6 +26,7 @@ export function ReferralCard({ referral, onOpen, onBook }: { referral: CareRefer
   const { coverFor } = useReferralActions();
   const patient = patientById(referral.patientId);
   const cover = coverFor(referral);
+  const system = referralSystem(referral);
 
   return (
     <article className="grid grid-cols-1 gap-5 rounded-inner bg-surface p-4 transition-shadow duration-200 hover:shadow-[inset_0_0_0_1px_var(--color-line-strong)] md:p-6 xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)_auto] xl:items-center xl:gap-8">
@@ -36,6 +39,7 @@ export function ReferralCard({ referral, onOpen, onBook }: { referral: CareRefer
             </Link>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
               <DisciplineTag discipline={referral.toDiscipline} />
+              {system ? <OrganTag info={system} label={referralSystemLabel(system)} className="max-w-[160px] text-xs" /> : null}
               {referral.priority === "high" || referral.priority === "urgent" ? <StatusBadge tone={priorityTone(referral.priority)}>{PRIORITY_LABEL[referral.priority]}</StatusBadge> : null}
               {referral.local ? <StatusBadge tone="draft">New · this session</StatusBadge> : null}
             </div>

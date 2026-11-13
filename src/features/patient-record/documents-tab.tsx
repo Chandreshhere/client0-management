@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowsLeftRight, ArrowUpRight, FileText, Files, MagnifyingGlass, Pill as PillIcon, Scan, Signature, TestTube, UploadSimple } from "@phosphor-icons/react";
+import { ArrowsLeftRight, ArrowUpRight, Files, FileText, Flask, MagnifyingGlass, Pill as PillIcon, Scan, Signature, UploadSimple } from "@phosphor-icons/react";
 import type { DocStatus } from "@/data/types";
 import { DOC_STATUS_LABEL } from "@/data/records";
 import { patientById } from "@/data/patients";
@@ -23,11 +23,11 @@ import { useRecord } from "./store";
 import { RecordFrame } from "./record-frame";
 import { DOC_STATUS_TONE, DocumentPreview, dueText, useEffectiveStatus } from "./document-preview";
 import { UploadDialog } from "./upload-dialog";
-import { baseDocuments, recordOf } from "./record-model";
+import { baseDocuments, readableDates, recordOf } from "./record-model";
 import { MonthBars, monthBuckets } from "./month-bars";
 
 const TYPE_ICON: Record<DocType, ReactNode> = {
-  "Lab report": <TestTube />,
+  "Lab report": <Flask />,
   Imaging: <Scan />,
   "Discharge summary": <FileText />,
   Prescription: <PillIcon />,
@@ -353,7 +353,7 @@ function DocTable({ docs, statusOf, onOpen, freshId }: RowProps) {
                         <span className="block truncate text-xs text-muted">
                           {d.pages} {d.pages === 1 ? "page" : "pages"}
                           {d.id === freshId || d.local ? " · added now" : ""}
-                          {d.summary && !d.local ? ` · ${d.summary}` : ""}
+                          {d.summary && !d.local ? ` · ${readableDates(d.summary)}` : ""}
                         </span>
                       </span>
                     </span>

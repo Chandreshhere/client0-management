@@ -1,5 +1,4 @@
 import { Fragment, type CSSProperties } from "react";
-import { DemoFlag } from "@/components/ui/misc";
 import { cn } from "@/lib/cn";
 import { AnchorLink } from "./anchor-link";
 import { CareMapProof } from "./care-map-proof";
@@ -61,10 +60,6 @@ export function Hero() {
         </div>
 
         <div className={cn("mt-12 md:mt-16", s.enter)} style={i(3)}>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <DemoFlag>Live product · synthetic patient</DemoFlag>
-            <p className="text-xs text-muted">Pick a body system or any event. Threads show documented links between records — not cause and effect.</p>
-          </div>
           <CareMapProof />
         </div>
       </div>

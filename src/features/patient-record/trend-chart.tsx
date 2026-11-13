@@ -24,12 +24,39 @@ export type TrendRange = { low?: number; high?: number; label: string };
 export type TrendThreshold = { value: number; label: string };
 
 /**
- * "6 Aug" within one calendar year; "Aug ’25" when the series spans years (these series are
- * monthly or slower, and the short form keeps the kit's 64px tick spacing collision-free).
+ * Ticks sit on the measurement dates themselves, and the kit reuses this formatter for the
+ * tooltip header — so it keeps the day: "6 Aug" within one calendar year, "6 Aug ’25" across
+ * years (fits the kit's 64px tick spacing). Same en-IN month names as every other date in the app.
  */
 const tickFormatter = (multiYear: boolean) => (iso: string) =>
-  multiYear ? `${formatDate(iso, { month: "short" })} ’${formatDate(iso, { year: "2-digit" })}` : formatDate(iso, { day: "numeric", month: "short" });
+  `${formatDate(iso, { day: "numeric", month: "short" })}${multiYear ? ` ’${iso.slice(2, 4)}` : ""}`;
+/** Fallback when day-level labels would collide on a narrow plot: "Aug ’25" (tooltip loses the day; the table view keeps it). */
+const compactFormatter = (iso: string) => `${formatDate(iso, { month: "short" })} ’${iso.slice(2, 4)}`;
+const tickTextWidth = (s: string) => s.length * 5.8;
+
+/**
+ * Would the kit's x labels overlap? Replays its thinning (a tick only ≥ 64px after the previous,
+ * last always kept) and its anchors (first start, last end, others middle).
+ */
+function ticksCollide(xs: string[], xOf: (t: number) => number, fmt: (iso: string) => string) {
+  const px = xs.map((x) => xOf(new Date(x).getTime()));
+  const idx: number[] = [];
+  px.forEach((p, i) => {
+    if (i === px.length - 1) {
+      while (idx.length && p - px[idx[idx.length - 1]] < 64) idx.pop();
+      idx.push(i);
+    } else if (!idx.length || p - px[idx[idx.length - 1]] >= 64) idx.push(i);
+  });
+  const span = (k: number) => {
+    const i = idx[k], w = tickTextWidth(fmt(xs[i]));
+    return k === 0 ? [px[i], px[i] + w] : k === idx.length - 1 ? [px[i] - w, px[i]] : [px[i] - w / 2, px[i] + w / 2];
+  };
+  for (let k = 1; k < idx.length; k++) if (span(k)[0] - span(k - 1)[1] < 6) return true;
+  return false;
+}
 const textWidth = (s: string) => s.length * 5.7 + 14;
+/** Series up to this many points get a marker on every reading (sparser data = each date matters). */
+const MARKER_MAX = 16;
 
 type Box = { x0: number; x1: number; y0: number; y1: number };
 type Pt = { x: number; y: number };
@@ -104,7 +131,9 @@ export function TrendChart({
   }
 
   const placed = geo ? placeLabels(thresholds.filter((t) => inDomain(t.value)), series, { xOf, yOf, iw, ih }) : [];
-  const formatX = tickFormatter(new Set(xs.map((x) => x.slice(0, 4))).size > 1);
+  const multiYear = new Set(xs.map((x) => x.slice(0, 4))).size > 1;
+  const dayFormat = tickFormatter(multiYear);
+  const formatX = geo && multiYear && ticksCollide(xs, xOf, dayFormat) ? compactFormatter : dayFormat;
 
   return (
     <div ref={wrap} className={cn("relative isolate", className)}>
@@ -126,6 +155,25 @@ export function TrendChart({
         </>
       ) : null}
       <LineChart series={series} height={height} band={kitBand} formatY={formatY} formatX={formatX} ariaLabel={ariaLabel} hollowNote={hollowNote} yPadding={yPadding} />
+      {geo ? (
+        // One marker per reading on sparse series (the kit marks only the end and self-reported
+        // points); under the kit's tooltip (z-10), never intercepting the pointer.
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 z-[1]" style={{ top: geo.top, height }}>
+          {series.map((s) =>
+            s.points.length > MARKER_MAX
+              ? null
+              : s.points.slice(0, -1).map((p) =>
+                  p.hollow ? null : (
+                    <span
+                      key={`${s.id}-${p.x}`}
+                      className="absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-surface"
+                      style={{ left: xOf(new Date(p.x).getTime()), top: yOf(p.y), background: s.color }}
+                    />
+                  ),
+                ),
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

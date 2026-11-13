@@ -5,8 +5,8 @@ import { useMemo } from "react";
 import { ArrowUpRight, CalendarBlank, ChatsCircle, ListChecks, ShieldCheck, ArrowsLeftRight } from "@phosphor-icons/react";
 import type { Patient, Role } from "@/data/types";
 import { ORGAN_LABEL } from "@/data/anatomy";
-import { getRecord } from "@/data/record";
-import { latestMeasurements, measureHistory } from "@/data/insights";
+import { getRecord, type PatientRecord } from "@/data/record";
+import { latestMeasurements, measureHistory, systemShares } from "@/data/insights";
 import { WEEK_APPOINTMENTS, DISCIPLINE_LABEL } from "@/data/appointments";
 import { clinicNumber, patientById } from "@/data/patients";
 import { staffById } from "@/data/staff";
@@ -21,7 +21,7 @@ import { useTasks } from "@/features/tasks/store";
 import { dueLabel } from "@/features/tasks/task-meta";
 import { byTime, dayName } from "@/features/tasks/time";
 import { useReferrals } from "@/features/referrals/store";
-import { referralState } from "@/features/referrals/meta";
+import { referralState, waitText } from "@/features/referrals/meta";
 import type { ThreadView } from "./store";
 
 /**
@@ -134,6 +134,7 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
                   ))}
                 </ul>
                 {ordered.length > 4 ? <p className="mt-1.5 text-[11px] text-muted">+{ordered.length - 4} more on the record</p> : null}
+                {record ? <SystemShares record={record} /> : null}
               </>
             ) : (
               <p className="mt-2 text-xs text-muted">No conditions recorded yet — nothing to summarise.</p>
@@ -162,6 +163,7 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
               </div>
               <p className="mt-2 text-[11px] text-muted">
                 {formatDate(latest.event.date, { day: "numeric", month: "short" })} · {latest.event.state === "self-reported" ? "self-reported" : latest.event.authorRole}
+                {latest.event.state === "awaiting-review" ? <span className="text-primary-ink"> · awaiting review</span> : null}
                 {latest.flag ? <span className="text-warning"> · {latest.flag === "high" ? "above" : "below"} target</span> : null}
                 {history.length > 1 ? ` · ${history.length} readings` : " · first reading"}
               </p>
@@ -230,7 +232,7 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
                   <span className="block text-ink-2">Referral → {DISCIPLINE_LABEL[r.toDiscipline]}</span>
                   <span className={cn("block text-[11px]", st.overdue ? "text-danger" : st.stalled ? "text-warning" : "text-muted")}>
                     Waiting to be {st.pending ? REFERRAL_STAGE_LABEL[st.pending].toLowerCase() : "moved on"}
-                    {staffById(st.waitingOn ?? undefined) ? ` by ${staffById(st.waitingOn ?? undefined)!.name}` : ""} · {st.waitingDays < 1 ? "<1 day" : `${st.waitingDays} days`}
+                    {staffById(st.waitingOn ?? undefined) ? ` by ${staffById(st.waitingOn ?? undefined)!.name}` : ""} · {waitText(st.waitingDays)}
                   </span>
                 </span>
               </li>
@@ -256,6 +258,42 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
 
       <PeopleInset title="Care team" ids={team} />
     </aside>
+  );
+}
+
+/**
+ * Where this patient's care activity went over the last 12 months, per body system on the record
+ * (ref 2's body-condition % cards, condensed). Only shown when there is more than one system.
+ */
+function SystemShares({ record }: { record: PatientRecord }) {
+  const shares = systemShares(record);
+  const total = shares[0]?.total ?? 0;
+  if (shares.length < 2 || total === 0) return null;
+  return (
+    <div className="mt-4 border-t border-line pt-3">
+      <p className="text-[11px] text-muted">
+        Share of care activity · last 12 months · {total} {total === 1 ? "event" : "events"}
+      </p>
+      <ul className="mt-2 flex flex-col gap-2">
+        {shares.map((s) => (
+          <li key={s.id} className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2 text-xs">
+            <OrganImage kind={s.organ} alt={ORGAN_LABEL[s.organ]} className="size-6" />
+            <span className="min-w-0">
+              <span className="flex items-baseline justify-between gap-2">
+                <span className="truncate text-ink-2">{s.name}</span>
+                <span className="shrink-0 text-[11px] text-muted tabular">
+                  {s.events} of {total}
+                </span>
+              </span>
+              <span className="mt-1 block h-1 overflow-hidden rounded-full bg-sunken" aria-hidden="true">
+                <span className="block h-full rounded-full bg-ink-2" style={{ width: `${s.percent}%` }} />
+              </span>
+            </span>
+            <span className="w-9 text-right text-ink tabular">{s.percent}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

@@ -120,7 +120,7 @@ export function ReferralStepper() {
         {/* referral header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
-            <Avatar src={patientById(r.patientId)?.avatar} name={patientById(r.patientId)?.name ?? "Patient"} size="md" />
+            <Avatar src={patientById(r.patientId)?.avatar} name={patientById(r.patientId)?.name ?? "Patient"} size="md" loading="eager" />
             <div className="min-w-0">
               <p className="text-base text-ink">{patientById(r.patientId)?.name}</p>
               <p className="text-xs text-muted">

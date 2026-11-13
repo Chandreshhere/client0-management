@@ -19,7 +19,7 @@ import { useToast } from "@/components/ui/toast";
 import { formatDate, formatTime, relativeTime, TODAY } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { recordHref, type RecordDocument } from "./data";
-import { eventForDoc } from "./record-model";
+import { eventForDoc, readableDates } from "./record-model";
 import { clinicalAccess, roleLabel } from "./access";
 import { REVIEW_OUTCOME_LABEL, updateRecord, useRecord, type ReviewOutcome } from "./store";
 
@@ -329,7 +329,7 @@ function FauxPage({
               </tbody>
             </table>
           ) : null}
-          {summary ? <p className="mt-4 text-[11px] leading-relaxed text-ink-2">{summary}</p> : null}
+          {summary ? <p className="mt-4 text-[11px] leading-relaxed text-ink-2">{readableDates(summary)}</p> : null}
         </>
       ) : null}
       <div className="mt-4 flex flex-col gap-2" aria-hidden="true">

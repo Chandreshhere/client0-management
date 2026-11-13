@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Bed, Bone, Brain, CalendarBlank, ClipboardText, Drop, Gauge, Heartbeat, Moon, PersonSimpleWalk, Pulse, Ruler, Scales, TestTube, Thermometer, Wind } from "@phosphor-icons/react";
+import { Bed, Bone, Brain, CalendarBlank, ClipboardText, Drop, Flask, Gauge, Heartbeat, Moon, PersonSimpleWalk, Pulse, Ruler, Scales, Thermometer, Wind } from "@phosphor-icons/react";
 import { BarsSpark, DotsSpark, EcgSpark, WaveSpark } from "@/components/viz/condition";
 import { cn } from "@/lib/cn";
 import type { VitalMeasure } from "./measures";
@@ -24,7 +24,7 @@ export function measureIcon(m: Pick<VitalMeasure, "label" | "lab">): ReactNode {
   if (/flush/.test(l)) return <Thermometer />;
   if (/cycle/.test(l)) return <CalendarBlank />;
   if (/symptom/.test(l)) return <ClipboardText />;
-  return m.lab ? <TestTube /> : <Pulse />;
+  return m.lab ? <Flask /> : <Pulse />;
 }
 
 /**
@@ -101,6 +101,61 @@ export function ResultDotsSpark({ values, low, high, label }: { values: number[]
   );
 }
 
+/**
+ * A single reading has no trend: show where it sits against its target instead. Linear scale
+ * padded around the value and the target limits; the target zone is the kit's hatch, the value
+ * a cobalt dot, the limits printed under the track. Without a target there is nothing to place
+ * it against, so it says so.
+ */
+export function TargetGauge({ value, low, high, unit, decimals = 0, caption, className }: { value: number; low?: number; high?: number; unit: string; decimals?: number; caption: string; className?: string }) {
+  const u = unit ? ` ${unit}` : "";
+  if (low === undefined && high === undefined) {
+    return (
+      <span className={cn("flex h-full items-center gap-2 text-[11px] text-muted", className)} role="img" aria-label={`${caption}: ${value.toFixed(decimals)}${u}, no target set`}>
+        <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
+        One reading · no target to compare with
+      </span>
+    );
+  }
+  const marks = [value, low, high].filter((v): v is number => v !== undefined);
+  const lo0 = Math.min(...marks), hi0 = Math.max(...marks);
+  const span = hi0 - lo0 || Math.abs(hi0) * 0.2 || 1;
+  // open-ended targets extend to the edge of the scale; a zero floor where the measure can't go negative
+  const min = Math.max(lo0 >= 0 ? 0 : -Infinity, lo0 - span * 0.35), max = hi0 + span * 0.35;
+  const pct = (v: number) => ((v - min) / (max - min || 1)) * 100;
+  const zoneFrom = low !== undefined ? pct(low) : 0;
+  const zoneTo = high !== undefined ? pct(high) : 100;
+  const inside = (low === undefined || value >= low) && (high === undefined || value <= high);
+  const target = low !== undefined && high !== undefined ? `${low} – ${high}` : high !== undefined ? `< ${high}` : `≥ ${low}`;
+  return (
+    <span
+      className={cn("flex h-full w-full flex-col justify-center gap-2", className)}
+      role="img"
+      aria-label={`${caption}: one reading, ${value.toFixed(decimals)}${u}, ${inside ? "inside" : "outside"} the target ${target}${u}. Hatched zone = target.`}
+    >
+      <span className="text-[11px] leading-none text-muted" aria-hidden="true">
+        One reading · placed against the target
+      </span>
+      <span className="relative block h-2 rounded-full bg-sunken" aria-hidden="true">
+        <span className="absolute inset-y-0 rounded-full bg-hatch shadow-[inset_0_0_0_1px_var(--color-line-strong)]" style={{ left: `${zoneFrom}%`, right: `${100 - zoneTo}%` }} />
+        <span className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-2 ring-surface" style={{ left: `${pct(value)}%` }} />
+      </span>
+      <span className="relative block h-3 text-[11px] leading-none text-muted tabular" aria-hidden="true">
+        {low !== undefined ? (
+          <span className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${zoneFrom}%` }}>
+            {low}
+          </span>
+        ) : null}
+        {high !== undefined ? (
+          <span className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${zoneTo}%` }}>
+            {high}
+          </span>
+        ) : null}
+      </span>
+    </span>
+  );
+}
+
 /** Spark for a measure's history, chosen to fit what is measured; the aria-label says what it shows. */
 export function MeasureSpark({ m }: { m: VitalMeasure }) {
   const pts = m.points;
@@ -109,13 +164,8 @@ export function MeasureSpark({ m }: { m: VitalMeasure }) {
   const values = pts.map((p) => p.v);
   const unit = m.unit ? ` ${m.unit}` : "";
   const n = pts.length;
-  if (n < 2 && m.spark !== "ecg") {
-    return (
-      <span className="flex h-full items-center gap-2 text-[11px] text-muted" role="img" aria-label={`${m.label}: a single reading so far, ${measureValueText(m, latest)}${unit}`}>
-        <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
-        One reading — no trend yet
-      </span>
-    );
+  if (n < 2 && m.spark !== "ecg" && !m.twoValues) {
+    return <TargetGauge value={latest.v} low={m.range?.low} high={m.range?.high} unit={m.unit} decimals={m.decimals} caption={m.label} />;
   }
   switch (m.spark) {
     case "range-bars":

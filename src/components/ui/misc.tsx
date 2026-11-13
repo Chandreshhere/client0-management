@@ -23,7 +23,7 @@ export function PageHeader({
         <h1 className="text-[36px] font-light leading-[1.05] tracking-[-0.028em] text-ink md:text-display">{title}</h1>
         {description ? <p className="mt-3 max-w-[60ch] text-sm text-muted">{description}</p> : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }

@@ -163,6 +163,21 @@ export function findConflicts(req: SlotRequest, occ: Occupant[]): Conflict[] {
   return out.sort((a, b) => a.occupant.start - b.occupant.start);
 }
 
+/**
+ * The patient's own commitments that overlap a requested time: their active bookings and any class
+ * they're enrolled in (cancelled places excluded). A soft check — joint or back-to-back care across
+ * disciplines is normal, so the desk is told rather than blocked.
+ */
+export function patientOverlaps(patientId: string, req: Pick<SlotRequest, "date" | "start" | "duration" | "excludeIds">, events: DiaryEvent[]): DiaryEvent[] {
+  const end = req.start + req.duration;
+  return events.filter((e) => {
+    if (e.date !== req.date || req.excludeIds?.includes(e.id) || !(e.start < end && req.start < e.end)) return false;
+    if (e.booking && !isActive(e.booking)) return false;
+    if (e.booking?.patientId === patientId) return true;
+    return !!e.cls?.enrolled.some((x) => x.patientId === patientId && x.attendance !== "cancelled");
+  });
+}
+
 export const onLeave = (staffId: string, date: string) => {
   const l = LEAVE[staffId];
   return l ? date < l.until : false;

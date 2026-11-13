@@ -7,7 +7,9 @@ const COLUMNS = [
   {
     title: "Product",
     links: [
+      { href: "/#anatomy", label: "Anatomy by condition" },
       { href: "/#product", label: "Workspaces" },
+      { href: "/#journey", label: "Care journey" },
       { href: "/#workflows", label: "Referral workflow" },
       { href: "/#modules", label: "Modules" },
       { href: "/#india", label: "India-first details" },

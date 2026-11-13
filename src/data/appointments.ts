@@ -24,7 +24,7 @@ export const TODAY_APPOINTMENTS: Appointment[] = [
   { id: "a-1100", patientId: "p-kabir", staffId: "s-ananya", service: "Heart Health review · week 9", discipline: "medical", start: D(13, "11:00"), durationMin: 30, room: "Consult 1", status: "booked", kind: "review", formsComplete: true },
   { id: "a-1130", patientId: "p-kabir", staffId: "s-meera", service: "Nutrition follow-up", discipline: "nutrition", start: D(13, "11:30"), durationMin: 30, room: "Nutrition Studio", status: "booked", kind: "follow-up", formsComplete: true },
   { id: "a-1200", patientId: "p-aditi", staffId: "s-lakshmi", service: "Breath & Balance", discipline: "movement", start: D(13, "12:00"), durationMin: 45, room: "Yoga Hall", status: "booked", kind: "class" },
-  { id: "a-1230", patientId: "p-aditi", staffId: "s-vikram", service: "PCOS review", discipline: "medical", start: D(13, "12:30"), durationMin: 30, room: "Consult 2", status: "booked", kind: "review", formsComplete: true },
+  { id: "a-1445", patientId: "p-aditi", staffId: "s-vikram", service: "PCOS review", discipline: "medical", start: D(13, "14:45"), durationMin: 30, room: "Consult 2", status: "booked", kind: "review", formsComplete: true },
   { id: "a-1400", patientId: "p-priya", staffId: "s-vikram", service: "New consultation", discipline: "medical", start: D(13, "14:00"), durationMin: 45, room: "Consult 2", status: "booked", kind: "consultation", formsComplete: false },
   { id: "a-1500", patientId: "p-arun", staffId: "s-ananya", service: "Cardiac rehab review", discipline: "medical", start: D(13, "15:00"), durationMin: 30, room: "Consult 1", status: "booked", kind: "review", formsComplete: true },
   { id: "a-1530", patientId: "p-sunita", staffId: "s-vikram", service: "BP & renal follow-up", discipline: "medical", start: D(13, "15:30"), durationMin: 30, room: "Consult 2", status: "booked", kind: "follow-up", formsComplete: true },
@@ -76,7 +76,7 @@ function generateWeek(): Appointment[] {
       const slots = pr.discipline === "movement" ? MOVEMENT_SLOTS : SLOTS;
       const pool = pr.patients.filter((pid) => eligible(pid, day));
       if (!pool.length) continue;
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < count && pool.length; i++) {
         let slot = slots[Math.floor(rand() * slots.length)];
         let guard = 0;
         while (used.has(slot) && guard++ < 20) slot = slots[Math.floor(rand() * slots.length)];
@@ -88,7 +88,7 @@ function generateWeek(): Appointment[] {
         const service = pr.services[Math.floor(rand() * pr.services.length)];
         out.push({
           id: `a-${day}-${pr.id}-${slot.replace(":", "")}`,
-          patientId: pool[Math.floor(rand() * pool.length)],
+          patientId: pool.splice(Math.floor(rand() * pool.length), 1)[0],
           staffId: pr.id,
           service,
           discipline: pr.discipline,

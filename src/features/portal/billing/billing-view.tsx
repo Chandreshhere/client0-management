@@ -19,6 +19,7 @@ import { DemoNote, FocalCard, Panel, PortalHeader, Reveal, downloadFile } from "
 import { usePortalStore } from "../store";
 import { apptStore } from "../appointments/store";
 import { dayLabel, daysFromToday, longDate, shortDate } from "../time";
+import { PackageBurnDown, VisitCoverage } from "./insights";
 import { BALANCE_DUE, BOOKED_SESSIONS, CELLS, CLASS_DAY_NAMES, COVERS_UNTIL, FREE, MY_INVOICES, PACKAGE, PROGRAMME_REVIEW, receiptText, upcomingCharges, type SessionCell } from "./data";
 
 /**
@@ -94,11 +95,22 @@ export function BillingView() {
         </Reveal>
       </div>
 
-      <Reveal index={2}>
+      {PACKAGE ? (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+          <Reveal index={2}>
+            <PackageBurnDown />
+          </Reveal>
+          <Reveal index={3}>
+            <VisitCoverage requests={appts.requests} />
+          </Reveal>
+        </div>
+      ) : null}
+
+      <Reveal index={4}>
         <InvoicesSection />
       </Reveal>
 
-      <Reveal index={3}>
+      <Reveal index={5}>
         <section aria-labelledby="bill-how" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-3 rounded-card bg-surface p-6">
             <h2 id="bill-how" className="text-lg font-normal tracking-[-0.01em] text-ink">

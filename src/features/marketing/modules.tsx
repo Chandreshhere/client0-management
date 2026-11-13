@@ -124,7 +124,7 @@ function CarePlanCell({ className }: { className?: string }) {
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
           <span>{pname("p-kabir")} · {CARE_PLAN.episode}</span>
           <span className="inline-flex items-center gap-2">
-            <Avatar src={lead.avatar} name={lead.name} size="xs" />
+            <Avatar src={lead.avatar} name={lead.name} size="xs" loading="eager" />
             Accountable: {lead.name}
           </span>
         </div>
@@ -141,7 +141,7 @@ function CarePlanCell({ className }: { className?: string }) {
                 <p className="mt-1 line-clamp-2 text-sm text-ink">{l.text}</p>
               </div>
               <span className="hidden shrink-0 items-center gap-2 text-xs text-muted sm:inline-flex">
-                <Avatar src={by?.avatar} name={by?.name ?? ""} size="xs" />
+                <Avatar src={by?.avatar} name={by?.name ?? ""} size="xs" loading="eager" />
                 {short(l.updated)}
               </span>
             </li>
@@ -165,7 +165,7 @@ function CarePlanCell({ className }: { className?: string }) {
               const owner = staffById(a.owner) ?? patientById(a.owner);
               return (
                 <li key={a.id} className="flex items-center gap-2 text-sm">
-                  <Avatar src={owner?.avatar} name={owner?.name ?? ""} size="xs" />
+                  <Avatar src={owner?.avatar} name={owner?.name ?? ""} size="xs" loading="eager" />
                   <span className={cn("min-w-0 flex-1 truncate", a.status === "done" ? "text-muted line-through" : "text-ink")}>{a.label}</span>
                   <StatusBadge tone={statusTone[a.status]} dot={false} className="shrink-0">
                     {statusLabel[a.status]}
@@ -261,7 +261,7 @@ function ReviewCell({ className }: { className?: string }) {
         return (
           <Row
             key={d.id}
-            lead={<Avatar src={reviewer?.avatar} name={reviewer?.name ?? ""} size="md" />}
+            lead={<Avatar src={reviewer?.avatar} name={reviewer?.name ?? ""} size="md" loading="eager" />}
             title={d.title}
             meta={
               <>

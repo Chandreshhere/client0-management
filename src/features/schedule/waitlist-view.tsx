@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
+import { useLenis } from "lenis/react";
 import { ArrowUpRight, CalendarBlank, CalendarCheck, CalendarPlus, Clock, DotsThree, HourglassMedium, ListPlus, Trash, Warning, X } from "@phosphor-icons/react";
 import { CLASSES } from "@/data/programs";
 import { DISCIPLINE_LABEL } from "@/data/appointments";
@@ -30,6 +31,7 @@ import { useSchedule, type WaitEntry, type WaitOffer } from "./store";
 import { DisciplineDot } from "./ui";
 import { AddWaitlistModal, OfferSlotModal } from "./waitlist-modals";
 import { offerable, waitMatch, type WaitMatch } from "./waitlist-insights";
+import { WaitlistTimeline, type ListRow, type Outlook } from "./waitlist-timeline";
 
 type Sort = "priority" | "oldest" | "newest";
 
@@ -47,11 +49,32 @@ const offerLabel = (o: WaitOffer) => {
   return `${shortDay(o.date)}, ${hhmm(o.start)} · ${staffById(o.staffId)?.name}`;
 };
 
+/** What happens next for an open request: the slot already offered, else the earliest match (or why there's none). */
+function outlookFor(w: WaitEntry, m: WaitMatch): Outlook {
+  if (w.status === "offered" && w.offer) {
+    if (w.offer.kind === "slot") return { kind: "offered", date: w.offer.date, start: w.offer.start };
+    const classId = w.offer.classId;
+    const c = CLASSES.find((x) => x.id === classId);
+    if (c) return { kind: "offered", date: dateOf(c.start), start: minOf(c.start) };
+  }
+  if (m.kind === "slots") return m.count > 0 && m.next ? { kind: "slot", date: m.next.date, start: m.next.start, count: m.count, unit: "slot" } : { kind: "none", label: `no slot by ${shortDay(DIARY_TO).replace(/ \w+$/, "")}` };
+  if (m.kind === "leave") return { kind: "leave", who: m.names, until: m.until, others: m.anyCount };
+  if (m.kind === "class") {
+    const c = CLASSES.find((x) => x.id === w.classId);
+    return m.free > 0 && c ? { kind: "slot", date: dateOf(c.start), start: minOf(c.start), count: m.free, unit: "place" } : { kind: "none", label: "class full" };
+  }
+  return { kind: "none", label: "—" };
+}
+
+/** "Weekday evenings" → "weekday evenings" after "Prefers", but day and month names keep their capital ("Fri 12:00"). */
+const sentenceTail = (s: string) => (/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1));
+
 /** Who a request is waiting for: one named practitioner, or "any <discipline> practitioner". */
 const requestedKey = (w: WaitEntry) => (w.staffIds.length === 1 ? w.staffIds[0] : `any-${w.discipline}`);
 
 function Waitlist() {
   const router = useRouter();
+  const lenis = useLenis();
   const { toast } = useToast();
   const { waitlist, person, patchWaitlist, removeWaitlist, restoreWaitlist, addBookings, occupants, takeClassSeat, classSeats } = useSchedule();
   const [disc, setDisc] = useState<CareDiscipline[]>([...CARE_DISCIPLINES]);
@@ -90,6 +113,32 @@ function Waitlist() {
       return b.addedAt.localeCompare(a.addedAt);
     });
   }, [waitlist, disc, who, sort]);
+
+  // One line per open request in view (same filters as the table), longest waiting first.
+  const lines = useMemo<ListRow[]>(
+    () =>
+      rows
+        .filter((w) => w.status !== "booked")
+        .sort((a, b) => a.addedAt.localeCompare(b.addedAt))
+        .map((w) => ({
+          id: w.id,
+          name: person(w.patientId)?.name ?? "Patient",
+          priority: w.priority,
+          want: w.want,
+          discipline: w.discipline,
+          added: w.addedAt,
+          outlook: outlookFor(w, matches.get(w.id)!),
+        })),
+    [rows, person, matches],
+  );
+
+  const revealRow = (id: string) => {
+    const el = [...document.querySelectorAll<HTMLElement>(`[data-wait-row="${id}"]`)].find((x) => x.offsetParent !== null);
+    if (!el) return;
+    if (lenis) lenis.scrollTo(el, { offset: -160 });
+    else el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.animate([{ backgroundColor: "var(--color-primary-soft)" }, { backgroundColor: "transparent" }], { duration: 1400, easing: "cubic-bezier(0.25, 1, 0.5, 1)" });
+  };
 
   const high = open.filter((w) => w.priority === "high" || w.priority === "urgent").length;
   const offered = open.filter((w) => w.status === "offered").length;
@@ -263,20 +312,45 @@ function Waitlist() {
         </div>
       </div>
 
-      {/* ref 5: who the open requests are waiting for, with counts — also a filter for the table */}
-      <section aria-labelledby="wl-people" className="flex flex-col gap-2 rounded-card bg-surface p-2">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-2 pt-2">
-          <h2 id="wl-people" className="text-sm text-ink">
-            Requested practitioners <span className="text-muted">· open requests each</span>
-          </h2>
-          <p className="text-xs text-muted">{who ? "Showing one practitioner's requests — select them again to show everyone." : "Select someone to see only their requests."}</p>
-        </div>
-        {people.length ? (
-          <PeopleList className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4" people={people} selected={who ?? undefined} onSelect={(id) => setWho((cur) => (cur === id ? null : id))} />
-        ) : (
-          <p className="px-2 pb-2 text-xs text-muted">No open requests.</p>
-        )}
-      </section>
+      {/* ref 5: who the open requests are waiting for (with counts, also a filter) beside each request's line */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+        <section aria-labelledby="wl-people" className="flex flex-col gap-2 rounded-card bg-surface p-2">
+          <div className="flex flex-col gap-1 px-2 pt-2">
+            <h2 id="wl-people" className="text-sm text-ink">
+              Requested practitioners <span className="text-muted">· open requests each</span>
+            </h2>
+            <p className="text-xs text-muted">{who ? "Showing one practitioner's requests — select them again to show everyone." : "Select someone to see only their requests."}</p>
+          </div>
+          {people.length ? (
+            <PeopleList className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1" people={people} selected={who ?? undefined} onSelect={(id) => setWho((cur) => (cur === id ? null : id))} />
+          ) : (
+            <p className="px-2 pb-2 text-xs text-muted">No open requests.</p>
+          )}
+        </section>
+
+        <section aria-labelledby="wl-lines" className="flex min-w-0 flex-col gap-4 rounded-card bg-surface p-6">
+          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-1">
+            <div className="min-w-0 flex-1">
+              <h2 id="wl-lines" className="text-lg font-normal tracking-[-0.01em] text-ink">
+                Time on the list → next slot
+              </h2>
+              <p className="mt-1 text-xs text-muted">
+                Longest waiting first · the next slot is the earliest the diary can offer by {shortDay(DIARY_TO)}, same search as the Offer dialog · click a line to find the request
+              </p>
+            </div>
+            {lines.length ? (
+              <p className="text-sm text-ink-2">
+                <span className="text-ink">{lines.filter((l) => l.outlook.kind === "slot").length}</span> of {lines.length} can be offered a slot
+              </p>
+            ) : null}
+          </div>
+          {lines.length ? (
+            <WaitlistTimeline rows={lines} endDate={DIARY_TO} onPick={revealRow} />
+          ) : (
+            <p className="flex min-h-[120px] items-center justify-center rounded-inner bg-sunken px-4 text-center text-sm text-muted">{filtered ? "No open requests match these filters." : "No open requests."}</p>
+          )}
+        </section>
+      </div>
 
       <div className="flex flex-col gap-4">
         <Card padded={false} className="min-w-0 overflow-hidden">
@@ -326,6 +400,7 @@ function Waitlist() {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, transition: { duration: 0.15 } }}
                           transition={spring}
+                          data-wait-row={w.id}
                           className={cn("border-t border-line align-middle transition-opacity", w.status === "booked" && "opacity-60")}
                         >
                           <td className="py-4 pl-6 pr-3">
@@ -360,7 +435,7 @@ function Waitlist() {
               {/* mobile cards */}
               <ul className="flex flex-col md:hidden">
                 {rows.map((w) => (
-                  <li key={w.id} className="flex flex-col gap-3 border-t border-line p-4 first:border-t-0">
+                  <li key={w.id} data-wait-row={w.id} className="flex flex-col gap-3 border-t border-line p-4 first:border-t-0">
                     <div className="flex items-start justify-between gap-2">
                       <PatientCell w={w} />
                       <StatusBadge tone={priorityTone(w.priority)}>{PRIORITY_LABEL[w.priority]}</StatusBadge>
@@ -428,7 +503,7 @@ function WantCell({ w }: { w: WaitEntry }) {
         {cls ? `${cls.title} · ${shortDay(dateOf(cls.start))}, ${hhmm(minOf(cls.start))}` : staff ? staff.name : `Any ${DISCIPLINE_LABEL[w.discipline].toLowerCase()} practitioner`}
         {w.note ? ` · ${w.note}` : ""}
       </span>
-      <span className="truncate pl-4 text-xs text-muted">Prefers {w.preferred.charAt(0).toLowerCase() + w.preferred.slice(1)}</span>
+      <span className="truncate pl-4 text-xs text-muted">Prefers {sentenceTail(w.preferred)}</span>
     </span>
   );
 }

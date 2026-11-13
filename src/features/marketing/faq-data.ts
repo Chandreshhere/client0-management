@@ -41,6 +41,11 @@ const ALL: Record<string, Faq> = {
     q: "Which plan is cheaper for a team of five?",
     a: `Five users fits both ${team.name} and ${clinic.name}. At five users ${clinic.name} costs ${formatINR(clinicAt5)} a month against ${formatINR(teamAt5)} on ${team.name}, with the same ${formatINR(clinic.setupFee)} setup fee, and it adds the patient portal, the care-coordinator workspace and administration.`,
   },
+  anatomy: {
+    id: "anatomy",
+    q: "Why does each patient's record open on a different organ?",
+    a: "Carelane files every recorded condition under a body system, and the patient overview shows that system's organ: COPD opens on the lungs, CKD on the kidneys, type 2 diabetes on the pancreas, knee osteoarthritis on the knee joint. A patient with conditions in several systems gets one card per system. The 3D organs are illustrations for orientation, not the patient's imaging, and a record with no condition yet shows no organ.",
+  },
   abha: {
     id: "abha",
     q: "Does Carelane work with ABHA and ABDM?",
@@ -73,5 +78,5 @@ const ALL: Record<string, Faq> = {
   },
 };
 
-export const LANDING_FAQ: Faq[] = [ALL.what, ALL.shared, ALL.setup, ALL.monthly, ALL.abha, ALL.residency, ALL.dpdp, ALL.demo, ALL.portal];
+export const LANDING_FAQ: Faq[] = [ALL.what, ALL.shared, ALL.anatomy, ALL.setup, ALL.monthly, ALL.abha, ALL.residency, ALL.dpdp, ALL.demo, ALL.portal];
 export const PRICING_FAQ: Faq[] = [ALL.setup, ALL.monthly, ALL.five, ALL.shared, ALL.portal, ALL.residency, ALL.try];

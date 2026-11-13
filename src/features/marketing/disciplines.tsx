@@ -6,7 +6,8 @@ import { patientById } from "@/data/patients";
 import { PLANS } from "@/data/plans";
 import { DEMO_USER, ROLE_ORDER, staffById } from "@/data/staff";
 import type { Role } from "@/data/types";
-import { Avatar, AvatarStack } from "@/components/ui/avatar";
+import { Avatar } from "@/components/ui/avatar";
+import { EagerAvatarStack } from "./eager-avatars";
 import { StatusBadge, type Tone } from "@/components/ui/status";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/format";
@@ -135,7 +136,7 @@ function DisciplineGroup({ d }: { d: Discipline }) {
           </span>
           {person ? (
             <span className="inline-flex min-w-0 items-center gap-2 text-xs text-ink-2">
-              <Avatar src={person.avatar} name={person.name} size="xs" />
+              <Avatar src={person.avatar} name={person.name} size="xs" loading="eager" />
               <span className="truncate">{person.name}</span>
             </span>
           ) : null}
@@ -176,7 +177,7 @@ function SharedRecord() {
   const team = [CARE_PLAN.responsible, kabirPlan.authorId, sunrise.instructorId].map((id) => staffById(id)).filter((p): p is NonNullable<typeof p> => !!p);
   return (
     <div className={cn("mx-auto flex max-w-[760px] flex-col gap-4 rounded-card bg-primary p-6 text-white sm:flex-row sm:items-center", s.reveal)}>
-      <Avatar src={kabir.avatar} name={kabir.name} size="lg" className="ring-2 ring-white/30" />
+      <Avatar src={kabir.avatar} name={kabir.name} size="lg" loading="eager" className="ring-2 ring-white/30" />
       <div className="min-w-0 flex-1">
         <p className="text-xs text-white/70">One shared record</p>
         <p className="mt-1 text-[22px] font-light leading-tight tracking-[-0.015em]">
@@ -185,7 +186,7 @@ function SharedRecord() {
         <p className="mt-2 text-xs text-white/70">Medical, nutrition and movement entries on one timeline — each with its author, date and state.</p>
       </div>
       <span className="sr-only">Care team: {team.map((p) => p.name).join(", ")}</span>
-      <AvatarStack people={team.map((p) => ({ name: p.name, avatar: p.avatar }))} size="md" />
+      <EagerAvatarStack people={team.map((p) => ({ name: p.name, avatar: p.avatar }))} size="md" />
     </div>
   );
 }

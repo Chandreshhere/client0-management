@@ -14,6 +14,7 @@ import { StatusBadge, priorityTone } from "@/components/ui/status";
 import type { CareTask } from "./store";
 import { PRIORITY_LABEL, STATUS_LABEL, STATUS_ORDER, byDue, dueLabel } from "./task-meta";
 import { CountChip, PersonInline } from "./ui";
+import { OrganGlyph } from "./organ-glyph";
 import { strikeClass } from "./task-list";
 
 const STATUS_ICON: Record<TaskStatus, Icon> = { todo: Circle, "in-progress": CircleHalf, blocked: Prohibit, done: CheckCircle };
@@ -82,7 +83,16 @@ function BoardCard({ task, onMove, onOpen }: { task: CareTask; onMove: (to: Task
         <span className={cn("tabular", due.tone === "danger" ? "text-danger" : due.tone === "ink" ? "text-ink" : "text-muted")}>{due.text}</span>
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="min-w-0 text-xs">{task.patientId ? <PersonInline id={task.patientId} link className="max-w-full" /> : <span className="text-muted">Clinic task</span>}</span>
+        <span className="flex min-w-0 items-center gap-1.5 text-xs">
+          {task.patientId ? (
+            <>
+              <PersonInline id={task.patientId} link className="min-w-0" />
+              <OrganGlyph patientId={task.patientId} size="xs" className="relative z-10" />
+            </>
+          ) : (
+            <span className="text-muted">Clinic task</span>
+          )}
+        </span>
         <span className="relative z-10 flex shrink-0 gap-1">
           {prev ? (
             <IconButton label={`Move to ${STATUS_LABEL[prev]}`} tooltip="top" size="sm" variant="soft" onClick={() => onMove(prev)}>

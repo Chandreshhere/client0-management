@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { EagerAvatars } from "@/features/marketing/eager-avatars";
 import { HashScroll } from "@/features/marketing/hash-scroll";
 import { JsonLd, organizationLd } from "@/features/marketing/json-ld";
 import { SiteFooter } from "@/features/marketing/site-footer";
@@ -21,7 +20,6 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
       </main>
       <SiteFooter />
       <HashScroll />
-      <EagerAvatars />
       <JsonLd data={organizationLd()} />
     </div>
   );

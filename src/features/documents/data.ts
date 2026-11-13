@@ -42,12 +42,13 @@ export interface DocReview {
 
 export const DOC_CONTENT: Record<string, DocContent> = {
   d1: {
-    summary: "Fasting lipid profile. LDL is down from 142 mg/dL at the September baseline but remains above the secondary-prevention target.",
+    summary: "Fasting lipid profile. LDL 118 mg/dL — up from 96 mg/dL in August and above the < 70 mg/dL secondary-prevention target. HDL and triglycerides are within range.",
+    // matches the same panel on Kabir's record (LAB_PANELS / event e26-24); total = LDL + HDL + TG/5
     values: [
-      { label: "Total cholesterol", value: "186", unit: "mg/dL", ref: "< 200" },
+      { label: "Total cholesterol", value: "192", unit: "mg/dL", ref: "< 200" },
       { label: "LDL cholesterol", value: "118", unit: "mg/dL", ref: "< 70 (CAD target)", flag: "high" },
-      { label: "HDL cholesterol", value: "46", unit: "mg/dL", ref: "> 40" },
-      { label: "Triglycerides", value: "142", unit: "mg/dL", ref: "< 150" },
+      { label: "HDL cholesterol", value: "44", unit: "mg/dL", ref: "> 40" },
+      { label: "Triglycerides", value: "148", unit: "mg/dL", ref: "< 150" },
     ],
   },
   d2: {

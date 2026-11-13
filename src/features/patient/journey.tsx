@@ -175,7 +175,8 @@ function JourneyInner({ patient }: { patient: Patient }) {
             { value: "programmes", label: "Nutrition & movement" },
           ]}
         />
-        <Segmented
+        <div className="scrollbar-none max-w-full overflow-x-auto" data-lenis-prevent>
+          <Segmented
           size="sm"
           variant="tray"
           ariaLabel="Body system"
@@ -183,6 +184,7 @@ function JourneyInner({ patient }: { patient: Patient }) {
           onChange={setSystem}
           items={[{ value: "all", label: "All systems" }, ...record.systems.map((s) => ({ value: s.id, label: s.name }))]}
         />
+        </div>
       </div>
       <p className="text-xs text-muted" aria-live="polite">
         {shown} events · {linkCount} documented links in {year}

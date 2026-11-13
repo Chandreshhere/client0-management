@@ -27,10 +27,12 @@ export function useWidth<T extends HTMLElement>() {
 }
 
 /**
- * One tab stop for a row of marks: ←/→ (and Home/End) move focus between them, Enter/Space picks.
- * Hover and focus share one "active" index so the tooltip shows the same thing for both.
+ * One tab stop for a row of marks: ←/→ (or ↑/↓ for stacked rows, `axis = "y"`) and Home/End move
+ * focus between them, Enter/Space picks. Hover and focus share one "active" index so the tooltip
+ * shows the same thing for both.
  */
-export function useMarks(count: number, initial: number, onPick?: (i: number) => void) {
+export function useMarks(count: number, initial: number, onPick?: (i: number) => void, axis: "x" | "y" = "x") {
+  const [prevKey, nextKey] = axis === "x" ? ["ArrowLeft", "ArrowRight"] : ["ArrowUp", "ArrowDown"];
   const refs = useRef<(SVGGElement | null)[]>([]);
   const [focusIdx, setFocusIdx] = useState(initial);
   const [active, setActive] = useState<number | null>(null);
@@ -59,10 +61,10 @@ export function useMarks(count: number, initial: number, onPick?: (i: number) =>
     onBlur: () => setActive((a) => (a === i ? null : a)),
     onClick: () => onPick?.(i),
     onKeyDown: (e: KeyboardEvent<SVGGElement>) => {
-      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      if (e.key === nextKey || e.key === prevKey) {
         e.preventDefault();
         e.stopPropagation();
-        move(i + (e.key === "ArrowRight" ? 1 : -1));
+        move(i + (e.key === nextKey ? 1 : -1));
       } else if (e.key === "Home" || e.key === "End") {
         e.preventDefault();
         move(e.key === "Home" ? 0 : count - 1);

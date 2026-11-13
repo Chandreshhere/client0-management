@@ -34,9 +34,10 @@ import { BRANCHES, DEMO_USER, STAFF, staffById } from "@/data/staff";
 import { PATIENTS, clinicNumber, patientById } from "@/data/patients";
 import { DISCIPLINE_LABEL, TODAY_APPOINTMENTS } from "@/data/appointments";
 import { TASKS } from "@/data/care";
-import { DOCUMENTS, INVOICES } from "@/data/records";
+import { DOCUMENTS, INVOICES, collected } from "@/data/records";
 import type { AppointmentStatus, Discipline, Patient, Staff } from "@/data/types";
-import { ACTIVITY, NOW_LABEL, NOW_MIN, TODAY_KEY, istDayKey, istMinutes, minutesUntil, shortDate, spanLabel, whenLabel } from "./data";
+import { ACTIVITY, NOW_LABEL, NOW_MIN, istMinutes, minutesUntil, shortDate, spanLabel, whenLabel } from "./data";
+import { CaseMixPanel } from "./case-mix";
 import { DashboardHeader, FocalCard, FocalHead, Panel, Reveal } from "./ui";
 
 /**
@@ -58,9 +59,10 @@ const toCome = appts.filter((a) => a.status === "booked" && istMinutes(a.start) 
 const OPEN = new Set(["due", "overdue", "partially-paid", "failed"]);
 const openInvoices = INVOICES.filter((i) => OPEN.has(i.status));
 const outstanding = openInvoices.reduce((s, i) => s + (i.total - i.paid), 0);
-const unconfirmed = INVOICES.filter((i) => i.status === "failed").reduce((s, i) => s + i.total, 0);
-// Only confirmed money counts: invoices issued today with a recorded payment (a failed callback is not money).
-const collectedToday = INVOICES.filter((i) => istDayKey(i.issuedAt) === TODAY_KEY && i.status !== "failed").reduce((s, i) => s + Math.max(0, i.paid), 0);
+// Only confirmed money counts (shared `collected()`); a payment attempt whose callback never arrived is not money.
+const unconfirmedPayments = INVOICES.flatMap((i) => i.payments ?? []).filter((p) => !p.confirmed);
+const unconfirmed = unconfirmedPayments.reduce((s, p) => s + p.amount, 0);
+const collectedToday = collected();
 const branchCount = new Set(appts.map((a) => BRANCHES.find((b) => b.rooms.includes(a.room))?.id)).size;
 
 // ---------- chart: appointments by hour × discipline ----------
@@ -133,7 +135,12 @@ export function AdminHome() {
           <Stat label="Appointments today" value={appts.length} icon={<CalendarBlank />} context={`${toCome.length} still to come · ${pluralize(branchCount, "branch", "branches")}`} />
           <Stat label="Arrived so far" value={arrived.length} icon={<SignIn />} context={`${waitingNow.length} waiting now${longestWait ? ` · longest ${spanLabel(longestWait)}` : ""}`} />
           <Stat label="No-shows" value={noShows.length} icon={<CalendarX />} context={`${pluralize(cancelled.length, "cancellation")} · ${onLeave.length ? `${onLeave[0].name} on leave` : "all staff in"}`} />
-          <Stat label="Collected today" value={formatINR(collectedToday)} icon={<Coins />} context={`${formatINR(outstanding)} outstanding · ${formatINR(unconfirmed)} unconfirmed`} />
+          <Stat
+            label="Collected today"
+            value={formatINR(collectedToday)}
+            icon={<Coins />}
+            context={unconfirmed ? `${formatINR(unconfirmed)} ${unconfirmedPayments[0].method} unconfirmed · not counted` : `${formatINR(outstanding)} outstanding`}
+          />
         </section>
       </Reveal>
 
@@ -149,7 +156,7 @@ export function AdminHome() {
                 categories={CATEGORIES}
                 series={SERIES}
                 values={VALUES}
-                height={280}
+                height={336}
                 highlight={NOW_HOUR_INDEX}
                 ariaLabel={`Appointments by hour today, stacked by discipline. ${CATEGORIES.map((c, i) => `${c}:00 ${VALUES.reduce((s, row) => s + row[i], 0)}`).join(", ")}.`}
                 formatY={(v) => String(v)}
@@ -207,6 +214,14 @@ export function AdminHome() {
         </Reveal>
 
         <Reveal index={3} className="lg:col-span-2">
+          <CaseMixPanel className="h-full" />
+        </Reveal>
+
+        <Reveal index={4}>
+          <StaffTodayPanel />
+        </Reveal>
+
+        <Reveal index={5} className="lg:col-span-2 xl:col-span-3">
           <Panel icon={<ClockCounterClockwise />} title="Activity history" subtitle="Attributed account, record and export actions" href="/settings/audit" actionLabel="Open the audit log">
             <ul className="flex flex-col rounded-inner bg-surface p-2">
               {ACTIVITY.slice(0, 7).map((e) => {
@@ -228,10 +243,6 @@ export function AdminHome() {
               })}
             </ul>
           </Panel>
-        </Reveal>
-
-        <Reveal index={4}>
-          <StaffTodayPanel />
         </Reveal>
       </div>
     </div>

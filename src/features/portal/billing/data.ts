@@ -117,3 +117,82 @@ export function receiptText(inv: Invoice) {
   ];
   return lines.join("\n");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Package burn-down: sessions left over time, from the same cells as the package grid
+// ---------------------------------------------------------------------------------------------
+
+export type BurnKind = "used" | "booked" | "free" | "expiry";
+export interface BurnPoint {
+  at: string;
+  /** sessions left after this point */
+  left: number;
+  kind: BurnKind;
+  /** package session number (absent for the expiry point) */
+  n?: number;
+  label: string;
+}
+
+export const EXPIRES_AT = PACKAGE ? istIso(PACKAGE.expires, "23:59") : null;
+
+/**
+ * Points in time order: used sessions whose date is listed in Appointments, then the booked
+ * sessions, then the free ones placed on the next class days (only those before expiry), and a
+ * final point at expiry carrying whatever would still be unused.
+ */
+export const BURN: BurnPoint[] = (() => {
+  if (!PACKAGE || !EXPIRES_AT) return [];
+  const pts: BurnPoint[] = CELLS.filter((c) => c.at && (c.state !== "free" || c.at <= EXPIRES_AT)).map((c) => ({
+    at: c.at!,
+    left: PACKAGE.total - c.n,
+    kind: c.state,
+    n: c.n,
+    label: c.state === "used" ? `Session ${c.n} used` : c.state === "booked" ? `Session ${c.n} booked` : `Session ${c.n} free — next ${CLASS_DAY_NAMES.length ? "class day" : "slot"}`,
+  }));
+  const last = pts.at(-1);
+  if (last && last.at < EXPIRES_AT) pts.push({ at: EXPIRES_AT, left: last.left, kind: "expiry", label: "Package expires" });
+  return pts;
+})();
+
+/** Free sessions that would still be unused when the package expires (at the class rhythm). */
+export const UNUSED_AT_EXPIRY = PACKAGE && EXPIRES_AT ? FREE.filter((c) => !c.at || c.at > EXPIRES_AT).length : 0;
+/** When the last session would be used, if that happens before expiry. */
+export const LAST_SESSION_AT = BURN.find((p) => p.n === PACKAGE?.total)?.at ?? null;
+/** Used sessions without a date in the portal (between the first listed one and the next). */
+export const UNDATED_USED = CELLS.filter((c) => c.state === "used" && !c.at).map((c) => c.n);
+
+// ---------------------------------------------------------------------------------------------
+// How the visits on the Appointments page are covered (read from each visit's cost line)
+// ---------------------------------------------------------------------------------------------
+
+export type Coverage = "programme" | "package" | "pay" | "none";
+export const COVERAGE_ORDER: Coverage[] = ["programme", "package", "pay", "none"];
+export const COVERAGE_LABEL: Record<Coverage, string> = {
+  programme: "Included in your programme",
+  package: "Package sessions",
+  pay: "Paid at the visit",
+  none: "No charge",
+};
+
+export function coverageOf(a: PortalAppt): Coverage {
+  if (/included in your programme/i.test(a.cost)) return "programme";
+  if (/package session/i.test(a.cost)) return "package";
+  if (amountOf(a.cost) !== null) return "pay";
+  return "none";
+}
+
+export type VisitPhase = "done" | "booked" | "requested" | "cancelled";
+export const phaseOf = (a: PortalAppt): VisitPhase =>
+  a.status === "cancelled" ? "cancelled" : a.status === "requested" ? "requested" : a.status === "booked" ? "booked" : "done";
+
+export function coverageGroups(localRequests: PortalAppt[]) {
+  const all = [...PAST, ...UPCOMING, ...REQUESTED, ...localRequests].sort((a, b) => a.start.localeCompare(b.start));
+  return {
+    total: all.length,
+    groups: COVERAGE_ORDER.map((c) => {
+      const visits = all.filter((a) => coverageOf(a) === c);
+      const amount = visits.reduce((s, a) => s + (amountOf(a.cost) ?? 0), 0);
+      return { id: c, label: COVERAGE_LABEL[c], visits, amount };
+    }),
+  };
+}

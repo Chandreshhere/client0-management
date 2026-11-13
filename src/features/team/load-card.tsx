@@ -60,21 +60,21 @@ export function LoadCard({ deactivated, onOpenStaff }: { deactivated: Record<str
         </div>
         {sel ? (
           <Inset className="flex min-w-0 flex-col gap-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-col gap-3">
               <div className="min-w-0">
                 <p className="text-sm text-ink">{sel.s.name} · this week</p>
                 <p className="text-xs text-muted">
                   {formatDate(`${WEEK_KEYS[0]}T12:00:00+05:30`, { day: "numeric", month: "short" })} – {formatDate(`${WEEK_KEYS[WEEK_KEYS.length - 1]}T12:00:00+05:30`, { day: "numeric", month: "short" })} · diary days
                 </p>
               </div>
-              <div className="text-right">
-                <p className="text-[26px] font-light leading-none tracking-[-0.01em] text-ink">{total}</p>
-                <p className="mt-1 text-xs text-muted">
+              <p className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-[26px] font-light leading-none tracking-[-0.01em] text-ink tabular">{total}</span>
+                <span className="text-xs text-muted">
                   {pluralize(total, "appointment")}
                   {noShows ? ` · ${pluralize(noShows, "no-show")}` : ""}
                   {cancelled ? ` · ${cancelled} cancelled` : ""}
-                </p>
-              </div>
+                </span>
+              </p>
             </div>
             {total || cancelled ? (
               <BarChart

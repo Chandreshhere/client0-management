@@ -23,6 +23,7 @@ import type { ActivityKind } from "./data";
 import { DUE_TIMES, PRIORITY_LABEL, PRIORITY_ORDER, SOURCE_META, STATUS_LABEL, STATUS_ORDER, dueLabel, sourceKind, statusTone } from "./task-meta";
 import { personById, staffOptions } from "./people";
 import { PersonInline } from "./ui";
+import { OrganTag } from "./organ-glyph";
 import { dayKey, isoAt, shortDay, stamp } from "./time";
 
 const KIND_LABEL: Record<ActivityKind, string> = {
@@ -211,7 +212,16 @@ function TaskSheetBody({ task }: { task: CareTask }) {
           </div>
           <div>
             <dt className="text-xs text-muted">Patient</dt>
-            <dd className="mt-2 text-sm">{task.patientId ? <PersonInline id={task.patientId} size="sm" link /> : <span className="text-muted">Clinic task — no patient</span>}</dd>
+            <dd className="mt-2 flex flex-col items-start gap-1.5 text-sm">
+              {task.patientId ? (
+                <>
+                  <PersonInline id={task.patientId} size="sm" link />
+                  <OrganTag patientId={task.patientId} />
+                </>
+              ) : (
+                <span className="text-muted">Clinic task — no patient</span>
+              )}
+            </dd>
           </div>
           <div className="sm:col-span-2">
             <dt className="text-xs text-muted">Source</dt>

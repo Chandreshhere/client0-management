@@ -24,6 +24,7 @@ import { DOC_CONTENT, OUTCOME_HINT, OUTCOME_LABEL, type ReviewOutcome } from "./
 import { SOURCE_ICON, docDue, docStatusTone, reportDateText, reportLag, uploadedText } from "./doc-meta";
 import { outcomeTone } from "./doc-table";
 import { canReview, contentAccess, displayTitle, patchDocument, useDocuments, type CareDocument } from "./store";
+import { ValueTrends } from "./value-trends";
 
 const OUTCOME_ICON: Record<ReviewOutcome, Icon> = { normal: CheckCircle, "follow-up": ListPlus, discuss: ChatCircleText };
 
@@ -237,6 +238,7 @@ function SheetBody({ doc, onClose, onIdentify }: { doc: CareDocument; onClose: (
               </table>
             ) : null}
             <p className="mt-2 text-[11px] text-muted">Transcribed for this demo — verify against the original document.</p>
+            {content?.values?.length ? <ValueTrends doc={doc} values={content.values} role={role} /> : null}
           </div>
         ) : (
           <div className="mt-2 rounded-inner bg-canvas p-4">

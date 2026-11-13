@@ -18,7 +18,7 @@ import { StatusBadge } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { usePlan, useRole } from "@/components/shell/role-context";
 import { InfoNote, ReadOnlyBanner } from "./ui";
-import { NOW_ISO, whenLabel } from "./time";
+import { NOW_ISO, whenInline } from "./time";
 import { TEMPLATE_STATUS_LABEL, settingsAccess, smsSegments, type Template, type TemplateChannel } from "./data";
 import { revertTemplate, saveTemplate, useClinic, useTemplates } from "./store";
 
@@ -219,7 +219,7 @@ export function TemplatesView() {
                 {t.clinical ? <StatusBadge tone="neutral" dot={false}>Clinical</StatusBadge> : null}
               </div>
               <p className="mt-1 text-sm text-muted">
-                {t.channel} · {t.purpose} · owner: {t.owner} · edited {whenLabel(t.editedAt).toLowerCase()} by {staffById(t.editedBy)?.name ?? "the team"}
+                {t.channel} · {t.purpose} · owner: {t.owner} · edited {whenInline(t.editedAt)} by {staffById(t.editedBy)?.name ?? "the team"}
               </p>
             </div>
             <Segmented

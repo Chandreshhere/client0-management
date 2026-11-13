@@ -127,9 +127,9 @@ export function YearScrubber({
             const inRange = y >= value[0] && y <= value[1];
             const d = density[y] ?? [];
             return (
-              <div key={y} className="flex flex-1 items-center justify-center gap-2 px-2">
+              <div key={y} className="flex min-w-0 flex-1 items-center justify-center gap-2 px-1 sm:px-2">
                 <span className={cn("text-[11px] tabular", inRange ? "text-white" : "text-muted")}>{y}</span>
-                <span className="flex items-center gap-[3px]" aria-hidden="true">
+                <span className="hidden items-center gap-[3px] md:flex" aria-hidden="true">
                   {d.filter((_, i) => i % 2 === 0).map((c, i) => (
                     <span
                       key={i}

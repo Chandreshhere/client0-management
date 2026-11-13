@@ -45,6 +45,7 @@ import { NOW_ISO, NOW_MIN, PRACTITIONERS, TODAY_KEY } from "./data";
 import { dateOf, hhmm, minOf, waitLabel, type Booking } from "./engine";
 import { WALK_IN_MIN, availabilityNow } from "./insights";
 import { StageFlow, type FlowChip, type FlowKey, type FlowStation } from "./stage-flow";
+import { WaitTimeline, type WaitRow } from "./wait-timeline";
 import { StaffOnly } from "./staff-only";
 import { displayName, useSchedule } from "./store";
 import { ApptStatus, DisciplineDot, IntakeBadge, TokenChip } from "./ui";
@@ -117,6 +118,28 @@ function QueueBoard() {
   // Average wait to be seen today: arrival → called in, for every visit that has been called.
   const seen = today.filter((b) => b.arrivedAt && b.calledAt);
   const avgWait = seen.length ? Math.round(seen.reduce((n, b) => n + Math.max(0, minOf(b.calledAt!) - minOf(b.arrivedAt!)), 0) / seen.length) : null;
+
+  // Waits today: every checked-in visit, in arrival order (arrival times from the shared arrival log).
+  const waitRows = useMemo<WaitRow[]>(
+    () =>
+      today
+        .filter((b): b is Booking & { status: Stage; arrivedAt: string } => isStage(b.status) && !!b.arrivedAt)
+        .sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt))
+        .map((b) => ({
+          id: b.id,
+          token: b.token ?? hhmm(minOf(b.start)),
+          name: queueDisplay ? null : displayName(person(b.patientId)?.name ?? "Patient", false),
+          discipline: b.discipline,
+          practitioner: staffById(b.staffId)?.name ?? "Practitioner",
+          stage: b.status,
+          arrived: minOf(b.arrivedAt),
+          booked: minOf(b.start),
+          called: b.calledAt && b.status !== "arrived" && b.status !== "waiting" ? minOf(b.calledAt) : null,
+          done: b.status === "completed" && b.doneAt ? minOf(b.doneAt) : null,
+        })),
+    [today, queueDisplay, person],
+  );
+  const stillWaiting = waitRows.filter((r) => r.called === null).length;
 
   // Who could see a walk-in now: on shift at 09:40, not in a session, nothing booked in the next 20 minutes.
   const freeNow = useMemo(() => PRACTITIONERS.filter((s) => availabilityNow(s, events).free), [events]);
@@ -348,6 +371,30 @@ function QueueBoard() {
           }
         />
       </div>
+
+      <section aria-labelledby="waits-title" className="rounded-card bg-surface p-6">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <div className="min-w-0 flex-1">
+            <h2 id="waits-title" className="text-lg font-normal tracking-[-0.01em] text-ink">
+              Waits today
+            </h2>
+            <p className="mt-1 text-xs text-muted">Arrival → called in → done for each checked-in visit · click a row to find it on the board</p>
+          </div>
+          <p className="text-sm text-ink-2">
+            <span className="text-ink">{waitRows.length}</span> checked in · <span className="text-ink">{stillWaiting}</span> still waiting
+          </p>
+        </div>
+        {waitRows.length ? (
+          <>
+            <WaitTimeline rows={waitRows} now={NOW_MIN} onPick={(id) => reveal(`[data-queue-card="${id}"]`, `[data-queue-card="${id}"]`)} />
+            <p className="mt-3 text-xs text-muted">
+              Arrival times come from the desk&apos;s arrival log. Called-in and done times are recorded when you move a card; for visits seen before {hhmm(NOW_MIN)} they&apos;re estimated as the later of arrival and booked time, plus the booked length.
+            </p>
+          </>
+        ) : (
+          <EmptyState icon={<SignIn />} title="Nobody has checked in yet today" description="Check in an expected patient or register a walk-in — their wait starts from arrival." className="py-8" />
+        )}
+      </section>
 
       <AnimatePresence initial={false}>
         {calling ? (

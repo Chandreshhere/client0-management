@@ -15,6 +15,9 @@ import { Tip } from "@/components/ui/tooltip";
  * a real slot. Area ∝ value; values are in the accessible name and on hover/focus.
  * (Upstream request: same loop in components/viz/bubble-chart.tsx, then delete this fork.)
  */
+/** Bubbles at or below this radius (viewBox px) show only their value; the label is in the tooltip. */
+const LABEL_MIN_R = 22;
+
 type Bubble = { id: string; label: string; value: number; display?: string; detail?: string };
 type Placed = { it: Bubble & { r: number }; x: number; y: number };
 
@@ -67,6 +70,7 @@ export function FitBubbles({
   height = 220,
   onSelect,
   selected,
+  smallNote,
 }: {
   items: Bubble[];
   title: string;
@@ -75,11 +79,14 @@ export function FitBubbles({
   height?: number;
   onSelect?: (id: string) => void;
   selected?: string | null;
+  /** print the names of bubbles too small to carry a label (white text, for the cobalt card) */
+  smallNote?: string;
 }) {
   const W = 320;
   const H = height;
   const placed = useMemo(() => pack(items, W, H), [items, H]);
   const top = placed[0]?.it.id;
+  const small = placed.filter((p) => p.it.r <= LABEL_MIN_R);
   const describe = (it: Bubble) => `${it.label}: ${it.display ?? it.value}${unit ? ` ${unit}` : ""}${it.detail ? ` · ${it.detail}` : ""}`;
   return (
     <div className={cn("relative w-full", className)} role={onSelect ? "group" : "img"} aria-label={`${title}: ${items.map(describe).join(", ")}`}>
@@ -110,7 +117,7 @@ export function FitBubbles({
                 className={cn("outline-none [&:focus-visible>circle]:stroke-white [&:focus-visible>circle]:stroke-2", interactive ? "cursor-pointer" : "cursor-default")}
               >
                 <circle cx={x} cy={y} r={it.r} fill={big ? "#ffffff" : on ? "rgb(255 255 255 / 0.3)" : "rgb(255 255 255 / 0.16)"} stroke={on ? "#ffffff" : "rgb(255 255 255 / 0.28)"} strokeWidth={big ? 0 : on ? 2 : 1} />
-                {it.r > 22 ? (
+                {it.r > LABEL_MIN_R ? (
                   <>
                     <text x={x} y={y - (big ? 4 : 2)} textAnchor="middle" className={cn("font-light", big ? "fill-ink" : "fill-white")} style={{ fontSize: big ? Math.min(30, it.r * 0.5) : Math.min(18, it.r * 0.42) }}>
                       {it.display ?? it.value}
@@ -129,6 +136,11 @@ export function FitBubbles({
           );
         })}
       </svg>
+      {smallNote && small.length ? (
+        <p className="px-2 pb-2 text-[11px] text-white/90">
+          {smallNote}: {small.map((p) => `${p.it.label} ${p.it.display ?? p.it.value}`).join(" · ")}
+        </p>
+      ) : null}
     </div>
   );
 }

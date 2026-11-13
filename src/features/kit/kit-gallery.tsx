@@ -197,7 +197,7 @@ export function KitGallery() {
         />
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[320px_1fr]">
+      <section className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] [&>*]:min-w-0">
         <div>
           <SectionLabel>Care team · records authored for this patient</SectionLabel>
           <PeopleList selected={doc ?? team[0]?.staff.id} onSelect={setDoc} people={team.map((t) => ({ id: t.staff.id, name: t.staff.name, role: t.staff.title.split(" ·")[0], avatar: t.staff.avatar, count: t.count }))} />

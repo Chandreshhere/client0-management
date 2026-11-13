@@ -22,6 +22,9 @@ const NOW_ISO = "2026-11-13T09:40:00+05:30";
 
 export const isFeaturedPatient = (id: string) => id === FEATURED_PATIENT_ID;
 
+/** Record summaries are generated with ISO dates ("reported 2026-10-02"); show them the app's way. */
+export const readableDates = (text: string) => text.replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (iso) => fmtDay(iso));
+
 /** The patient's record, or null when nothing clinical is recorded yet (no classified condition). */
 export function recordOf(patientId: string): PatientRecord | null {
   return hasRecord(patientId) ? getRecord(patientId) : null;
@@ -402,9 +405,15 @@ export const NOTE_LINK_LABEL: Record<NoteLinkKind, string> = {
   earlier: "Linked · earlier",
 };
 
+export type DerivedNoteKind = "consultation" | "review" | "letter";
+
+export const NOTE_KIND_LABEL: Record<DerivedNoteKind, string> = { consultation: "Consultations", review: "Reviews", letter: "Letters" };
+
 export interface DerivedNote {
   id: string;
-  kind: "consultation" | "letter";
+  kind: DerivedNoteKind;
+  /** reviews: how the measured value moved since the previous one ("Down 5 mmHg from 152 on 6 Nov 2025.") */
+  trend?: string;
   title: string;
   /** when the note was entered (signed) */
   signedAt: string;
@@ -421,11 +430,33 @@ export interface DerivedNote {
   links: { kind: NoteLinkKind; event: CareEvent }[];
 }
 
+/** A doctor's signed review at which something was measured (BP review, neurology review…). */
+const isDoctorReview = (e: CareEvent) => (e.type === "vitals" || e.type === "consult") && e.state === "signed" && e.source === "Clinic measurement" && e.authorRole === "Doctor";
+
+/** "Down 5 mmHg from 152 on 6 Nov 2025." — the reviewed value against the previous one in the record. */
+function reviewTrend(record: PatientRecord, e: CareEvent): string | undefined {
+  const v = e.values?.[0];
+  if (!v) return undefined;
+  const prev = record.events
+    .filter((x) => x.date < e.date && x.systemId === e.systemId && x.values?.some((y) => y.label === v.label))
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  if (!prev) return `First ${v.label} on this record.`;
+  const pv = prev.values!.find((y) => y.label === v.label)!;
+  const a = Number(v.value), b = Number(pv.value);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return undefined;
+  const decimals = Math.max(decimalsOf(v.value), decimalsOf(pv.value));
+  const diff = +(a - b).toFixed(decimals);
+  const u = v.unit ? ` ${v.unit}` : "";
+  return diff === 0 ? `Unchanged from ${fmtDay(prev.date)}.` : `${diff > 0 ? "Up" : "Down"} ${Math.abs(diff).toFixed(decimals)}${u} from ${pv.value} on ${fmtDay(prev.date)}.`;
+}
+
 /**
  * Signed notes in a generated record: consultation notes (consult/note events signed against a
- * "Consultation note" source) and referral letters. The body is the record's own summary; the
- * documented links say what the note ordered or led to. A linked result dated before the note is
- * what the note was based on, not something it ordered.
+ * "Consultation note" source), the doctor's signed reviews (a clinic measurement the doctor
+ * signed — the value and its change since the previous review are the note) and referral
+ * letters. Appointments alone are not notes: a booked visit carries no clinical text. The body is
+ * the record's own summary; the documented links say what the note ordered or led to. A linked
+ * result dated before the note is what the note was based on, not something it ordered.
  */
 export const derivedNotes = memo((patientId: string): DerivedNote[] => {
   if (isFeaturedPatient(patientId)) return [];
@@ -434,12 +465,15 @@ export const derivedNotes = memo((patientId: string): DerivedNote[] => {
   return record.events
     .filter(
       (e) =>
-        ((e.type === "consult" || e.type === "note") && (e.state === "signed" || e.state === "amended") && /^Consultation note/.test(e.source)) ||
-        (e.type === "document" && /^Referral/.test(e.source)),
+        e.date <= TODAY_DATE &&
+        (((e.type === "consult" || e.type === "note") && (e.state === "signed" || e.state === "amended") && /^Consultation note/.test(e.source)) ||
+          isDoctorReview(e) ||
+          (e.type === "document" && /^Referral/.test(e.source))),
     )
     .map((e) => ({
       id: e.id,
-      kind: e.type === "document" ? ("letter" as const) : ("consultation" as const),
+      kind: e.type === "document" ? ("letter" as const) : isDoctorReview(e) ? ("review" as const) : ("consultation" as const),
+      trend: isDoctorReview(e) ? reviewTrend(record, e) : undefined,
       title: e.title,
       signedAt: e.enteredAt,
       date: e.date,
@@ -468,7 +502,7 @@ export const treatments = memo((patientId: string) => {
   if (!record || isFeaturedPatient(patientId)) return [];
   return record.events
     .filter((e) => e.type === "medication" && e.state !== "scheduled")
-    .map((e) => ({ id: e.id, name: e.title, detail: e.summary, prescribed: e.date, by: e.authorId, conditionId: e.conditionId }))
+    .map((e) => ({ id: e.id, name: e.title, detail: readableDates(e.summary), prescribed: e.date, by: e.authorId, conditionId: e.conditionId }))
     .sort((a, b) => b.prescribed.localeCompare(a.prescribed));
 });
 
@@ -513,18 +547,18 @@ export const derivedChanges = memo((patientId: string): DerivedChange[] => {
       if (e.type === "lab" || e.type === "imaging" || e.type === "document") {
         const value = e.values?.map((v) => `${v.label} ${v.value}${v.unit ? ` ${v.unit}` : ""}${v.flag ? ` (${v.flag})` : ""}`).join(", ");
         const target: ChangeTarget = doc ? { tab: "documents", docId: doc.id } : { tab: e.type === "imaging" ? "imaging" : "labs" };
-        return [{ ...base, kind: "report", title: e.title, detail: value ? `${value}. Reported ${fmtDay(e.date)}.` : e.summary, target }];
+        return [{ ...base, kind: "report", title: e.title, detail: value ? `${value}. Reported ${fmtDay(e.date)}.` : readableDates(e.summary), target }];
       }
       if (e.type === "vitals") {
         const value = e.values?.map((v) => `${v.label} ${v.value}${v.unit ? ` ${v.unit}` : ""}`).join(", ");
-        return [{ ...base, kind: "report", title: e.title, detail: value ? `${value}.` : e.summary, target: { tab: "vitals" } }];
+        return [{ ...base, kind: "report", title: e.title, detail: value ? `${value}.` : readableDates(e.summary), target: { tab: "vitals" } }];
       }
-      if (e.type === "medication") return [{ ...base, kind: "plan", title: e.title, detail: e.summary, target: { href: `/patients/${patientId}/journey`, label: "Open in the care journey" } }];
+      if (e.type === "medication") return [{ ...base, kind: "plan", title: e.title, detail: readableDates(e.summary), target: { href: `/patients/${patientId}/journey`, label: "Open in the care journey" } }];
       if (e.type === "nutrition" || e.type === "movement") {
         // a booked session the patient didn't attend is a missed session, not a plan change
         const missed = /absent|did not attend/i.test(`${e.title} ${e.summary}`);
         const target: ChangeTarget = e.type === "nutrition" ? { href: "/nutrition", label: "Open nutrition plans" } : { href: "/classes", label: "Open classes" };
-        return [{ ...base, kind: missed ? "missed" : "plan", title: e.title, detail: e.summary, target }];
+        return [{ ...base, kind: missed ? "missed" : "plan", title: e.title, detail: readableDates(e.summary), target }];
       }
       return [];
     })

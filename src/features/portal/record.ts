@@ -2,6 +2,7 @@ import { ORGAN_LABEL, type OrganKind } from "@/data/anatomy";
 import { CARE_PLAN, EVENT_TYPE_LABEL, LAB_PANELS, VITAL_SERIES, type CareEvent, type CareEventType, type Condition, type ScanKind } from "@/data/featured";
 import { patientById } from "@/data/patients";
 import { getRecord } from "@/data/record";
+import { measureHistory } from "@/data/insights";
 import { DOCUMENTS } from "@/data/records";
 import { REFERRALS } from "@/data/care";
 import { DEMO_USER, staffById } from "@/data/staff";
@@ -154,20 +155,34 @@ const fromVital = (id: string): MetricPoint[] =>
     return { date: pt.d, value: pt.v, value2: pt.v2, self: pt.self, source: pt.self ? "Your home reading" : "Measured at the clinic" };
   });
 
-/** LAB_PANELS history restricted to released lab reports. */
-function labPoints(name: string): MetricPoint[] {
-  for (const panel of LAB_PANELS) {
-    const a = panel.analytes.find((x) => x.name === name);
-    if (a) return a.points.filter((p) => RELEASED_LAB_DATES.has(p.d)).map((p) => ({ date: p.d, value: p.v, self: false, source: `${panel.name} · lab report` }));
-  }
-  return [];
+/** The record as the patient may see it: released, already-happened events only. */
+const RELEASED_VIEW = { ...RECORD, events: RELEASED_PAST };
+
+/** Structured values from released events, via the shared `measureHistory` (e.g. LDL-C, spirometry). */
+function releasedValues(label: string): MetricPoint[] {
+  return measureHistory(RELEASED_VIEW, label).map((p) => {
+    const e = RELEASED_PAST.find((x) => x.date === p.date && x.values?.some((v) => v.label === label));
+    return { date: p.date, value: p.value, self: e?.state === "self-reported", source: e ? (e.type === "lab" ? `${e.title} · lab report` : e.title) : "Released record" };
+  });
 }
 
-/** Structured values from released events (e.g. spirometry). */
-function releasedValues(label: string): MetricPoint[] {
-  return RELEASED_PAST.flatMap((e) =>
-    (e.values ?? []).filter((v) => v.label === label).map((v) => ({ date: e.date, value: Number(v.value), self: e.state === "self-reported", source: e.type === "lab" ? `${e.title} · lab report` : e.title })),
-  ).filter((p) => Number.isFinite(p.value));
+/**
+ * Lab history = values filed on released events (`measureHistory`) plus the full panel rows
+ * from the same released reports (a lipid report carries HDL and triglycerides even when the
+ * event summary only lists LDL). The event's own value wins when both exist for a date.
+ */
+function labPoints(name: string): MetricPoint[] {
+  const fromRecord = releasedValues(name);
+  const seen = new Set(fromRecord.map((p) => p.date));
+  for (const panel of LAB_PANELS) {
+    const a = panel.analytes.find((x) => x.name === name);
+    if (!a) continue;
+    const fromPanel = a.points
+      .filter((p) => RELEASED_LAB_DATES.has(p.d) && !seen.has(p.d))
+      .map((p): MetricPoint => ({ date: p.d, value: p.v, self: false, source: `${panel.name} · lab report` }));
+    return [...fromRecord, ...fromPanel].sort((x, y) => x.date.localeCompare(y.date));
+  }
+  return fromRecord;
 }
 
 /** Peak flow: the released diary entry, valued from the respiratory system's home reading. */
@@ -247,6 +262,8 @@ export interface LabResult {
   high?: number;
   points: MetricPoint[];
   systemId: string;
+  /** the report panel it is printed on (Lipid profile, Complete blood count…) */
+  panel: string;
   /** a newer value exists in a report the clinic hasn't released */
   newerWithheld: boolean;
 }
@@ -278,6 +295,7 @@ export const LAB_RESULTS: LabResult[] = [
         high: bounds.high,
         points: labPoints(a.name),
         systemId: meta.systemId,
+        panel: panel.name,
         newerWithheld: WITHHELD_LABELS.has(a.name),
       };
     }),
@@ -291,6 +309,7 @@ export const LAB_RESULTS: LabResult[] = [
     low: 0.7,
     points: releasedValues("FEV1/FVC"),
     systemId: "respiratory",
+    panel: RELEASED_PAST.filter((e) => e.values?.some((v) => v.label === "FEV1/FVC")).at(-1)?.title ?? "Breathing test",
     newerWithheld: false,
   },
 ].filter((l) => l.points.length > 0);

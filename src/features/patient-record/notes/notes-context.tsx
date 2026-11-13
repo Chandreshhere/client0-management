@@ -14,6 +14,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Textarea } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { StatusBadge, recordTone } from "@/components/ui/status";
+import { ChipGroup } from "@/components/viz/cards";
 import { useToast } from "@/components/ui/toast";
 import { formatDate, formatTime, TODAY } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -22,7 +23,8 @@ import { CHANGE_KIND_LABEL, MED_RECONCILED, MEDICATIONS, NOTE_SECTIONS, recordHr
 import { localId, updateRecord, useRecord } from "../store";
 import { DOC_STATUS_TONE, useEffectiveStatus } from "../document-preview";
 import { OrganThumb } from "../record-frame";
-import { NOTE_LINK_LABEL, baseDocuments, derivedNotes, docIdForEvent, isFeaturedPatient, recordOf, systemOf, treatments, type DerivedNote } from "../record-model";
+import { NOTE_KIND_LABEL, NOTE_LINK_LABEL, baseDocuments, derivedNotes, readableDates, docIdForEvent, isFeaturedPatient, recordOf, systemOf, treatments, type DerivedNote, type DerivedNoteKind } from "../record-model";
+import { MonthBars, monthBuckets } from "../month-bars";
 import { changesFor, problemsFor, sinceFor } from "./notes-data";
 
 const fmtShort = (d: string) => formatDate(d, { day: "numeric", month: "short" });
@@ -321,21 +323,88 @@ function RecentReports({ patient, onOpenDoc }: { patient: Patient; onOpenDoc: (d
 
 /* ------------------------------------------------------------------ previous notes */
 
+const KIND_ORDER: DerivedNoteKind[] = ["consultation", "review", "letter"];
+type KindChip = "all" | DerivedNoteKind;
+
 function PreviousNotes({ patient, canWrite }: { patient: Patient; canWrite: boolean }) {
   const featured = isFeaturedPatient(patient.id);
   const derived = derivedNotes(patient.id);
   const firstId = featured ? NOTES[0]?.id : derived[0]?.id;
   const [open, setOpen] = useState<string | null>(firstId ?? null);
+  const [month, setMonth] = useState<string | null>(null);
+  const [kinds, setKinds] = useState<DerivedNoteKind[]>([]);
   const toggle = (id: string) => setOpen((o) => (o === id ? null : id));
-  const count = featured ? NOTES.length : derived.length;
+
+  // one list for both shapes: when each note was written and what kind it is
+  const items = useMemo(
+    () => (featured ? NOTES.map((n) => ({ id: n.id, date: n.date, kind: "consultation" as DerivedNoteKind })) : derived.map((n) => ({ id: n.id, date: n.date, kind: n.kind }))),
+    [featured, derived],
+  );
+  const buckets = useMemo(() => monthBuckets(items.map((i) => ({ reportDate: i.date, awaiting: false }))).map((b) => (b.key === "earlier" ? { ...b, label: "Older" } : b)), [items]);
+  const inMonth = (d: string) => !month || (month === "earlier" ? d.slice(0, 7) < buckets[1].key : d.startsWith(month));
+  const shown = new Set(items.filter((i) => inMonth(i.date) && (kinds.length === 0 || kinds.includes(i.kind))).map((i) => i.id));
+  const presentKinds = KIND_ORDER.filter((k) => items.some((i) => i.kind === k));
+  const count = items.length;
+  const filtered = month !== null || kinds.length > 0;
+  const clear = () => {
+    setMonth(null);
+    setKinds([]);
+  };
+  const selectedBucket = buckets.find((b) => b.key === month);
+
   return (
     <Group>
       <GroupHeader icon={<Notebook />} title="Previous notes" subtitle={`${count} signed · corrections are addenda, the signed text never changes`} />
       <div className="flex flex-col gap-2">
+        {count > 1 ? (
+          <Inset>
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="text-xs text-muted">Signed notes per month · by the date written</h3>
+              {selectedBucket ? (
+                <button type="button" onClick={() => setMonth(null)} className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-charcoal px-2.5 text-[11px] text-white">
+                  {selectedBucket.long.replace(/^Before /, "< ")} · {selectedBucket.count}
+                  <span aria-hidden="true">×</span>
+                  <span className="sr-only">Clear month filter</span>
+                </button>
+              ) : null}
+            </div>
+            <MonthBars className="mt-2 h-20 gap-1" buckets={buckets} value={month} onChange={setMonth} noun={["signed note", "signed notes"]} label="Signed notes per month — select a month to filter" />
+            {presentKinds.length > 1 ? (
+              <ChipGroup<KindChip>
+                ariaLabel="Note kind"
+                variant="dark"
+                className="mt-3"
+                options={[{ value: "all", label: "All", count }, ...presentKinds.map((k) => ({ value: k, label: NOTE_KIND_LABEL[k], count: items.filter((i) => i.kind === k).length }))]}
+                value={kinds.length ? kinds : ["all"]}
+                onChange={(next) => {
+                  const added = next.find((v) => !(kinds.length ? kinds : ["all"]).includes(v));
+                  if (added === "all" || next.length === 0) setKinds([]);
+                  else setKinds(next.filter((v): v is DerivedNoteKind => v !== "all"));
+                }}
+              />
+            ) : null}
+          </Inset>
+        ) : null}
         {featured
-          ? NOTES.map((n) => <SignedNote key={n.id} note={n} open={open === n.id} onToggle={() => toggle(n.id)} canWrite={canWrite} />)
-          : derived.map((n) => <DerivedNoteCard key={n.id} patientId={patient.id} note={n} open={open === n.id} onToggle={() => toggle(n.id)} canWrite={canWrite} />)}
+          ? NOTES.filter((n) => shown.has(n.id)).map((n) => <SignedNote key={n.id} note={n} open={open === n.id} onToggle={() => toggle(n.id)} canWrite={canWrite} />)
+          : derived.filter((n) => shown.has(n.id)).map((n) => <DerivedNoteCard key={n.id} patientId={patient.id} note={n} open={open === n.id} onToggle={() => toggle(n.id)} canWrite={canWrite} />)}
         {count === 0 ? <Inset className="text-sm text-muted">No signed notes on this record yet.</Inset> : null}
+        {count > 0 && shown.size === 0 ? (
+          <Inset className="flex items-center justify-between gap-3 text-sm text-muted">
+            No signed notes match this month and kind.
+            <Button size="sm" variant="secondary" onClick={clear}>
+              Clear filters
+            </Button>
+          </Inset>
+        ) : null}
+        {filtered && shown.size > 0 ? (
+          <p className="px-2 text-xs text-muted">
+            Showing {shown.size} of {count} ·{" "}
+            <button type="button" onClick={clear} className="text-ink-2 underline underline-offset-4">
+              Clear filters
+            </button>
+          </p>
+        ) : null}
       </div>
     </Group>
   );
@@ -480,6 +549,7 @@ function DerivedNoteCard({ patientId, note, open, onToggle, canWrite }: { patien
   const sys = record ? systemOf(record, note.systemId) : undefined;
   const addendaCount = useAddendaCount(note.id, 0);
   const letter = note.kind === "letter";
+  const review = note.kind === "review";
   return (
     <Inset className="p-0">
       <button type="button" onClick={onToggle} aria-expanded={open} aria-controls={panelId} className="flex w-full items-start gap-3 rounded-inner p-4 text-left transition-colors hover:bg-canvas">
@@ -487,7 +557,7 @@ function DerivedNoteCard({ patientId, note, open, onToggle, canWrite }: { patien
         <span className="min-w-0 flex-1">
           <span className="block text-sm text-ink">{note.title}</span>
           <span className="block text-xs text-muted">
-            {letter ? "Referral letter · " : ""}
+            {letter ? "Referral letter · " : review ? "Review · " : ""}
             {formatDate(note.date)} · {authorName(note.authorId)}
             {addendaCount ? ` · ${addendaCount} addend${addendaCount === 1 ? "um" : "a"}` : ""}
           </span>
@@ -501,8 +571,9 @@ function DerivedNoteCard({ patientId, note, open, onToggle, canWrite }: { patien
         <div id={panelId} className="px-4 pb-4">
           <dl className="flex flex-col gap-3">
             <div>
-              <dt className="text-xs text-muted">{letter ? "Letter" : "Note"}</dt>
-              <dd className="mt-0.5 text-sm leading-relaxed text-ink-2">{note.body}</dd>
+              <dt className="text-xs text-muted">{letter ? "Letter" : review ? "Measured and signed at this review" : "Note"}</dt>
+              <dd className="mt-0.5 text-sm leading-relaxed text-ink-2">{readableDates(note.body)}</dd>
+              {note.trend ? <dd className="mt-1 text-xs text-muted">{note.trend}</dd> : null}
             </div>
             {note.links.length ? (
               <div>

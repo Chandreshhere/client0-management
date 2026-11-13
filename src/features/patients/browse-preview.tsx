@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { useId, useMemo, useState } from "react";
-import { ArrowUpRight, CalendarBlank, CalendarPlus, LockSimple, Path } from "@phosphor-icons/react";
+import { useId, useMemo, useState, type CSSProperties } from "react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, CalendarBlank, CalendarPlus, LockSimple, Path } from "@phosphor-icons/react";
 import type { Appointment } from "@/data/types";
 import type { Condition } from "@/data/featured";
 import { ORGAN_LABEL } from "@/data/anatomy";
@@ -27,7 +27,7 @@ import { EVENT_ICON } from "@/features/patient/event-meta";
 import { clinicalAccess } from "@/features/patient-record/access";
 import { branchLabel, clinicNoOf, dayWord, isLive, upcomingVisits, type RegistryPatient, type Row } from "./data";
 import { AllergyLine, FlagPills, PatientStatusBadge } from "./registry-bits";
-import { HOTSPOT_ANCHORS, activityByMonth, systemHistory, teamFor } from "./anatomy";
+import { HOTSPOT_ANCHORS, activityByMonth, organFit, systemHistory, teamFor } from "./anatomy";
 import { ActivityBars } from "./activity-bars";
 import { RowActions } from "./row-actions";
 
@@ -228,8 +228,6 @@ function RecordedBody({ patient, record }: { patient: RegistryPatient; record: P
   );
 }
 
-const ORGAN_SCALE = 1.22;
-
 function OrganPanel({
   patientName,
   system,
@@ -243,56 +241,61 @@ function OrganPanel({
   focus: Condition | undefined;
   onFocus: (id: string) => void;
 }) {
-  // The render is drawn 22% larger than OrganHero's default, so the anatomical anchors scale with it.
-  const anchors = HOTSPOT_ANCHORS[system.organ].map((a) => ({ x: 50 + (a.x - 50) * ORGAN_SCALE, y: 50 + (a.y - 50) * ORGAN_SCALE }));
+  // Every organ is fitted to the same size and centred in the rings; hotspot anchors follow.
+  const fit = organFit(system.organ);
+  const anchors = HOTSPOT_ANCHORS[system.organ].map(fit.map);
   const organName = ORGAN_LABEL[system.organ];
   const first = patientName.split(" ")[0];
   return (
-    <section aria-label={`${system.name} system — ${organName}`} className="flex flex-col rounded-card bg-surface p-6">
-      <SectionLabel className="mb-1">
-        {system.name} · {organName}
-      </SectionLabel>
-      <p className="text-xs text-muted">
-        Shown because {first}&apos;s record lists {conditions.length === 1 ? "this condition" : `these ${conditions.length} conditions`} in the {system.name.toLowerCase()} system.
-      </p>
-      <div className="relative mt-2 grid">
-        <AnimatePresence initial={false}>
-          <motion.div
-            key={system.organ}
-            className="col-start-1 row-start-1"
-            initial={{ opacity: 0, scale: 0.88 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.04, transition: { duration: 0.18 } }}
-            transition={spring}
-          >
-            <OrganHero
-              kind={system.organ}
-              label={`${organName} — ${system.name} conditions recorded for ${patientName}`}
-              className="mx-auto max-w-[312px] [&_img]:scale-[1.22]"
-              hotspots={conditions.map((c, i) => ({
-                id: c.id,
-                ...anchors[i % anchors.length],
-                label: c.name,
-                detail: `${c.status} · ${c.markers} linked records`,
-                active: c.id === focus?.id,
-                onClick: () => onFocus(c.id),
-              }))}
-            />
-          </motion.div>
-        </AnimatePresence>
-        {focus ? (
-          <GlassCard className="absolute bottom-0 left-0 w-[216px]">
-            <p className="text-[11px] text-muted">Condition · {focus.status}</p>
-            <p className="mt-0.5 truncate text-sm text-ink" title={focus.name}>
-              {focus.name}
-            </p>
-            <p className="mt-1 text-[11px] text-muted">
-              Since {formatDate(`${focus.since}T00:00:00+05:30`, { month: "short", year: "numeric" })} · <span className="tabular text-ink-2">{focus.markers}</span> linked records
-            </p>
-          </GlassCard>
-        ) : null}
+    <section aria-label={`${system.name} system — ${organName}`} className="flex flex-col rounded-card bg-surface p-2">
+      {/* Recessed stage (ref 3): white rings read against the grey, the organ floats in them. */}
+      <div className="relative isolate overflow-hidden rounded-inner bg-[radial-gradient(110%_80%_at_50%_46%,var(--color-surface)_0%,var(--color-canvas)_58%,var(--color-sunken)_100%)] px-4 pb-4 pt-4">
+        <SectionLabel className="mb-1">
+          {system.name} · {organName}
+        </SectionLabel>
+        <p className="max-w-[40ch] text-xs text-muted">
+          Shown because {first}&apos;s record lists {conditions.length === 1 ? "this condition" : `these ${conditions.length} conditions`} in the {system.name.toLowerCase()} system.
+        </p>
+        <div className="relative -mt-2 grid">
+          <AnimatePresence initial={false}>
+            <motion.div
+              key={system.organ}
+              className="col-start-1 row-start-1"
+              style={fit.vars as CSSProperties}
+              initial={{ opacity: 0, scale: 0.88 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.04, transition: { duration: 0.18 } }}
+              transition={spring}
+            >
+              <OrganHero
+                kind={system.organ}
+                label={`${organName} — ${system.name} conditions recorded for ${patientName}`}
+                className="mx-auto max-w-[328px] [&_img]:[transform:translate(var(--organ-tx),var(--organ-ty))_scale(var(--organ-s))]"
+                hotspots={conditions.map((c, i) => ({
+                  id: c.id,
+                  ...anchors[i % anchors.length],
+                  label: c.name,
+                  detail: `${c.status} · ${c.markers} linked records`,
+                  active: c.id === focus?.id,
+                  onClick: () => onFocus(c.id),
+                }))}
+              />
+            </motion.div>
+          </AnimatePresence>
+          {focus ? (
+            <GlassCard className="absolute bottom-0 left-0 w-[216px]">
+              <p className="text-[11px] text-muted">Condition · {focus.status}</p>
+              <p className="mt-0.5 truncate text-sm text-ink" title={focus.name}>
+                {focus.name}
+              </p>
+              <p className="mt-1 text-[11px] text-muted">
+                Since {formatDate(`${focus.since}T00:00:00+05:30`, { month: "short", year: "numeric" })} · <span className="tabular text-ink-2">{focus.markers}</span> linked records
+              </p>
+            </GlassCard>
+          ) : null}
+        </div>
       </div>
-      <div role="group" aria-label="Conditions in this system" className="mt-4 flex flex-wrap gap-2">
+      <div role="group" aria-label="Conditions in this system" className="flex flex-wrap gap-2 px-4 pb-4 pt-4">
         {conditions.map((c) => {
           const on = c.id === focus?.id;
           return (
@@ -434,19 +437,36 @@ function TeamSection({ patient, record }: { patient: RegistryPatient; record: Pa
 function NextVisitSection({ row, sessionVisits }: { row: Row; sessionVisits: Appointment[] }) {
   const p = row.patient;
   const upcoming = useMemo(() => upcomingVisits(p, sessionVisits), [p, sessionVisits]);
-  const v = upcoming[0] ?? null;
+  const [index, setIndex] = useState(0);
+  const at = Math.min(index, Math.max(0, upcoming.length - 1));
+  const v = upcoming[at] ?? null;
   const staff = v ? staffById(v.staffId ?? undefined) : undefined;
   const live = v ? isLive(v) : false;
+  const step = "flex size-8 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-surface hover:text-ink disabled:pointer-events-none disabled:text-faint";
   return (
     <section aria-label="Next appointment">
-      <SectionLabel actions={upcoming.length > 1 ? <span className="text-xs text-muted">+{upcoming.length - 1} more booked</span> : undefined}>Next appointment</SectionLabel>
+      <SectionLabel actions={upcoming.length > 1 ? <span className="text-xs text-muted tabular">{upcoming.length} booked</span> : undefined}>{at === 0 ? "Next appointment" : "Upcoming appointment"}</SectionLabel>
       <div className="flex flex-col gap-4 rounded-card bg-surface p-6">
+        {upcoming.length > 1 ? (
+          // Ref 3 schedule-card stepper: walk through this patient's own bookings, soonest first.
+          <div className="flex items-center justify-between rounded-full bg-sunken p-1">
+            <button type="button" className={step} aria-label="Earlier booking" disabled={at === 0} onClick={() => setIndex(at - 1)}>
+              <ArrowLeft size={14} />
+            </button>
+            <span className="text-xs text-ink-2" aria-live="polite">
+              Booking <span className="tabular">{at + 1}</span> of <span className="tabular">{upcoming.length}</span>
+            </span>
+            <button type="button" className={step} aria-label="Later booking" disabled={at === upcoming.length - 1} onClick={() => setIndex(at + 1)}>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        ) : null}
         <div className="flex items-center gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sunken text-ink-2" aria-hidden="true">
             <CalendarBlank size={18} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-muted">{v ? (live ? "In the clinic now" : "Booked") : "Not booked"}</p>
+            <p className="text-xs text-muted">{v ? (live ? "In the clinic now" : at === 0 ? "Booked · next" : "Booked") : "Not booked"}</p>
             <p className="truncate text-sm text-ink">
               {v ? (
                 <>

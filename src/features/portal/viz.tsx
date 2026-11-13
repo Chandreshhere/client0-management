@@ -72,3 +72,19 @@ export function StatusLine({ tone, children, className }: { tone: "good" | "watc
     </span>
   );
 }
+
+/**
+ * Chart well with the first and last reading dates under the spark, so a trend line always says
+ * which period it covers (sparks space readings evenly; the caption gives the count).
+ */
+export function DatedWell({ from, to, children }: { from: string; to: string; children: React.ReactNode }) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="min-h-0 flex-1">{children}</div>
+      <div className="mt-1 flex justify-between text-[11px] leading-none text-muted tabular" aria-hidden="true">
+        <span>{from}</span>
+        <span>{to}</span>
+      </div>
+    </div>
+  );
+}

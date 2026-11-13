@@ -1,4 +1,4 @@
-import { primaryOrgan, ORGAN_LABEL, type OrganKind } from "@/data/anatomy";
+import { patientSystems, primaryOrgan, ORGAN_LABEL, type OrganKind } from "@/data/anatomy";
 import { TODAY_APPOINTMENTS } from "@/data/appointments";
 import { REFERRALS, REFERRAL_STAGES } from "@/data/care";
 import { CLASSES } from "@/data/programs";
@@ -74,6 +74,10 @@ export type CaseMixGroup = {
   key: OrganKind | "unrecorded";
   label: string;
   patients: { id: string; name: string; firstAppt: Appointment; count: number }[];
+  /** every appointment today for the patients in this group, in time order */
+  visits: Appointment[];
+  /** the recorded conditions that put patients in this group, with how many patients carry each */
+  conditions: { name: string; patients: number }[];
 };
 
 /**
@@ -88,11 +92,22 @@ export function caseMix(appts: Appointment[] = TODAY_APPOINTMENTS): CaseMixGroup
     const p = patientById(pid);
     const kind = p ? primaryOrgan(p) : null;
     const key = kind ?? "unrecorded";
-    const g = groups.get(key) ?? { key, label: kind ? ORGAN_LABEL[kind] : "Not recorded yet", patients: [] };
+    const g = groups.get(key) ?? { key, label: kind ? ORGAN_LABEL[kind] : "Not recorded yet", patients: [], visits: [], conditions: [] };
     g.patients.push({ id: pid, name: p?.name ?? pid, firstAppt: list[0], count: list.length });
+    g.visits.push(...list);
+    // only the conditions of the primary system — the ones that chose this organ
+    for (const name of p ? (patientSystems(p)[0]?.conditions ?? []) : []) {
+      const hit = g.conditions.find((c) => c.name === name);
+      if (hit) hit.patients += 1;
+      else g.conditions.push({ name, patients: 1 });
+    }
     groups.set(key, g);
   }
-  return [...groups.values()].sort((a, b) => Number(a.key === "unrecorded") - Number(b.key === "unrecorded") || b.patients.length - a.patients.length || a.label.localeCompare(b.label));
+  for (const g of groups.values()) {
+    g.visits.sort((x, y) => x.start.localeCompare(y.start));
+    g.conditions.sort((x, y) => y.patients - x.patients || x.name.localeCompare(y.name));
+  }
+  return [...groups.values()].sort((a, b) => Number(a.key === "unrecorded") - Number(b.key === "unrecorded") || b.patients.length - a.patients.length || b.visits.length - a.visits.length || a.label.localeCompare(b.label));
 }
 
 // ---------------------------------------------------------------------------------------------

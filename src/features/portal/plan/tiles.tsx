@@ -8,7 +8,7 @@ import { spring } from "@/lib/motion";
 import { pluralize } from "@/lib/format";
 import { staffById } from "@/data/staff";
 import { MediaStatCard, SectionLabel } from "@/components/viz/cards";
-import { BarsSpark, DotsSpark, EcgSpark, SparkValue, ValuePill, VitalTile, WaveSpark } from "@/components/viz/condition";
+import { BarsSpark, DotsSpark, SparkValue, ValuePill, VitalTile, WaveSpark } from "@/components/viz/condition";
 import { ScanThumb } from "@/features/patient/scan-thumb";
 import {
   IMAGING,
@@ -28,7 +28,7 @@ import {
   type MetricPoint,
   type PortalSystem,
 } from "../record";
-import { RangeGauge, StatusLine } from "../viz";
+import { DatedWell, RangeGauge, StatusLine } from "../viz";
 import { shortDate } from "../time";
 import type { LoggedReading } from "./store";
 
@@ -118,20 +118,26 @@ function MetricTile({ metric, points, wide }: { metric: Metric; points: MetricPo
 
   let chart: ReactNode;
   let aside: ReactNode = <SparkValue value={formatValue(metric, last.value)} sub={last.value2 !== undefined ? `/${formatValue(metric, last.value2)}` : unit} />;
-  if (metric.id === "bp") {
+  const dated = (node: ReactNode) => (
+    <DatedWell from={shortDate(first.date)} to={shortDate(last.date)}>
+      {node}
+    </DatedWell>
+  );
+  if (metric.id === "bp" && points.length > 1) {
     // one bar per reading, spread across the well; bars rise from 100 mmHg so changes are visible
-    chart = (
+    chart = dated(
       <div className="h-full [&>div]:justify-between">
         <BarsSpark values={values.map((v) => Math.max(1, v - BP_BASELINE))} label={`Systolic pressure, ${range}: ${values.join(", ")} mmHg (bars drawn from ${BP_BASELINE} mmHg)`} />
-      </div>
+      </div>,
     );
-  } else if (metric.id === "hr") {
-    chart = <EcgSpark beats={Math.max(2, Math.min(6, Math.round(last.value / 20)))} label={`Illustrative trace drawn at ${lastText} beats per minute`} />;
+  } else if (metric.id === "hr" && points.length > 1) {
+    // his own resting-rate readings (not an illustrative ECG); the pill holds the latest value
+    chart = dated(<WaveSpark values={values} label={`Resting heart rate, ${range}: ${values.join(", ")} bpm`} />);
     aside = <ValuePill value={lastText} unit="bpm" />;
-  } else if (metric.id === "weight") {
-    chart = <DotsSpark values={values} label={`Weight, ${range}: ${values.join(", ")} kg`} />;
+  } else if (metric.id === "weight" && points.length > 1) {
+    chart = dated(<DotsSpark values={values} label={`Weight, ${range}: ${values.join(", ")} kg`} />);
   } else if (points.length > 1) {
-    chart = <WaveSpark values={values} label={`${metric.label}, ${range}: ${values.map((v) => formatValue(metric, v)).join(", ")} ${unit}`} />;
+    chart = dated(<WaveSpark values={values} label={`${metric.label}, ${range}: ${values.map((v) => formatValue(metric, v)).join(", ")} ${unit}`} />);
   } else {
     const t = metric.target.above ?? metric.target.below ?? last.value;
     chart = (

@@ -13,33 +13,24 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dropdown, DropdownContent, DropdownItem, DropdownTrigger } from "@/components/ui/dropdown";
 import { IconButton } from "@/components/ui/icon-button";
-import { EmptyState, PageHeader, Stat } from "@/components/ui/misc";
+import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { Segmented } from "@/components/ui/segmented";
-import { StatusBadge, type Tone } from "@/components/ui/status";
+import { StatusBadge } from "@/components/ui/status";
+import { Tip } from "@/components/ui/tooltip";
+import { OrganImage } from "@/components/viz/organ";
 import { useToast } from "@/components/ui/toast";
 import { useRole } from "@/components/shell/role-context";
 import { DisciplineTag, ReadOnlyBanner } from "@/features/settings/ui";
 import { addDays, daysPhrase, daysUntil } from "@/features/settings/time";
-import { PROGRAMMES, billingLabel, enrolledIn, programmeForName, type PackageRow } from "./data";
-import { CreditMeter, type MeterTone } from "./credit-meter";
+import { PROGRAMMES, billingLabel, enrolledIn, programmeForName } from "./data";
+import { CreditMeter } from "./credit-meter";
+import { CreditsFocal, ExpiryRunway } from "./package-overview";
+import { healthOf, pace, programmeOrgans, runways, type Health } from "./package-insights";
 import { money } from "./meta";
 import { SellPackageModal } from "./sell-package";
 import { extendPackage, usePackages } from "./store";
 
 const SELL_ROLES: Role[] = ["admin", "frontdesk"];
-
-type Health = { key: "expired" | "used-up" | "expiring" | "low" | "active"; label: string; tone: Tone; meter: MeterTone; note: string };
-
-/** Most severe state first; each carries a text label so colour is never the only signal. */
-function healthOf(p: PackageRow): Health {
-  const left = p.total - p.used;
-  const days = daysUntil(p.expires);
-  if (days < 0) return { key: "expired", label: "Expired", tone: "danger", meter: "danger", note: `${pluralize(left, "credit")} unused` };
-  if (left <= 0) return { key: "used-up", label: "All used", tone: "neutral", meter: "muted", note: "Every credit has been used" };
-  if (days <= 30) return { key: "expiring", label: "Expires soon", tone: "warning", meter: "warning", note: `${pluralize(left, "credit")} to use ${daysPhrase(p.expires)}` };
-  if (left <= Math.max(2, Math.round(p.total * 0.2))) return { key: "low", label: "Running low", tone: "warning", meter: "warning", note: `Only ${left} left — offer a renewal` };
-  return { key: "active", label: "Active", tone: "success", meter: "neutral", note: "" };
-}
 
 type Filter = "all" | "attention" | "active";
 
@@ -57,14 +48,11 @@ export function PackagesView() {
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   const rows = useMemo(() => packages.map((p) => ({ p, h: healthOf(p) })), [packages]);
-  const attention = rows.filter((r) => r.h.key === "expiring" || r.h.key === "low" || r.h.key === "expired");
+  // packages that need a faster weekly pace than their programme schedules (see ExpiryRunway)
+  const atRisk = useMemo(() => new Map(runways(packages).filter((r) => r.atRisk).map((r) => [r.row.key, r])), [packages]);
+  const attention = rows.filter((r) => r.h.key === "expiring" || r.h.key === "low" || r.h.key === "expired" || atRisk.has(r.p.key));
   const active = rows.filter((r) => r.h.key !== "expired" && r.h.key !== "used-up");
   const shown = (filter === "attention" ? attention : filter === "active" ? active : rows).slice().sort((a, b) => order(a.h) - order(b.h) || daysUntil(a.p.expires) - daysUntil(b.p.expires));
-
-  const creditsLeft = active.reduce((s, r) => s + (r.p.total - r.p.used), 0);
-  const creditsSold = active.reduce((s, r) => s + r.p.total, 0);
-  const expiring = rows.filter((r) => r.h.key === "expiring").sort((a, b) => daysUntil(a.p.expires) - daysUntil(b.p.expires));
-  const low = rows.filter((r) => r.p.total - r.p.used <= Math.max(2, Math.round(r.p.total * 0.2)) && r.p.used < r.p.total && daysUntil(r.p.expires) >= 0);
 
   if (role === "patient") {
     return (
@@ -91,6 +79,24 @@ export function PackagesView() {
     setSellOpen(true);
   };
 
+  /** Bring one package row into view and flash it (from the bubbles and the runway). */
+  const flashRow = (key: string) => {
+    setFlashKey(key);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-pkg-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" })),
+    );
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setFlashKey(null), 2400);
+  };
+  const focusPackage = (key: string) => {
+    setFilter("all");
+    flashRow(key);
+  };
+  const showAttention = () => {
+    setFilter("attention");
+    requestAnimationFrame(() => document.getElementById("credits-title")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+  };
+
   return (
     <div className="flex flex-col gap-6 lg:gap-8">
       <PageHeader
@@ -108,22 +114,10 @@ export function PackagesView() {
 
       {!canSell ? <ReadOnlyBanner>Package balances are visible to the care team. The front desk and administrators sell and change packages.</ReadOnlyBanner> : null}
 
-      <section aria-label="Package summary" className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4">
-        <Stat label="Active packages" value={active.length} context={`${pluralize(new Set(active.map((r) => r.p.patientId)).size, "patient")}`} className="p-4 sm:p-6" />
-        <Stat label="Credits left" value={creditsLeft} context={`of ${creditsSold} on active packages`} className="p-4 sm:p-6" />
-        <Stat
-          label="Expiring within 30 days"
-          value={expiring.length}
-          context={expiring[0] ? `Next: ${patientById(expiring[0].p.patientId)?.name.split(" ")[0]} · ${formatDate(expiring[0].p.expires, { day: "numeric", month: "short" })}` : "None"}
-          className="p-4 sm:p-6"
-        />
-        <Stat
-          label="Running low"
-          value={low.length}
-          context={low[0] ? `${patientById(low[0].p.patientId)?.name.split(" ")[0]} · ${pluralize(low[0].p.total - low[0].p.used, "credit")} left` : "None"}
-          className="p-4 sm:p-6"
-        />
-      </section>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <CreditsFocal packages={packages} onFocusPackage={focusPackage} onShowAttention={() => showAttention()} />
+        <ExpiryRunway packages={packages} onFocusPackage={focusPackage} />
+      </div>
 
       <section aria-labelledby="credits-title" className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -149,7 +143,7 @@ export function PackagesView() {
 
         {shown.length === 0 ? (
           <Card>
-            <EmptyState icon={<Package />} title="Nothing needs attention" description="No package is expiring within 30 days or running low on credits." action={<Button variant="secondary" onClick={() => setFilter("all")}>Show all packages</Button>} />
+            <EmptyState icon={<Package />} title="Nothing needs attention" description="No package is expiring within 30 days, running low on credits or behind its planned pace." action={<Button variant="secondary" onClick={() => setFilter("all")}>Show all packages</Button>} />
           </Card>
         ) : (
           <ul className="flex flex-col rounded-card bg-surface p-2">
@@ -195,6 +189,11 @@ export function PackagesView() {
                     <span className="flex flex-col items-start gap-1 md:items-end">
                       <StatusBadge tone={h.tone}>{h.label}</StatusBadge>
                       {h.note ? <span className="text-xs text-muted md:text-right">{h.note}</span> : null}
+                      {atRisk.has(p.key) ? (
+                        <span className="text-xs text-danger md:text-right">
+                          Needs {pace(atRisk.get(p.key)?.needed ?? 0)} · plan {pace(atRisk.get(p.key)?.planned ?? 0)}
+                        </span>
+                      ) : null}
                     </span>
                     <Dropdown>
                       <DropdownTrigger asChild>
@@ -246,18 +245,34 @@ export function PackagesView() {
           <h2 id="catalogue-title" className="text-lg font-normal tracking-[-0.01em] text-ink">
             Programme catalogue
           </h2>
-          <p className="mt-1 text-sm text-muted">Programmes combine consultations, nutrition follow-ups and yoga with set review points.</p>
+          <p className="mt-1 text-sm text-muted">Programmes combine consultations, nutrition follow-ups and yoga with set review points. Organ = the primary body system of the patients enrolled, from their records.</p>
         </div>
         <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {PROGRAMMES.map((prog) => {
             const enrolled = enrolledIn(prog);
+            const organs = programmeOrgans(prog);
             return (
               <li key={prog.id} className="flex flex-col rounded-card bg-surface p-6">
                 <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-lg font-normal leading-tight tracking-[-0.01em] text-ink">{prog.match}</h3>
-                  <span className="inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-xs text-muted shadow-[inset_0_0_0_1px_var(--color-line-strong)]">
-                    {prog.credits} credits
-                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-normal leading-tight tracking-[-0.01em] text-ink">{prog.match}</h3>
+                    <span className="mt-2 inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-xs text-muted shadow-[inset_0_0_0_1px_var(--color-line-strong)]">
+                      {prog.credits} credits
+                    </span>
+                  </div>
+                  {organs.length ? (
+                    <ul className="-my-2 -mr-2 flex shrink-0 -space-x-4" aria-label={`Enrolled patients' primary body systems: ${organs.map((o) => `${o.label} (${o.patients.length})`).join(", ")}`}>
+                      {organs.slice(0, 2).map((o) => (
+                        <li key={o.organ}>
+                          <Tip label={`${o.label} · ${o.patients.map((p) => p.name).join(", ")}`}>
+                            <span tabIndex={0} className="flex size-[72px] items-center justify-center rounded-full bg-sunken/70 outline-none ring-4 ring-surface focus-visible:ring-primary">
+                              <OrganImage kind={o.organ} className="size-14" />
+                            </span>
+                          </Tip>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
                 <p className="mt-4 text-[26px] font-light leading-none tracking-[-0.02em] text-ink tabular">{money(prog.price)}</p>
                 <p className="mt-1 text-xs text-muted">
@@ -297,12 +312,7 @@ export function PackagesView() {
           packages={packages}
           onSold={(key) => {
             setFilter("all");
-            setFlashKey(key);
-            requestAnimationFrame(() =>
-              requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-pkg-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" })),
-            );
-            window.clearTimeout(timer.current);
-            timer.current = window.setTimeout(() => setFlashKey(null), 2400);
+            flashRow(key);
           }}
         />
       ) : null}

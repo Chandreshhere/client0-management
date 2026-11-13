@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpRight, ChartLine, FileText, Minus, Table as TableIcon, TestTube } from "@phosphor-icons/react";
+import { ArrowDown, ArrowUp, ArrowUpRight, ChartLine, FileText, Flask, Minus, Table as TableIcon } from "@phosphor-icons/react";
 import { CARE_EVENTS } from "@/data/featured";
 import { patientById } from "@/data/patients";
 import { useRole } from "@/components/shell/role-context";
@@ -11,7 +11,8 @@ import { EmptyState } from "@/components/ui/misc";
 import { IconButton } from "@/components/ui/icon-button";
 import { Segmented } from "@/components/ui/segmented";
 import { StatusBadge } from "@/components/ui/status";
-import { MediaStatCard } from "@/components/viz/cards";
+import { MediaStatCard, SectionLabel } from "@/components/viz/cards";
+import { BodyConditionCard } from "@/components/viz/condition";
 import { Sparkline } from "@/components/charts/bar-chart";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -21,6 +22,7 @@ import { clinicalAccess } from "./access";
 import { useRecord } from "./store";
 import { NoRecordState, OrganThumb, RecordFrame, RestrictedRecord } from "./record-frame";
 import { TrendChart, TrendKey, type TrendThreshold } from "./trend-chart";
+import { TargetGauge } from "./sparks";
 import { docIdForEvent, eventById, isFeaturedPatient, labGroups, recordOf, systemOf, untranscribedLabDocs, type Flag, type LabAnalyte, type LabGroup } from "./record-model";
 
 const fmtShort = (d: string) => formatDate(d, { day: "numeric", month: "short" });
@@ -42,6 +44,29 @@ function FlagText({ flag }: { flag: Flag }) {
 }
 
 const rangeNoun = (a: LabAnalyte) => (a.isTarget ? "target" : "reference range");
+
+/** Results from the last 12 months (all on file when none are that recent). */
+const YEAR_AGO = "2025-11-13";
+
+/**
+ * Share of a group's results inside their target / reference range: every reported value of
+ * every test that has one, over the last 12 months (falls back to everything on file). This is
+ * the number the body-condition card prints — the caption says exactly what it counts.
+ */
+function groupShare(g: LabGroup) {
+  const all = g.analytes.filter((a) => a.low !== undefined || a.high !== undefined).flatMap((a) => a.points);
+  const recent = all.filter((p) => p.d >= YEAR_AGO);
+  const pts = recent.length ? recent : all;
+  const within = pts.filter((p) => !p.flag).length;
+  return { within, total: pts.length, recent: recent.length > 0, percent: pts.length ? Math.round((within / pts.length) * 100) : 0 };
+}
+
+/** Reports in a group still awaiting clinician review (a panel report counts once). */
+function pendingCount(g: LabGroup, metaFor: MetaFor, featured: boolean) {
+  const keys = new Set<string>();
+  for (const a of g.analytes) for (const p of a.points) if (metaFor(a, p.d, p.eventId).pending) keys.add(featured ? p.d : (p.eventId ?? p.d));
+  return keys.size;
+}
 
 export function LabsTab({ patientId }: { patientId: string }) {
   const patient = patientById(patientId)!;
@@ -101,7 +126,7 @@ function LabsBody({ patientId, groups, group, onGroup }: { patientId: string; gr
       <div className="flex flex-col gap-6">
         <Card className="py-6">
           <EmptyState
-            icon={<TestTube />}
+            icon={<Flask />}
             title="No transcribed lab values on this record"
             description={pendingDocs.length ? "The reports below are on file, but their values haven't been entered as structured results — open each report to read it." : "No laboratory tests have been requested or uploaded for this patient yet."}
           />
@@ -113,54 +138,74 @@ function LabsBody({ patientId, groups, group, onGroup }: { patientId: string; gr
 
   const select = (key: string) => setSelected((s) => ({ ...s, [group.id]: key }));
   const systemFor = (g: LabGroup) => (g.systemId ? systemOf(record, g.systemId) : undefined);
+  // Featured: the selected panel's tests. Generated records: every test on file (≤ 4), across systems.
+  const cards = (featured ? group.analytes.map((a) => ({ a, g: group })) : groups.flatMap((g) => g.analytes.map((a) => ({ a, g })))).slice(0, 4);
 
   return (
     <div className="flex flex-col gap-6">
-      {groups.length > 1 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="scrollbar-none -mx-4 min-w-0 overflow-x-auto px-4 @[640px]:mx-0 @[640px]:px-0" data-lenis-prevent>
-            <Segmented
-              ariaLabel={featured ? "Lab panel" : "Body system"}
-              value={group.id}
-              onChange={onGroup}
-              items={groups.map((g) => {
-                const s = featured ? undefined : systemFor(g);
-                return { value: g.id, label: g.name, icon: s ? <OrganThumb kind={s.organ} size="sm" className="-ml-2 bg-surface" /> : undefined, count: g.analytes.length };
-              })}
-            />
+      <div className="grid grid-cols-1 items-start gap-6 @[1040px]:grid-cols-2">
+        <section aria-label={featured ? "Results within range, by panel" : "Results within target, by body system"} className="min-w-0">
+          <SectionLabel>{featured ? "Within range · by panel" : "Within target · by body system"}</SectionLabel>
+          <div className={cn("grid grid-cols-1 gap-3", groups.length > 1 && "@[560px]:grid-cols-2")}>
+            {groups.map((g) => {
+              const share = groupShare(g);
+              const s = systemFor(g);
+              const open = pendingCount(g, metaFor, featured);
+              return (
+                <BodyConditionCard
+                  key={g.id}
+                  icon={s ? <OrganThumb kind={s.organ} className="size-9 bg-surface" /> : <Flask />}
+                  label={g.name}
+                  percent={share.percent}
+                  progress={{ value: share.within, max: share.total }}
+                  count={open || undefined}
+                  active={groups.length > 1 && g.id === group.id}
+                  onClick={groups.length > 1 ? () => onGroup(g.id) : undefined}
+                >
+                  <span className="block text-[11px] leading-snug text-muted">
+                    {share.within} of {share.total} {share.total === 1 ? "result" : "results"} {g.analytes.every((a) => a.isTarget) ? "on target" : "in range"} · {share.recent ? "last 12 months" : "all on file (none in the last 12 months)"}
+                    {open ? ` · ${open} awaiting review` : ""}
+                  </span>
+                </BodyConditionCard>
+              );
+            })}
           </div>
-          <p className="text-xs text-muted">{featured ? "Panels group tests reported together" : "Grouped by the body system each test monitors"}</p>
-        </div>
-      ) : null}
+        </section>
 
-      <section aria-label="Latest result per test" className="grid grid-cols-1 gap-3 @[560px]:grid-cols-2 @[1080px]:grid-cols-4">
-        {/* Featured: the selected panel's tests. Generated records: every test on file (≤ 3), across systems. */}
-        {(featured ? group.analytes.map((a) => ({ a, g: group })) : groups.flatMap((g) => g.analytes.map((a) => ({ a, g }))))
-          .slice(0, 4)
-          .map(({ a, g }) => {
-            const latest = a.points[a.points.length - 1];
-            const on = g.id === group.id && a.key === analyte.key;
-            const meta = metaFor(a, latest.d, latest.eventId);
-            return (
-              <MediaStatCard
-                key={`${g.id}-${a.key}`}
-                className={cn("transition-shadow duration-200", on && "shadow-[0_0_0_2px_var(--color-canvas),0_0_0_4px_var(--color-primary)]")}
-                value={fmtV(a, latest.v)}
-                label={`${a.name}${a.unit ? ` (${a.unit})` : ""}${latest.flag ? ` · ${latest.flag}` : ""}`}
-                time={`${fmtShort(latest.d)}${meta.pending ? " · awaiting review" : ""}`}
-                onOpen={() => {
-                  onGroup(g.id);
-                  setSelected((s) => ({ ...s, [g.id]: a.key }));
-                }}
-                media={
-                  <div className="flex size-full items-center justify-end pr-4" role="img" aria-label={a.points.length > 1 ? `${a.name}: ${a.points.length} results, oldest to newest, latest ${fmtV(a, latest.v)} ${a.unit}` : `${a.name}: first result`}>
-                    {a.points.length > 1 ? <Sparkline tone="white" className="h-12 w-[112px]" values={a.points.map((p) => p.v)} /> : <span className="text-[11px] text-white/60">first result</span>}
-                  </div>
-                }
-              />
-            );
-          })}
-      </section>
+        <section aria-label="Latest result per test" className="min-w-0">
+          <SectionLabel>Latest result per test</SectionLabel>
+          <div className={cn("grid grid-cols-1 gap-3", cards.length > 1 && "@[560px]:grid-cols-2")}>
+            {cards.map(({ a, g }) => {
+              const latest = a.points[a.points.length - 1];
+              const on = g.id === group.id && a.key === analyte.key;
+              const meta = metaFor(a, latest.d, latest.eventId);
+              return (
+                <MediaStatCard
+                  key={`${g.id}-${a.key}`}
+                  className={cn("transition-shadow duration-200", on && "shadow-[0_0_0_2px_var(--color-canvas),0_0_0_4px_var(--color-ink)]")}
+                  value={
+                    <>
+                      {fmtV(a, latest.v)}
+                      {a.unit ? <span className="ml-1 text-sm text-white/60">{a.unit}</span> : null}
+                    </>
+                  }
+                  label={a.name}
+                  time={`${fmtShort(latest.d)}${latest.flag ? ` · ${latest.flag === "high" ? "High" : "Low"}` : ""}${meta.pending ? " · awaiting review" : ""}`}
+                  onOpen={() => {
+                    onGroup(g.id);
+                    setSelected((s) => ({ ...s, [g.id]: a.key }));
+                  }}
+                  media={
+                    <div className="flex size-full items-center justify-end pr-4" role="img" aria-label={a.points.length > 1 ? `${a.name}: ${a.points.length} results, oldest to newest, latest ${fmtV(a, latest.v)} ${a.unit}` : `${a.name}: first result`}>
+                      {a.points.length > 1 ? <Sparkline tone="white" className="h-12 w-[112px]" values={a.points.map((p) => p.v)} /> : <span className="text-[11px] text-white/60">first result</span>}
+                    </div>
+                  }
+                />
+              );
+            })}
+          </div>
+        </section>
+      </div>
 
       <div className="grid grid-cols-1 items-start gap-6 @[1040px]:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
         {featured ? (
@@ -454,9 +499,15 @@ function AnalyteCard({ analyte, metaFor, patientId }: { analyte: LabAnalyte; met
             <TrendKey range={range} thresholds={thresholds} />
           </div>
         ) : (
-          <p className="rounded-inner bg-canvas p-4 text-sm text-muted">
-            One result so far — {fmtV(analyte, latest.v)} {analyte.unit} on {fmtLong(latest.d)}. The trend appears from the second report.
-          </p>
+          <div className="flex flex-col gap-3 rounded-inner bg-canvas p-4">
+            <div className="h-[72px] rounded-[12px] bg-surface px-4">
+              <TargetGauge value={latest.v} low={analyte.low} high={analyte.high} unit={analyte.unit} decimals={analyte.decimals} caption={analyte.name} />
+            </div>
+            <p className="text-sm text-muted">
+              One result so far — {fmtV(analyte, latest.v)} {analyte.unit} on {fmtLong(latest.d)}. The trend line appears from the second report.
+            </p>
+            {range ? <TrendKey range={range} /> : null}
+          </div>
         )
       ) : (
         <div className="scrollbar-thin relative -mx-6 overflow-x-auto px-6" data-lenis-prevent>

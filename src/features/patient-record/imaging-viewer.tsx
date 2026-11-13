@@ -14,7 +14,7 @@ import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { authorAvatar, authorName } from "@/features/patient/event-meta";
 import { MODALITY, TECHNIQUE, recordHref, type StudyKind } from "./data";
-import { conditionOf, isFeaturedPatient, recordOf, studyPeople, type Study } from "./record-model";
+import { conditionOf, isFeaturedPatient, readableDates, recordOf, studyPeople, type Study } from "./record-model";
 import { StudyThumb } from "./study-thumb";
 
 /**
@@ -304,7 +304,7 @@ function ReportPanel({ study, patientId }: { study: Study; patientId: string }) 
       ) : null}
       <section>
         <h3 className="text-xs text-muted">Report</h3>
-        <p className="mt-1 text-sm leading-relaxed text-ink">{e?.summary ?? "No report text recorded."}</p>
+        <p className="mt-1 text-sm leading-relaxed text-ink">{e?.summary ? readableDates(e.summary) : "No report text recorded."}</p>
       </section>
       <section>
         <h3 className="text-xs text-muted">Source record</h3>

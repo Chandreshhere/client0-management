@@ -53,7 +53,8 @@ const branchAppointments = TODAY_APPOINTMENTS.filter((a) => BRANCH.rooms.include
 const otherBranchCount = TODAY_APPOINTMENTS.length - branchAppointments.length;
 
 type QueueStatus = Extract<AppointmentStatus, "arrived" | "waiting" | "in-session" | "checkout" | "completed">;
-type QueueEntry = { apptId: string; token: string; status: QueueStatus; arrivedAt: string };
+/** `sentInAt` = when the patient went in to the practitioner (sent in from this screen, or the slot start for sessions already running). */
+type QueueEntry = { apptId: string; token: string; status: QueueStatus; arrivedAt: string; sentInAt?: string };
 
 const QUEUE_STATES = new Set<AppointmentStatus>(["arrived", "waiting", "in-session", "checkout"]);
 const INITIAL_QUEUE: QueueEntry[] = branchAppointments
@@ -115,7 +116,8 @@ export function FrontdeskHome() {
     .filter((a) => (seen.has(a.patientId) ? false : (seen.add(a.patientId), true)))
     .slice(0, 2);
 
-  const setStatus = (apptId: string, status: QueueStatus) => setQueue((qs) => qs.map((q) => (q.apptId === apptId ? { ...q, status } : q)));
+  const setStatus = (apptId: string, status: QueueStatus) =>
+    setQueue((qs) => qs.map((q) => (q.apptId === apptId ? { ...q, status, ...(status === "in-session" ? { sentInAt: NOW_ISO } : {}) } : q)));
 
   const advance = (q: QueueEntry) => {
     const a = apptById(q.apptId);
@@ -403,7 +405,7 @@ function QueueRow({ entry: q, onAdvance }: { entry: QueueEntry; onAdvance: (q: Q
         <div className="flex items-center justify-between gap-3 @lg:justify-end">
           <span className={cn("flex items-center gap-1.5 text-xs tabular", long ? "text-warning" : "text-muted")}>
             {long ? <HourglassMedium size={14} aria-hidden="true" /> : null}
-            {waitingNow ? `${spanLabel(waitMin)} wait` : q.status === "in-session" ? `Since ${formatTime(a.start)}` : "Collect & book"}
+            {waitingNow ? `${spanLabel(waitMin)} wait` : q.status === "in-session" ? `Since ${formatTime(q.sentInAt ?? a.start)}` : "Collect & book"}
           </span>
           <StatusBadge tone={appointmentTone(q.status)}>{APPOINTMENT_STATUS_LABEL[q.status]}</StatusBadge>
           <Button size="sm" variant={waitingNow ? "dark" : "secondary"} onClick={() => onAdvance(q)} aria-label={`${action}: ${p?.name}`}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { ArrowRight, CalendarCheck, CheckCircle, Clock, Coffee, WarningCircle } from "@phosphor-icons/react";
+import { ArrowRight, CalendarCheck, CheckCircle, Clock, Coffee, UserCircleMinus, WarningCircle } from "@phosphor-icons/react";
 import { DISCIPLINE_LABEL } from "@/data/appointments";
 import { staffById } from "@/data/staff";
 import { cn } from "@/lib/cn";
@@ -23,6 +23,7 @@ import {
   isoAt,
   nextFreeSlot,
   outsideHours,
+  patientOverlaps,
   rangeLabel,
   shortDay,
   slotProblems,
@@ -65,7 +66,7 @@ const START_OPTIONS = Array.from({ length: (DAY_END - DAY_START) / 15 }, (_, i) 
 function BookingForm({ prefill, onCancel, onBooked }: { prefill: BookingPrefill; onCancel: () => void; onBooked: (created: Booking[]) => void }) {
   const { user } = useRole();
   const { has } = usePlan();
-  const { occupants, person, addBookings } = useSchedule();
+  const { occupants, events, person, addBookings } = useSchedule();
   const { toast } = useToast();
   const multi = has("multi-role");
   const allowedStaff = multi ? PRACTITIONERS : PRACTITIONERS.filter((p) => p.id === user.id);
@@ -141,6 +142,11 @@ function BookingForm({ prefill, onCancel, onBooked }: { prefill: BookingPrefill;
     [blocking, staffId, room, date, start, duration, occupants, occurrences],
   );
   const lunch = touchesLunch(start, duration);
+  // Soft check: the patient's own bookings and classes at the same time (shown, not blocking).
+  const patientBusy = useMemo(
+    () => (patientId ? dates.flatMap((d) => patientOverlaps(patientId, { date: d, start, duration }, events).map((e) => ({ e, date: d }))) : []),
+    [patientId, dates, start, duration, events],
+  );
   const offHours = outsideHours({ staffId, date, start, duration });
   const dayLoad = occupants.filter((o) => o.staffId === staffId && o.date === date).length;
   const staffHours = hoursOn(staffId, date);
@@ -379,6 +385,21 @@ function BookingForm({ prefill, onCancel, onBooked }: { prefill: BookingPrefill;
               </span>
             </div>
           )}
+          {patientBusy.length ? (
+            <ul className="mt-2 flex flex-col gap-1 text-xs text-ink-2" aria-label="Patient already booked">
+              {patientBusy.slice(0, 3).map(({ e, date: d }) => (
+                <li key={`${e.id}-${d}`} className="flex items-start gap-2">
+                  <UserCircleMinus size={14} className="mt-px shrink-0 text-warning" aria-hidden="true" />
+                  <span>
+                    {person(patientId ?? "")?.name ?? "This patient"} {e.cls ? "is enrolled in" : "already has"} {e.cls ? e.cls.title : e.booking?.service ?? "a booking"}
+                    {" "}with {staffById(e.staffId)?.name ?? "another practitioner"}, {repeat === "weekly" ? `${shortDay(d)} ` : ""}
+                    {rangeLabel(e.start, e.end)} — allowed for joint care, but the times overlap.
+                  </span>
+                </li>
+              ))}
+              {patientBusy.length > 3 ? <li className="pl-6 text-muted">+{patientBusy.length - 3} more overlaps</li> : null}
+            </ul>
+          ) : null}
           {lunch ? (
             <p className="mt-2 flex items-center gap-2 text-xs text-muted">
               <Coffee size={14} aria-hidden="true" />

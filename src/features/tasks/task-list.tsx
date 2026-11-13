@@ -14,6 +14,7 @@ import { Tip } from "@/components/ui/tooltip";
 import type { CareTask } from "./store";
 import { BUCKETS, PRIORITY_LABEL, SOURCE_META, STATUS_LABEL, bucketOf, byDue, dueLabel, sourceKind, statusTone, type Bucket } from "./task-meta";
 import { CountChip, PersonInline } from "./ui";
+import { OrganGlyph } from "./organ-glyph";
 
 const BUCKET_ICON: Record<Bucket, Icon> = { overdue: WarningOctagon, today: SunHorizon, week: CalendarBlank, later: CalendarDots, done: CheckCircle };
 
@@ -100,7 +101,14 @@ function TaskRow({ task, completing, onToggle, onOpen }: { task: CareTask; compl
           <span className={strikeClass(done)}>{task.title}</span>
         </button>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted">
-          {task.patientId ? <PersonInline id={task.patientId} link className="max-w-[180px] text-xs" /> : <span>No patient · clinic task</span>}
+          {task.patientId ? (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <PersonInline id={task.patientId} link className="max-w-[180px] text-xs" />
+              <OrganGlyph patientId={task.patientId} size="xs" className="relative z-10" />
+            </span>
+          ) : (
+            <span>No patient · clinic task</span>
+          )}
           <span className="inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 rounded-full px-2.5 text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line-strong)]">
             <SourceIcon size={14} className="shrink-0 text-muted" aria-hidden="true" />
             <span className="truncate">{task.source}</span>

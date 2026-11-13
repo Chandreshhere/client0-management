@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 import { snappy, spring } from "@/lib/motion";
 import { formatDate, formatTime, pluralize } from "@/lib/format";
 import { ORGAN_LABEL, type SystemKey } from "@/data/anatomy";
-import { LAB_PANELS, VITAL_SERIES, type BodySystem } from "@/data/featured";
+import { CARE_PLAN, LAB_PANELS, VITAL_SERIES, type BodySystem } from "@/data/featured";
 import type { PatientRecord } from "@/data/record";
 import { patientById } from "@/data/patients";
 import { staffById } from "@/data/staff";
@@ -43,6 +43,23 @@ const HEADLINE: Partial<Record<SystemKey, { id: string; label: string }>> = {
 const SYSTEM_ICON: Partial<Record<SystemKey, typeof Heart>> = { cardiovascular: Heart, neurological: Brain, respiratory: Wind };
 
 const sourceLabel = (p: VitalPoint) => (p.self ? "home reading · self-reported" : "clinic reading");
+
+/** Scale for a reference-range dot plot: the normal band plus 40% of its width each side, widened to fit every reading. */
+function scaleAround(low: number, high: number, readings: number[]): [number, number] {
+  const pad = (high - low || Math.abs(high) * 0.2 || 1) * 0.4;
+  return [Math.min(low - pad, ...readings), Math.max(high + pad, ...readings)];
+}
+
+/** "Targets: blood pressure < 130/80 mmHg · …" — read from the vital series targets and the care-plan goal. */
+function targetsLine() {
+  const parts = ["bp", "hr"].flatMap((id) => {
+    const s = VITAL_SERIES.find((x) => x.id === id);
+    return s?.target ? [`${s.name.toLowerCase()} ${s.target.replace(/\s*–\s*/, "–")} ${s.unit}`] : [];
+  });
+  const ldlGoal = CARE_PLAN.goal.match(/LDL-C below [^;.]+/)?.[0];
+  if (ldlGoal) parts.push(`${ldlGoal} (care-plan goal)`);
+  return parts.length ? `Targets: ${parts.join(" · ")}.` : "";
+}
 
 // ---------------------------------------------------------------------------------------------
 // Hero: organ + condition hotspots + glass reading card + condition list
@@ -322,7 +339,7 @@ export function ConditionTiles({ record, className }: { record: PatientRecord; c
               <RangeDots
                 readings={rbcPts.map((p) => p.v)}
                 range={[rbc.low ?? rbcLast.v, rbc.high ?? rbcLast.v]}
-                domain={[4, 6.4]}
+                domain={scaleAround(rbc.low ?? rbcLast.v, rbc.high ?? rbcLast.v, rbcPts.map((p) => p.v))}
                 label={`Red blood cells ${rbcPts.map((p) => `${p.v} on ${shortDate(p.d)}`).join(", ")} ${rbc.unit}; reference range ${rbc.range}`}
               />
             }
@@ -330,7 +347,7 @@ export function ConditionTiles({ record, className }: { record: PatientRecord; c
         ) : null}
       </div>
       <p className="mt-3 text-xs text-muted">
-        Targets in your care plan: blood pressure below 130/80 · resting heart rate 55–75 · LDL below 70 mg/dL by March 2027. Dots on the red-cell scale: hollow = earlier result, blue = latest; the darker band is the normal range.
+        {targetsLine()} Dots on the red-cell scale: hollow = earlier result, blue = latest; the darker band is the normal range.
       </p>
     </section>
   );

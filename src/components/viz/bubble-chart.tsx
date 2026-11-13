@@ -67,7 +67,7 @@ export function BubbleChart({ items, title, unit, className, height = 220 }: { i
                     <text x={x} y={y - (big ? 4 : 2)} textAnchor="middle" className={cn("tabular font-light", big ? "fill-ink" : "fill-white")} style={{ fontSize: big ? Math.min(30, it.r * 0.55) : Math.min(18, it.r * 0.45) }}>
                       {it.display ?? it.value}
                     </text>
-                    <text x={x} y={y + (big ? 16 : 12)} textAnchor="middle" className={big ? "fill-muted" : "fill-white/70"} style={{ fontSize: Math.min(11, Math.max(8, it.r * 0.2)) }}>
+                    <text x={x} y={y + (big ? 16 : 12)} textAnchor="middle" className={big ? "fill-muted" : "fill-white/70"} style={{ fontSize: Math.min(12, Math.max(10, it.r * 0.22)) }}>
                       {it.label}
                     </text>
                   </>

@@ -148,9 +148,62 @@ export function teamFor(record: PatientRecord | null, careTeam: Patient["careTea
   return out;
 }
 
+// ---------------------------------------------------------------- organ hero framing
+
+/**
+ * Visible extent of each organ render — the alpha bounding box (x0, y0, x1, y1) in the 640px
+ * source WebP in /public/organs, measured from the files. The renders are framed differently (a
+ * wide pancreas, a tall thyroid, a small cluster of blood cells), so one fixed zoom draws some
+ * organs tiny and off-centre.
+ */
+const ORGAN_BOX: Record<OrganKind, [number, number, number, number]> = {
+  brain: [83, 168, 515, 572],
+  cells: [171, 192, 530, 541],
+  gut: [199, 120, 470, 538],
+  heart: [148, 72, 494, 536],
+  kidney: [141, 167, 449, 639],
+  knee: [248, 95, 390, 609],
+  liver: [97, 216, 572, 497],
+  lungs: [129, 75, 514, 553],
+  pancreas: [97, 253, 532, 505],
+  spine: [245, 162, 448, 543],
+  thyroid: [184, 59, 451, 639],
+  uterus: [121, 232, 540, 546],
+};
+/** OrganHero draws the image at 92% of a 92% box: 84.64% of the hero, centred. */
+const HERO_IMG = 0.92 * 0.92;
+
+export interface OrganFit {
+  /** CSS custom properties for the hero image transform (translate is in % of the image box). */
+  vars: Record<"--organ-s" | "--organ-tx" | "--organ-ty", string>;
+  /** Maps a point in OrganHero's default framing (hero %) to the fitted framing. */
+  map: (p: { x: number; y: number }) => { x: number; y: number };
+}
+
+/**
+ * Scale and offset that make an organ's longest visible side `target` of the hero and centre it,
+ * so every patient's organ reads at the same size inside the rings. Hotspot anchors go through
+ * the same `map`, so they stay on the anatomy.
+ */
+export function organFit(kind: OrganKind, target = 0.7): OrganFit {
+  const [x0, y0, x1, y1] = ORGAN_BOX[kind];
+  const w = ((x1 - x0) / 640) * HERO_IMG;
+  const h = ((y1 - y0) / 640) * HERO_IMG;
+  const s = Math.min(1.5, target / Math.max(w, h));
+  const cx = 50 + ((x0 + x1) / 1280 - 0.5) * HERO_IMG * 100;
+  const cy = 50 + ((y0 + y1) / 1280 - 0.5) * HERO_IMG * 100;
+  const tx = -(cx - 50) * s;
+  const ty = -(cy - 50) * s;
+  const r = (n: number) => Math.round(n * 100) / 100;
+  return {
+    vars: { "--organ-s": String(r(s)), "--organ-tx": `${r(tx / HERO_IMG)}%`, "--organ-ty": `${r(ty / HERO_IMG)}%` },
+    map: (p) => ({ x: r(50 + (p.x - 50) * s + tx), y: r(50 + (p.y - 50) * s + ty) }),
+  };
+}
+
 // ---------------------------------------------------------------- organ hero hotspots
 
-/** Anatomical anchor points (percent of the hero box) per organ render — one per condition. */
+/** Anatomical anchor points (percent of the hero box, default framing) per organ render — one per condition. */
 export const HOTSPOT_ANCHORS: Record<OrganKind, { x: number; y: number }[]> = {
   heart: [{ x: 58, y: 66 }, { x: 64, y: 24 }, { x: 34, y: 44 }],
   brain: [{ x: 40, y: 38 }, { x: 64, y: 62 }, { x: 52, y: 26 }],

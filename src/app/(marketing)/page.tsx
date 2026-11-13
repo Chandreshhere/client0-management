@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { AnatomySection } from "@/features/marketing/anatomy-section";
 import { CtaBand } from "@/features/marketing/cta-band";
 import { Disciplines } from "@/features/marketing/disciplines";
 import { LANDING_FAQ } from "@/features/marketing/faq-data";
 import { Handoff } from "@/features/marketing/handoff";
 import { Hero } from "@/features/marketing/hero";
 import { IndiaFirst } from "@/features/marketing/india";
+import { JourneySection } from "@/features/marketing/journey-section";
 import { JsonLd, faqLd, softwareLd, websiteLd } from "@/features/marketing/json-ld";
 import { FaqSection, PricingSection } from "@/features/marketing/landing-sections";
 import { Modules } from "@/features/marketing/modules";
@@ -25,7 +27,9 @@ export default function HomePage() {
   return (
     <>
       <Hero />
+      <AnatomySection />
       <Disciplines />
+      <JourneySection />
       <Handoff />
       <Modules />
       <IndiaFirst />

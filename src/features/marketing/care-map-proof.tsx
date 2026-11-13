@@ -1,42 +1,60 @@
 "use client";
 
-import Link from "next/link";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Files } from "@phosphor-icons/react";
-import { BODY_SYSTEMS, CARE_EVENTS, CONDITIONS, EVENT_TYPE_LABEL, RECORD_STATE_LABEL, conditionById, systemById, type BodySystemId, type CareEvent } from "@/data/featured";
-import { clinicNumber, patientById } from "@/data/patients";
-import { DEMO_USER, staffById } from "@/data/staff";
-import type { Role } from "@/data/types";
+import { Files } from "@phosphor-icons/react";
+import { ORGAN_LABEL } from "@/data/anatomy";
+import { EVENT_TYPE_LABEL, RECORD_STATE_LABEL, type CareEvent } from "@/data/featured";
+import { careTeamActivity, systemShares } from "@/data/insights";
+import { clinicNumber } from "@/data/patients";
+import type { PatientRecord } from "@/data/record";
+import type { Discipline } from "@/data/types";
 import { OrganCanvas } from "@/features/patient/organ-canvas";
-import { Avatar, AvatarStack } from "@/components/ui/avatar";
+import { Avatar } from "@/components/ui/avatar";
+import { DemoFlag } from "@/components/ui/misc";
 import { Segmented } from "@/components/ui/segmented";
 import { StatusBadge, recordTone } from "@/components/ui/status";
 import { Tip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/format";
 import { pop, snappy, spring } from "@/lib/motion";
-import { DEFAULT_EVENT, EVENT_ICON, MONTHS, NOW, PROOF_YEARS, dayOf, eventsIn, latestFor, monthOf, placeBubbles, threadLinks, type ProofYear } from "./care-map-model";
+import {
+  EVENT_ICON,
+  MONTHS,
+  NOW,
+  PROOF_PATIENTS,
+  conditionOf,
+  conditionsIn,
+  dayOf,
+  defaultEvent,
+  eventsIn,
+  latestFor,
+  monthOf,
+  placeBubbles,
+  proofPatient,
+  systemOf,
+  threadLinks,
+  type ProofPatient,
+} from "./care-map-model";
+import { EagerAvatarStack } from "./eager-avatars";
 import { EventDetail } from "./event-detail";
+import { OpenRecordButton } from "./open-record";
+import { PatientSwitcher } from "./patient-switcher";
 import { ThreadLayer, useAnchors } from "./thread-layer";
 
 /**
- * Hero product proof — a scaled-down, working recreation of the patient care map:
- * body systems (focal cobalt card + recessed grey cards) → threads → a year of dated events.
- * Desktop (≥1280px): four tracks with threads. Below: a recomposed system switcher and a
- * chronological list (doc §6: the list is easier to scan on small screens).
- * All data is synthetic (Kabir Malhotra, 30). Threads mean "documented link", never causation.
+ * Hero product proof — a scaled-down, working recreation of the patient overview, for four
+ * synthetic patients. Switching patient rebuilds everything from that patient's record
+ * (@/data/record): the live organ (heart · lungs · pancreas · kidneys — from their conditions),
+ * the body-system cards and their share of care activity, the year of dated events, and the
+ * threads (condition → events documented against it; never cause and effect).
+ * Desktop (≥1280px): four tracks with threads. Below: a recomposed switcher + chronological list.
  */
 
-const PATIENT = patientById("p-kabir")!;
-const TEAM: { id: string; role: Role; dot: string }[] = [
-  { id: PATIENT.careTeam.doctor ?? "s-ananya", role: "doctor", dot: "bg-medical" },
-  { id: PATIENT.careTeam.nutritionist ?? "s-meera", role: "nutritionist", dot: "bg-nutrition" },
-  { id: PATIENT.careTeam.yoga ?? "s-kavya", role: "yoga", dot: "bg-movement" },
-];
 const ROW_H = 42;
 const BUBBLE = 28;
 const DEFAULT_TRACK = 372;
+const DISCIPLINE_DOT: Record<Discipline, string> = { medical: "bg-medical", nutrition: "bg-nutrition", movement: "bg-movement", operations: "bg-ops" };
 
 function useMedia(query: string) {
   const [match, setMatch] = useState<boolean | null>(null);
@@ -50,74 +68,113 @@ function useMedia(query: string) {
   return match;
 }
 
-
 export function CareMapProof() {
   const wide = useMedia("(min-width: 1280px)");
-  const [active, setActive] = useState<BodySystemId>("circulatory");
-  const [year, setYear] = useState<ProofYear>(2026);
-  const [selected, setSelected] = useState<string>(DEFAULT_EVENT);
+  const first = PROOF_PATIENTS[0];
+  const [pid, setPid] = useState(first.patient.id);
+  const pp = proofPatient(pid);
+  const record = pp.record;
+  const [active, setActive] = useState(first.focus.id);
+  const [year, setYear] = useState(first.record.years[0]);
+  const [selected, setSelected] = useState<string>(() => defaultEvent(first.record, first.record.years[0], first.focus.id)?.id ?? "");
   const [hover, setHover] = useState<string | null>(null);
   const [changed, setChanged] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { map, refFor } = useAnchors();
 
-  const yearEvents = useMemo(() => eventsIn(year), [year]);
-  const event = CARE_EVENTS.find((e) => e.id === selected) ?? yearEvents[yearEvents.length - 1];
-  const links = useMemo(() => threadLinks(year, active), [year, active]);
+  const yearEvents = useMemo(() => eventsIn(record, year), [record, year]);
+  const event = record.events.find((e) => e.id === selected) ?? defaultEvent(record, year, active);
+  const links = useMemo(() => threadLinks(record, year, active), [record, year, active]);
+  const sys = systemOf(record, active);
+  const featured = conditionOf(record, sys.featuredConditionId) ?? conditionsIn(record, sys.id)[0];
 
-  const focusSystem = (id: BodySystemId) => {
+  const switchPatient = (id: string) => {
+    if (id === pid) return;
+    const next = proofPatient(id);
+    const y = next.record.years[0];
+    setChanged(true);
+    setHover(null);
+    setPid(next.patient.id);
+    setActive(next.focus.id);
+    setYear(y);
+    setSelected(defaultEvent(next.record, y, next.focus.id)?.id ?? "");
+  };
+  const focusSystem = (id: string) => {
     if (id === active) return;
     setChanged(true);
     setActive(id);
-    const latest = latestFor(year, (e) => e.systemId === id);
+    const latest = latestFor(record, year, (e) => e.systemId === id);
     if (latest) setSelected(latest.id);
   };
-  const changeYear = (y: ProofYear) => {
+  const changeYear = (y: number) => {
     if (y === year) return;
     setChanged(true);
     setYear(y);
-    const latest = latestFor(y, (e) => e.systemId === active);
+    const latest = latestFor(record, y, (e) => e.systemId === active);
     if (latest) setSelected(latest.id);
   };
   const pickCondition = (cid: string) => {
-    const c = conditionById(cid);
+    const c = conditionOf(record, cid);
     if (!c) return;
     if (c.systemId !== active) {
       setChanged(true);
       setActive(c.systemId);
     }
-    const latest = latestFor(year, (e) => e.conditionId === cid);
+    const latest = latestFor(record, year, (e) => e.conditionId === cid);
     if (latest) setSelected(latest.id);
   };
 
-  const shared = { active, year, selected, hover, setHover, setSelected, focusSystem, changeYear, pickCondition, changed, refFor };
+  const shared: Shared = { pp, record, active, year, selected, hover, setHover, setSelected, focusSystem, changeYear, pickCondition, changed, refFor };
+  const firstName = pp.patient.name.split(" ")[0];
 
   return (
     <div>
+      <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <PatientSwitcher value={pid} onChange={switchPatient} label="Open a synthetic patient's record" />
+        <div className="flex flex-col items-start gap-2 xl:items-end">
+          <DemoFlag>Live product · synthetic patients</DemoFlag>
+          <p className="max-w-[60ch] text-xs leading-relaxed text-muted xl:text-right" aria-live="polite">
+            Showing {firstName}&apos;s <span className="text-ink-2">{sys.name}</span> system{featured ? <> — {featured.name}</> : null}, so the model is the{" "}
+            <span className="text-ink-2">{ORGAN_LABEL[sys.organ].toLowerCase()}</span>. Switch patient or system and the organ, cards and timeline are rebuilt from that record.
+          </p>
+        </div>
+      </div>
+
       {/* ≥1280px: the care map with threads */}
       <div ref={containerRef} className="relative hidden xl:grid xl:grid-cols-[232px_minmax(320px,360px)_minmax(40px,1fr)_minmax(440px,548px)] xl:gap-x-6">
-        <SummaryColumn event={event} />
+        {event ? <SummaryColumn pp={pp} event={event} /> : <div />}
         <SystemsColumn {...shared} showOrgan={wide === true} />
         <div aria-hidden="true" />
         <TimelineCard {...shared} events={yearEvents} />
-        <ThreadLayer containerRef={containerRef} anchors={map} threads={links} version={`${active}-${year}`} highlightGroup={hover} selectedEvent={selected} enabled={wide === true} />
+        <ThreadLayer
+          containerRef={containerRef}
+          anchors={map}
+          threads={links}
+          version={`${pid}-${active}-${year}`}
+          highlightGroup={hover}
+          selectedEvent={selected}
+          enabled={wide === true}
+        />
       </div>
+      <Legend />
 
       {/* <1280px: system switcher + chronological list */}
-      <CompactProof {...shared} events={yearEvents} event={event} showOrgan={wide === false} />
+      {event ? <CompactProof {...shared} events={yearEvents} event={event} showOrgan={wide === false} /> : null}
     </div>
   );
 }
 
 type Shared = {
-  active: BodySystemId;
-  year: ProofYear;
+  pp: ProofPatient;
+  record: PatientRecord;
+  active: string;
+  year: number;
   selected: string;
   hover: string | null;
   setHover: (id: string | null) => void;
   setSelected: (id: string) => void;
-  focusSystem: (id: BodySystemId) => void;
-  changeYear: (y: ProofYear) => void;
+  focusSystem: (id: string) => void;
+  changeYear: (y: number) => void;
   pickCondition: (cid: string) => void;
   changed: boolean;
   refFor: (key: string) => (el: HTMLElement | null) => void;
@@ -125,47 +182,41 @@ type Shared = {
 
 /* ------------------------------------------------------------------ summary column */
 
-function SummaryColumn({ event }: { event: CareEvent }) {
+function SummaryColumn({ pp, event }: { pp: ProofPatient; event: CareEvent }) {
+  const { patient, record } = pp;
+  const authors = useMemo(() => careTeamActivity(record).slice(0, 3), [record]);
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-3 rounded-card bg-sunken p-2">
-        <Avatar src={PATIENT.avatar} name={PATIENT.name} size="md" />
+        <Avatar src={patient.avatar} name={patient.name} size="md" loading="eager" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-ink">{PATIENT.name}</p>
-          <p className="truncate text-xs text-muted">{PATIENT.age} years old</p>
+          <p className="truncate text-sm font-medium text-ink">{patient.name}</p>
+          <p className="truncate text-xs text-muted">{patient.age} years old</p>
         </div>
-        <Tip label="Open this record in the live demo">
-          <Link
-            href="/demo"
-            aria-label="Open Kabir Malhotra's record in the live demo"
-            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface text-ink transition-[background-color,transform] duration-200 hover:bg-canvas active:scale-95"
-          >
-            <ArrowUpRight size={18} />
-          </Link>
-        </Tip>
+        <OpenRecordButton patientId={patient.id} tone="surface" />
       </div>
 
       <div className="rounded-card bg-surface p-4">
         <p className="flex items-center justify-between gap-2 text-xs text-muted">
-          Care team
-          <span className="font-mono text-ink-2">{clinicNumber(PATIENT.id)}</span>
+          Records authored
+          <span>all years</span>
         </p>
         <ul className="mt-3 flex flex-col gap-3">
-          {TEAM.map((t) => {
-            const person = staffById(t.id);
-            return (
-              <li key={t.id} className="flex items-center gap-3">
-                <Avatar src={person?.avatar} name={person?.name ?? DEMO_USER[t.role].label} size="sm" />
-                <span className="min-w-0">
-                  <span className="block truncate text-sm text-ink">{person?.name}</span>
-                  <span className="flex items-center gap-1.5 text-xs text-muted">
-                    <span aria-hidden="true" className={cn("size-1.5 rounded-full", t.dot)} />
-                    {DEMO_USER[t.role].label}
-                  </span>
+          {authors.map(({ staff, count }) => (
+            <li key={staff.id} className="flex items-center gap-3">
+              <Avatar src={staff.avatar} name={staff.name} size="sm" loading="eager" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-ink">{staff.name}</span>
+                <span className="flex items-center gap-1.5 truncate text-xs text-muted">
+                  <span aria-hidden="true" className={cn("size-1.5 shrink-0 rounded-full", DISCIPLINE_DOT[staff.discipline])} />
+                  <span className="truncate">{staff.title.split(" ·")[0]}</span>
                 </span>
-              </li>
-            );
-          })}
+              </span>
+              <span className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full bg-sunken px-1.5 text-xs text-ink-2 tabular" aria-label={`${count} records`}>
+                {count}
+              </span>
+            </li>
+          ))}
         </ul>
       </div>
 
@@ -182,23 +233,25 @@ function SummaryColumn({ event }: { event: CareEvent }) {
 
 /* ------------------------------------------------------------------ body systems */
 
-function SystemsColumn({ active, hover, setHover, focusSystem, pickCondition, setSelected, year, refFor, showOrgan }: Shared & { showOrgan: boolean }) {
-  const sys = systemById(active);
-  const others = BODY_SYSTEMS.filter((b) => b.id !== active);
-  const featured = conditionById(sys.featuredConditionId)!;
-  const secondary = sys.conditionIds.filter((c) => c !== sys.featuredConditionId).map((id) => conditionById(id)!);
-  const latest = latestFor(year, (e) => e.systemId === active);
+function SystemsColumn({ pp, record, active, hover, setHover, focusSystem, pickCondition, setSelected, year, refFor, showOrgan }: Shared & { showOrgan: boolean }) {
+  const sys = systemOf(record, active);
+  const conds = conditionsIn(record, sys.id);
+  const featured = conditionOf(record, sys.featuredConditionId) ?? conds[0];
+  const secondary = conds.filter((c) => c.id !== featured?.id);
+  const latest = latestFor(record, year, (e) => e.systemId === active);
+  const shares = useMemo(() => systemShares(record), [record]);
+  const total = shares[0]?.total ?? 0;
 
   return (
     <div className="flex flex-col">
       <div className="relative h-[288px]">
         <div className="absolute left-0 top-0 h-[248px] w-[208px] overflow-hidden rounded-card bg-primary text-white">
           <span className="absolute left-4 top-4 inline-flex h-8 items-center rounded-full px-3 text-xs text-white/90 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.35)]">
-            {sys.conditionIds.length} instances
+            {conds.length} {conds.length === 1 ? "condition" : "conditions"}
           </span>
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.p
-              key={sys.id}
+              key={`${pp.patient.id}-${sys.id}`}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
@@ -209,7 +262,7 @@ function SystemsColumn({ active, hover, setHover, focusSystem, pickCondition, se
             </motion.p>
           </AnimatePresence>
           <div className="absolute bottom-4 left-4 z-[3] flex gap-2">
-            <Tip label="Show the latest record">
+            <Tip label="Show the latest record in this system">
               <button
                 type="button"
                 aria-label={`Show the latest ${sys.name} record`}
@@ -219,47 +272,51 @@ function SystemsColumn({ active, hover, setHover, focusSystem, pickCondition, se
                 <Files size={18} />
               </button>
             </Tip>
-            <Tip label="Open in the live demo">
-              <Link href="/demo" aria-label="Open this record in the live demo" className="flex size-10 items-center justify-center rounded-full bg-white text-ink transition-transform duration-200 hover:scale-105 active:scale-95">
-                <ArrowUpRight size={18} />
-              </Link>
-            </Tip>
+            <OpenRecordButton patientId={pp.patient.id} />
           </div>
         </div>
 
-        {showOrgan ? <OrganCanvas shape={sys.organ} label={`Illustration: ${sys.organ}`} className="pointer-events-none absolute left-[40px] top-[80px] z-[2] size-[188px]" /> : null}
+        {showOrgan ? (
+          <OrganCanvas
+            shape={sys.organ}
+            label={`3D illustration of the ${ORGAN_LABEL[sys.organ].toLowerCase()} — ${pp.patient.name}'s ${sys.name} system`}
+            className="pointer-events-none absolute left-[40px] top-[80px] z-[2] size-[188px]"
+          />
+        ) : null}
 
-        <AnimatePresence initial={false}>
-          <motion.button
-            key={featured.id}
-            ref={refFor(`cond:${featured.id}`)}
-            type="button"
-            onClick={() => pickCondition(featured.id)}
-            onPointerEnter={() => setHover(featured.id)}
-            onPointerLeave={() => setHover(null)}
-            onFocus={() => setHover(featured.id)}
-            onBlur={() => setHover(null)}
-            aria-label={`${featured.name}, ${featured.status}. Show its latest event`}
-            initial={{ opacity: 0, x: 16, scale: 0.96 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
-            transition={spring}
-            className={cn(
-              "glass-dark absolute left-[136px] top-[20px] z-[4] flex h-[204px] w-[188px] flex-col rounded-card p-4 text-left text-white",
-              hover === featured.id && "outline-2 outline-offset-2 outline-white/60",
-            )}
-          >
-            <span className="flex w-full items-start justify-between gap-2">
-              <span className="pt-1 text-xs text-white/70">{featured.status}</span>
-              <span aria-hidden="true" className="-mr-1 -mt-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-ink">
-                <ArrowUpRight size={16} />
+        {featured ? (
+          <AnimatePresence initial={false}>
+            <motion.button
+              key={featured.id}
+              ref={refFor(`cond:${featured.id}`)}
+              type="button"
+              onClick={() => pickCondition(featured.id)}
+              onPointerEnter={() => setHover(featured.id)}
+              onPointerLeave={() => setHover(null)}
+              onFocus={() => setHover(featured.id)}
+              onBlur={() => setHover(null)}
+              aria-label={`${featured.name}, ${featured.status}, ${featured.markers} linked records. Show its latest event`}
+              initial={{ opacity: 0, x: 16, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
+              transition={spring}
+              className={cn(
+                "glass-dark absolute left-[136px] top-[20px] z-[4] flex h-[204px] w-[188px] flex-col rounded-card p-4 text-left text-white",
+                hover === featured.id && "outline-2 outline-offset-2 outline-white/60",
+              )}
+            >
+              <span className="flex w-full items-start justify-between gap-2">
+                <span className="pt-1 text-xs text-white/70">{featured.status}</span>
+                <span aria-hidden="true" className="-mr-1 -mt-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-ink">
+                  <Files size={16} />
+                </span>
               </span>
-            </span>
-            <span className="mt-2 text-lg leading-[1.15] tracking-[-0.01em]">{featured.name}</span>
-            <span className="mt-1 text-xs text-white/60">{featured.markers} markers</span>
-            <span className="mt-auto text-xs text-white/60">Since {formatDate(featured.since, { month: "short", year: "numeric" })}</span>
-          </motion.button>
-        </AnimatePresence>
+              <span className="mt-2 line-clamp-3 text-lg leading-[1.15] tracking-[-0.01em]">{featured.name}</span>
+              <span className="mt-1 text-xs text-white/60">{featured.markers} linked records</span>
+              <span className="mt-auto text-xs text-white/60">Since {formatDate(featured.since, { month: "short", year: "numeric" })}</span>
+            </motion.button>
+          </AnimatePresence>
+        ) : null}
 
         <div className="absolute left-[152px] top-[236px] z-[3] flex flex-col items-start gap-2">
           {secondary.map((c) => (
@@ -268,14 +325,18 @@ function SystemsColumn({ active, hover, setHover, focusSystem, pickCondition, se
         </div>
       </div>
 
+      <p className="mb-2 mt-4 text-xs text-muted">
+        Share of care activity · last 12 months · <span className="tabular">{total}</span> {total === 1 ? "event" : "events"}
+      </p>
       <LayoutGroup id="proof-systems">
-        <div className="mt-4 flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
           <AnimatePresence mode="popLayout" initial={false}>
-            {others.map((b) => {
-              const conditions = CONDITIONS.filter((c) => c.systemId === b.id);
+            {shares.map((s) => {
+              const on = s.id === active;
+              const list = conditionsIn(record, s.id);
               return (
                 <motion.div
-                  key={b.id}
+                  key={`${pp.patient.id}-${s.id}`}
                   layout
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -285,19 +346,34 @@ function SystemsColumn({ active, hover, setHover, focusSystem, pickCondition, se
                 >
                   <button
                     type="button"
-                    onClick={() => focusSystem(b.id)}
-                    aria-label={`Focus the ${b.name} system`}
-                    className="relative h-[112px] w-[188px] shrink-0 rounded-card bg-sunken text-left transition-colors duration-200 hover:bg-sunken-2"
+                    onClick={() => focusSystem(s.id)}
+                    aria-pressed={on}
+                    aria-label={`${s.name}: ${s.percent}% of care activity in the last 12 months (${s.events} of ${s.total} events)${on ? ", in focus" : ". Focus this system"}`}
+                    className={cn(
+                      "flex h-[96px] w-[188px] shrink-0 flex-col rounded-card p-4 text-left transition-colors duration-200",
+                      on ? "bg-surface shadow-[inset_0_0_0_1px_var(--color-line)]" : "bg-sunken hover:bg-sunken-2",
+                    )}
                   >
-                    <span className="absolute left-4 top-4 inline-flex h-8 items-center rounded-full px-3 text-xs text-muted shadow-[inset_0_0_0_1px_var(--color-line-strong)]">
-                      {conditions.length} instances
+                    <span className="flex w-full items-baseline justify-between gap-2">
+                      <span className="truncate text-xs text-muted">{s.name}</span>
+                      <span className="shrink-0 text-[11px] text-muted tabular">
+                        {s.events}/{s.total}
+                      </span>
                     </span>
-                    <span className="absolute bottom-4 left-4 text-[20px] leading-none tracking-[-0.015em] text-ink">{b.name}</span>
+                    <span className="mt-1 text-[24px] font-light leading-none tracking-[-0.02em] text-ink tabular">{s.percent}%</span>
+                    <span aria-hidden="true" className="mt-auto block h-1 w-full overflow-hidden rounded-full bg-ink/10">
+                      <span className={cn("block h-full rounded-full", on ? "bg-primary" : "bg-ink/45")} style={{ width: `${s.percent}%` }} />
+                    </span>
                   </button>
                   <div className="flex min-w-0 flex-col items-start gap-2">
-                    {conditions.map((c) => (
-                      <ConditionChip key={c.id} id={c.id} name={c.name} tone="light" {...{ hover, setHover, pickCondition, refFor }} />
-                    ))}
+                    {on ? (
+                      <span className="inline-flex h-8 items-center gap-1.5 text-xs text-muted">
+                        <span aria-hidden="true" className="size-1.5 rounded-full bg-primary" />
+                        In focus above
+                      </span>
+                    ) : (
+                      list.map((c) => <ConditionChip key={c.id} id={c.id} name={c.name} tone="light" {...{ hover, setHover, pickCondition, refFor }} />)
+                    )}
                   </div>
                 </motion.div>
               );
@@ -337,19 +413,19 @@ function ConditionChip({
       onFocus={() => setHover(id)}
       onBlur={() => setHover(null)}
       className={cn(
-        "inline-flex h-8 items-center whitespace-nowrap rounded-full px-3 text-xs transition-[background-color,box-shadow,color] duration-200",
+        "inline-flex h-8 max-w-[220px] items-center rounded-full px-3 text-xs transition-[background-color,box-shadow,color] duration-200",
         tone === "white" ? "bg-surface text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)]" : "bg-surface/60 text-ink-2",
         on ? "bg-charcoal text-white shadow-none" : "hover:bg-surface hover:text-ink",
       )}
     >
-      {name}
+      <span className="truncate">{name}</span>
     </button>
   );
 }
 
 /* ------------------------------------------------------------------ timeline */
 
-function TimelineCard({ events, active, year, selected, setSelected, setHover, changeYear, changed, refFor }: Shared & { events: CareEvent[] }) {
+function TimelineCard({ pp, record, events, active, year, selected, setSelected, setHover, changeYear, changed, refFor }: Shared & { events: CareEvent[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [trackW, setTrackW] = useState(DEFAULT_TRACK);
 
@@ -362,20 +438,17 @@ function TimelineCard({ events, active, year, selected, setSelected, setHover, c
   }, []);
 
   const counts = useMemo(
-    () =>
-      Object.fromEntries(
-        PROOF_YEARS.map((y) => [y, Array.from({ length: 12 }, (_, m) => eventsIn(y).filter((e) => e.systemId === active && monthOf(e) === m).length)]),
-      ) as Record<ProofYear, number[]>,
-    [active],
+    () => record.years.map((y) => ({ year: y, months: Array.from({ length: 12 }, (_, m) => eventsIn(record, y).filter((e) => e.systemId === active && monthOf(e) === m).length) })),
+    [record, active],
   );
 
   return (
-    <div className="flex rounded-card bg-surface py-4 pl-4">
+    <div className="flex min-h-[648px] rounded-card bg-surface py-4 pl-4">
       <div className="flex min-h-0 flex-1">
-        <ol className="flex min-w-0 flex-1 flex-col" aria-label={`Care events by month, ${year}. ${systemById(active).name} events are highlighted.`}>
+        <ol className="flex min-w-0 flex-1 flex-col" aria-label={`${pp.patient.name}: care events by month, ${year}. ${systemOf(record, active).name} events are highlighted.`}>
           {MONTHS.map((label, m) => (
             <MonthRow
-              key={`${year}-${m}`}
+              key={`${pp.patient.id}-${year}-${m}`}
               label={label}
               month={m}
               year={year}
@@ -415,7 +488,7 @@ function MonthRow({
   month: number;
   year: number;
   events: CareEvent[];
-  active: BodySystemId;
+  active: string;
   trackW: number;
   trackRef?: React.RefObject<HTMLDivElement | null>;
   selected: string;
@@ -506,32 +579,32 @@ function MonthRow({
   );
 }
 
-function YearScrubber({ year, changeYear, counts }: { year: ProofYear; changeYear: (y: ProofYear) => void; counts: Record<ProofYear, number[]> }) {
+function YearScrubber({ year, changeYear, counts }: { year: number; changeYear: (y: number) => void; counts: { year: number; months: number[] }[] }) {
   const dot = (n: number) => (n >= 3 ? 8 : n === 2 ? 6 : n === 1 ? 5 : 3);
   return (
     <LayoutGroup id="proof-years">
       <div role="radiogroup" aria-label="Timeline year" className="flex w-16 shrink-0 flex-col items-center gap-3 pr-4">
-        {PROOF_YEARS.map((y) => {
+        {counts.map(({ year: y, months }) => {
           const on = y === year;
-          const c = counts[y];
           return (
-            <button
-              key={y}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              aria-label={`${y}, ${c.reduce((sum, n) => sum + n, 0)} events for this body system`}
-              onClick={() => changeYear(y)}
-              className={cn("relative flex w-12 flex-col items-center gap-2 rounded-full py-3 transition-colors duration-200", !on && "text-muted hover:text-ink")}
-            >
-              {on ? <motion.span layoutId="proof-year-pill" transition={snappy} className="absolute inset-0 rounded-full bg-charcoal" /> : null}
-              <span className={cn("relative z-[1] text-[11px] tabular", on && "text-white")}>{y}</span>
-              <span aria-hidden="true" className="relative z-[1] flex flex-col items-center gap-1.5">
-                {(on ? c : c.filter((_, i) => i % 2 === 0)).map((n, i) => (
-                  <span key={i} className={cn("rounded-full", on ? "bg-white" : "bg-line-strong")} style={{ width: dot(n), height: dot(n), opacity: on && n === 0 ? 0.35 : 1 }} />
-                ))}
-              </span>
-            </button>
+            <Tip key={y} label={`${months.reduce((s, n) => s + n, 0)} events in this system · dot size = events per month`} side="left">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={on}
+                aria-label={`${y}, ${months.reduce((sum, n) => sum + n, 0)} events for this body system`}
+                onClick={() => changeYear(y)}
+                className={cn("relative flex w-12 flex-col items-center gap-2 rounded-full py-3 transition-colors duration-200", !on && "text-muted hover:text-ink")}
+              >
+                {on ? <motion.span layoutId="proof-year-pill" transition={snappy} className="absolute inset-0 rounded-full bg-charcoal" /> : null}
+                <span className={cn("relative z-[1] text-[11px] tabular", on && "text-white")}>{y}</span>
+                <span aria-hidden="true" className="relative z-[1] flex flex-col items-center gap-1.5">
+                  {(on ? months : months.filter((_, i) => i % 2 === 0)).map((n, i) => (
+                    <span key={i} className={cn("rounded-full", on ? "bg-white" : "bg-line-strong")} style={{ width: dot(n), height: dot(n), opacity: on && n === 0 ? 0.35 : 1 }} />
+                  ))}
+                </span>
+              </button>
+            </Tip>
           );
         })}
       </div>
@@ -539,114 +612,178 @@ function YearScrubber({ year, changeYear, counts }: { year: ProofYear; changeYea
   );
 }
 
+/** What each mark on the desktop care map means (doc §10: a legend wherever marks could be ambiguous). */
+function Legend() {
+  return (
+    <ul aria-label="How to read the care map" className="mt-3 hidden flex-wrap items-center justify-end gap-x-4 gap-y-1.5 text-[11px] text-muted xl:flex">
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="size-2.5 rounded-full bg-primary" />
+        Event in the system in focus
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="size-2.5 rounded-full shadow-[inset_0_0_0_1.5px_var(--color-primary)]" />
+        Scheduled
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="size-2.5 rounded-full border border-dashed border-primary" />
+        Self-reported
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="size-2 rounded-full bg-warning" />
+        Awaiting review
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="size-2 rounded-full bg-line-strong" />
+        Other body systems
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="h-px w-4 bg-primary" />
+        Line = event documented against that condition
+      </li>
+      <li>Position = day of the month</li>
+    </ul>
+  );
+}
+
 /* ------------------------------------------------------------------ compact (< 1280px) */
 
-function CompactProof({ events, event, active, year, setSelected, focusSystem, changeYear, showOrgan }: Shared & { events: CareEvent[]; event: CareEvent; showOrgan: boolean }) {
-  const sys = systemById(active);
-  const featured = conditionById(sys.featuredConditionId)!;
+function CompactProof({ pp, record, events, event, active, year, setSelected, focusSystem, changeYear, showOrgan }: Shared & { events: CareEvent[]; event: CareEvent; showOrgan: boolean }) {
+  const { patient } = pp;
+  const sys = systemOf(record, active);
+  const featured = conditionOf(record, sys.featuredConditionId) ?? conditionsIn(record, sys.id)[0];
+  const share = systemShares(record).find((s) => s.id === sys.id);
   const list = events
     .filter((e) => e.systemId === active && e.state !== "scheduled")
     .sort((a, b) => b.date.localeCompare(a.date) || b.enteredAt.localeCompare(a.enteredAt))
     .slice(0, 6);
-  const team = TEAM.map((t) => staffById(t.id)).filter((p): p is NonNullable<typeof p> => !!p);
+  const authors = careTeamActivity(record).slice(0, 3);
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:hidden">
       <div className="flex min-w-0 flex-col gap-4">
-        <div className="flex items-center gap-3 rounded-card bg-sunken p-2 pr-4">
-          <Avatar src={PATIENT.avatar} name={PATIENT.name} size="md" />
+        <div className="flex items-center gap-3 rounded-card bg-sunken p-2 pr-2">
+          <Avatar src={patient.avatar} name={patient.name} size="md" loading="eager" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-ink">{PATIENT.name}</p>
+            <p className="truncate text-sm font-medium text-ink">{patient.name}</p>
             <p className="truncate text-xs text-muted">
-              {PATIENT.age} years · <span className="font-mono">{clinicNumber(PATIENT.id)}</span>
+              {patient.age} years · <span className="font-mono">{clinicNumber(patient.id)}</span>
             </p>
           </div>
-          <span className="sr-only">Care team: {team.map((p) => p.name).join(", ")}</span>
-          <AvatarStack people={team.map((p) => ({ name: p.name, avatar: p.avatar }))} size="sm" />
+          <span className="sr-only">Records authored by: {authors.map((a) => `${a.staff.name} (${a.count})`).join(", ")}</span>
+          <EagerAvatarStack people={authors.map((a) => ({ name: a.staff.name, avatar: a.staff.avatar }))} size="sm" />
+          <OpenRecordButton patientId={patient.id} tone="surface" />
         </div>
 
-        <div className="-mx-1 overflow-x-auto px-1 scrollbar-none" data-lenis-prevent>
-          <Segmented
-            variant="tray"
-            size="sm"
-            ariaLabel="Body system"
-            value={active}
-            onChange={focusSystem}
-            className="w-max"
-            items={BODY_SYSTEMS.map((b) => ({ value: b.id, label: b.name.replace("Blood ", "") }))}
-          />
-        </div>
+        {record.systems.length > 1 ? (
+          <div className="-mx-1 overflow-x-auto px-1 scrollbar-none" data-lenis-prevent>
+            <Segmented
+              variant="tray"
+              size="sm"
+              ariaLabel="Body system"
+              value={active}
+              onChange={focusSystem}
+              className="w-max"
+              items={record.systems.map((b) => ({ value: b.id, label: b.name.replace("Blood ", "") }))}
+            />
+          </div>
+        ) : null}
 
         <div className="relative h-[232px] overflow-hidden rounded-card bg-primary text-white">
           <span className="absolute left-4 top-4 inline-flex h-8 items-center rounded-full px-3 text-xs text-white/90 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.35)]">
-            {sys.conditionIds.length} instances
+            {share ? `${share.percent}% of activity · 12 mo` : `${sys.conditionIds.length} conditions`}
           </span>
           <AnimatePresence mode="popLayout" initial={false}>
-            <motion.p key={sys.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={spring} className="absolute left-4 top-16 z-[2] max-w-[150px] text-[22px] leading-[1.1] tracking-[-0.015em]">
+            <motion.p
+              key={`${patient.id}-${sys.id}`}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, transition: { duration: 0.12 } }}
+              transition={spring}
+              className="absolute left-4 top-16 z-[2] max-w-[150px] text-[22px] leading-[1.1] tracking-[-0.015em]"
+            >
               {sys.name}
             </motion.p>
           </AnimatePresence>
-          {showOrgan ? <OrganCanvas shape={sys.organ} label={`Illustration: ${sys.organ}`} className="pointer-events-none absolute -right-2 top-4 z-[1] size-[200px]" /> : null}
-          <div className="absolute inset-x-4 bottom-4 z-[2] flex items-center justify-between gap-2 rounded-full bg-white/15 py-1 pl-4 pr-1 backdrop-blur-sm">
-            <span className="min-w-0 truncate text-xs">
-              {featured.name} · <span className="text-white/70">{featured.status}</span>
-            </span>
-            <Link href="/demo" aria-label="Open this record in the live demo" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-ink">
-              <ArrowUpRight size={16} />
-            </Link>
-          </div>
+          {showOrgan ? (
+            <OrganCanvas
+              shape={sys.organ}
+              label={`3D illustration of the ${ORGAN_LABEL[sys.organ].toLowerCase()} — ${patient.name}'s ${sys.name} system`}
+              className="pointer-events-none absolute -right-2 top-4 z-[1] size-[200px]"
+            />
+          ) : null}
+          {featured ? (
+            <div className="absolute inset-x-4 bottom-4 z-[2] flex items-center justify-between gap-2 rounded-full bg-white/15 py-1 pl-4 pr-1 backdrop-blur-sm">
+              <span className="min-w-0 truncate text-xs">
+                {featured.name} · <span className="text-white/70">{featured.status}</span>
+              </span>
+              <OpenRecordButton patientId={patient.id} size="sm" />
+            </div>
+          ) : null}
         </div>
       </div>
 
       <div className="min-w-0 rounded-card bg-surface p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-ink">Latest events</p>
-          <Segmented size="sm" variant="tray" ariaLabel="Timeline year" value={String(year) as `${ProofYear}`} onChange={(v) => changeYear(Number(v) as ProofYear)} items={PROOF_YEARS.map((y) => ({ value: String(y) as `${ProofYear}`, label: String(y) }))} />
+          {record.years.length > 1 ? (
+            <Segmented
+              size="sm"
+              variant="tray"
+              ariaLabel="Timeline year"
+              value={String(year)}
+              onChange={(v) => changeYear(Number(v))}
+              items={record.years.map((y) => ({ value: String(y), label: String(y) }))}
+            />
+          ) : null}
         </div>
-        <ol className="relative mt-4 flex flex-col gap-1">
-          <span aria-hidden="true" className="absolute bottom-6 left-[19px] top-6 w-px bg-line-strong" />
-          {list.map((e) => {
-            const Icon = EVENT_ICON[e.type];
-            const open = e.id === event.id;
-            return (
-              <li key={e.id} className="relative">
-                <button
-                  type="button"
-                  aria-expanded={open}
-                  onClick={() => setSelected(e.id)}
-                  className={cn("flex w-full items-center gap-3 rounded-inner p-0 py-1 pr-2 text-left transition-colors", !open && "hover:bg-canvas")}
-                >
-                  <span className={cn("relative z-[1] flex size-10 shrink-0 items-center justify-center rounded-full ring-4 ring-surface", e.state === "self-reported" ? "border-[1.5px] border-dashed border-primary bg-surface text-primary" : "bg-primary text-white")}>
-                    <Icon size={18} aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-ink">{e.title}</span>
-                    <span className="block truncate text-xs text-muted">
-                      {formatDate(e.date, { day: "numeric", month: "short" })} · entered {formatDate(e.enteredAt, { day: "numeric", month: "short" })}
-                    </span>
-                  </span>
-                  <StatusBadge tone={recordTone(e.state)} className="hidden sm:inline-flex">
-                    {RECORD_STATE_LABEL[e.state]}
-                  </StatusBadge>
-                </button>
-                <AnimatePresence initial={false}>
-                  {open ? (
-                    <motion.div
-                      key="detail"
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={spring}
-                      className="overflow-hidden"
+        {list.length === 0 ? (
+          <p className="mt-4 rounded-inner bg-canvas p-4 text-sm text-muted">
+            No {sys.name.toLowerCase()} events recorded in {year}. Pick another year or system.
+          </p>
+        ) : (
+          <ol className="relative mt-4 flex flex-col gap-1">
+            <span aria-hidden="true" className="absolute bottom-6 left-[19px] top-6 w-px bg-line-strong" />
+            {list.map((e) => {
+              const Icon = EVENT_ICON[e.type];
+              const open = e.id === event.id;
+              return (
+                <li key={e.id} className="relative">
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => setSelected(e.id)}
+                    className={cn("flex w-full items-center gap-3 rounded-inner p-0 py-1 pr-2 text-left transition-colors", !open && "hover:bg-canvas")}
+                  >
+                    <span
+                      className={cn(
+                        "relative z-[1] flex size-10 shrink-0 items-center justify-center rounded-full ring-4 ring-surface",
+                        e.state === "self-reported" ? "border-[1.5px] border-dashed border-primary bg-surface text-primary" : "bg-primary text-white",
+                      )}
                     >
-                      <EventDetail event={e} framed={false} className="mb-2 ml-[52px] mt-1 rounded-inner bg-canvas p-4" />
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-              </li>
-            );
-          })}
-        </ol>
+                      <Icon size={18} aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-ink">{e.title}</span>
+                      <span className="block truncate text-xs text-muted">
+                        {formatDate(e.date, { day: "numeric", month: "short" })} · entered {formatDate(e.enteredAt, { day: "numeric", month: "short" })}
+                      </span>
+                    </span>
+                    <StatusBadge tone={recordTone(e.state)} className="hidden sm:inline-flex">
+                      {RECORD_STATE_LABEL[e.state]}
+                    </StatusBadge>
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {open ? (
+                      <motion.div key="detail" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={spring} className="overflow-hidden">
+                        <EventDetail event={e} framed={false} className="mb-2 ml-[52px] mt-1 rounded-inner bg-canvas p-4" />
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+                </li>
+              );
+            })}
+          </ol>
+        )}
       </div>
     </div>
   );

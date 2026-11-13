@@ -58,7 +58,7 @@ export function EventDetail({ event, className, framed = true }: { event: CareEv
       ) : null}
 
       <div className="mt-3 flex items-center gap-2 text-xs text-muted">
-        <Avatar src={avatar} name={authorName(event.authorId)} size="xs" />
+        <Avatar src={avatar} name={authorName(event.authorId)} size="xs" loading="eager" />
         <span className="min-w-0 truncate">
           <span className="text-ink-2">{authorName(event.authorId)}</span> · {event.authorRole}
         </span>

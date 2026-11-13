@@ -19,6 +19,8 @@ import { useToast } from "@/components/ui/toast";
 import { usePlan, useRole } from "@/components/shell/role-context";
 import { LockBadge } from "@/components/shell/plan-switcher";
 import { InfoNote, ROLE_LABEL, ReadOnlyBanner, SaveState, type SaveStatus } from "./ui";
+import { OrganImage } from "@/components/viz/organ";
+import { caseloadByOrgan } from "@/features/team/data";
 import { DayTrack, DayTrackScale } from "./viz";
 import { NOW_ISO, NOW_MIN, hhmm } from "./time";
 import { BRANCH_ADDRESS, CLINIC_FIXED, roomBookingsToday, settingsAccess, type ClinicProfile } from "./data";
@@ -386,7 +388,10 @@ function BranchCard({ branch, canEdit }: { branch: ReturnType<typeof useRooms>[n
   const [room, setRoom] = useState("");
   const [error, setError] = useState<string | null>(null);
   const staff = STAFF.filter((s) => s.branch === branch.id).length;
-  const patients = PATIENTS.filter((p) => p.branch === branch.id).length;
+  const registered = PATIENTS.filter((p) => p.branch === branch.id);
+  const patients = registered.length;
+  const mix = caseloadByOrgan(registered);
+  const unrecorded = patients - mix.reduce((s, g) => s + g.patients.length, 0);
   const rows = branch.rooms.map((r) => ({ room: r, bookings: roomBookingsToday(r), added: branch.added.includes(r) }));
   const minutes = rows.reduce((s, r) => s + r.bookings.reduce((m, b) => m + b.minutes, 0), 0);
   const count = rows.reduce((s, r) => s + r.bookings.length, 0);
@@ -420,6 +425,31 @@ function BranchCard({ branch, canEdit }: { branch: ReturnType<typeof useRooms>[n
           </p>
           <p className="text-xs text-muted">{pct}% of opening hours booked</p>
         </Inset>
+        {patients ? (
+          <Inset className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-sm text-ink">
+                {pluralize(patients, "patient")} registered here
+                <span className="text-muted"> · by primary body system</span>
+              </p>
+              {unrecorded ? <p className="text-xs text-muted">{unrecorded} with no condition recorded yet</p> : null}
+            </div>
+            <ul data-lenis-prevent className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1" aria-label={`${branch.name} patients by primary body system`}>
+              {mix.map((g) => (
+                <li key={g.organ} className="shrink-0">
+                  <Tip label={`${g.system} · ${g.patients.map((p) => p.name).join(", ")}`}>
+                    <span tabIndex={0} className="flex w-[76px] flex-col items-center gap-0.5 rounded-[12px] bg-sunken px-1 pb-2 pt-1 text-center outline-none focus-visible:outline-2 focus-visible:outline-primary">
+                      <OrganImage kind={g.organ} className="size-11" />
+                      <span className="w-full truncate text-[11px] leading-tight text-ink-2">{g.label}</span>
+                      <span className="text-xs text-ink tabular">{g.patients.length}</span>
+                    </span>
+                  </Tip>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-muted">Organ = each patient&apos;s primary body system from their recorded conditions — the mix this branch&apos;s rooms and services serve.</p>
+          </Inset>
+        ) : null}
         <ul className="flex flex-col gap-2">
           {rows.map((r) => {
             const bookedMin = r.bookings.reduce((m, b) => m + b.minutes, 0);

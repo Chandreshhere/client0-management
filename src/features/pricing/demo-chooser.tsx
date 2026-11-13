@@ -125,7 +125,7 @@ function PlanChoice({ plan }: { plan: Plan }) {
         </div>
 
         <div className={cn("flex items-center gap-3 rounded-[8px] p-3", focal ? "bg-white/10" : "bg-surface")} aria-live="polite">
-          <Avatar src={who.avatar} name={who.name} size="md" />
+          <Avatar src={who.avatar} name={who.name} size="md" loading="eager" />
           <div className="min-w-0">
             <p className="truncate text-sm">You&apos;ll be {who.name}</p>
             <p className={cn("line-clamp-2 text-xs", sub)}>{DEMO_USER[role].description}</p>

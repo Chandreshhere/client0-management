@@ -17,7 +17,7 @@ export const PATIENTS: Patient[] = [
     id: "p-aditi", name: "Aditi Sharma", age: 34, sex: "Female", avatar: "/avatars/p-aditi.svg", phone: "+91 99•• ••• 087", area: "Domlur",
     primaryConcern: "PCOS with insulin resistance", conditions: ["PCOS", "Insulin resistance"], allergies: [], program: "PCOS Care · 16 weeks", status: "active",
     careTeam: { doctor: "s-vikram", nutritionist: "s-meera", yoga: "s-lakshmi", coordinator: "s-farhan" },
-    lastVisit: "2026-11-10T16:00:00+05:30", nextAppointment: "2026-11-13T12:30:00+05:30", intakeComplete: true, abhaLinked: false, balanceDue: 0,
+    lastVisit: "2026-11-10T16:00:00+05:30", nextAppointment: "2026-11-13T12:00:00+05:30", intakeComplete: true, abhaLinked: false, balanceDue: 0,
     registeredAt: "2026-07-02T09:00:00+05:30", branch: "indiranagar", tags: ["Endocrine", "Programme"],
   },
   {

@@ -9,6 +9,7 @@ import { JsonLd, breadcrumbLd } from "@/features/marketing/json-ld";
 import { GUTTER } from "@/features/marketing/section";
 import s from "@/features/marketing/motion.module.css";
 import { DemoChooser } from "@/features/pricing/demo-chooser";
+import { DemoPatients } from "@/features/pricing/demo-patients";
 
 const TITLE = "Live demo of Carelane clinic software — choose a plan";
 const DESCRIPTION =
@@ -68,6 +69,21 @@ export default function DemoPage() {
               </li>
             ))}
           </ul>
+
+          <section aria-labelledby="demo-patients-title" className="mt-16 md:mt-24">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-end lg:gap-8">
+              <h2 id="demo-patients-title" className="max-w-[20ch] text-balance text-[32px] font-light leading-[1.06] tracking-[-0.028em] text-ink lg:col-span-7 md:text-[44px]">
+                Or start from a patient&apos;s record.
+              </h2>
+              <p className="max-w-[52ch] text-base leading-relaxed text-muted lg:col-span-5 lg:pb-2">
+                Each record opens as the doctor on the Clinic plan. The organ on each card comes from that patient&apos;s own conditions — the same rules every record in the
+                demo uses.
+              </p>
+            </div>
+            <div className="mt-8 md:mt-12">
+              <DemoPatients />
+            </div>
+          </section>
         </div>
       </section>
       <JsonLd data={breadcrumbLd([{ name: "Home", path: "/" }, { name: "Live demo", path: "/demo" }])} />
