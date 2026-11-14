@@ -245,7 +245,9 @@ export function PackagesView() {
           <h2 id="catalogue-title" className="text-lg font-normal tracking-[-0.01em] text-ink">
             Programme catalogue
           </h2>
-          <p className="mt-1 text-sm text-muted">Programmes combine consultations, nutrition follow-ups and yoga with set review points. Organ = the primary body system of the patients enrolled, from their records.</p>
+          <p className="mt-1 text-sm text-muted">
+            Programmes combine consultations, nutrition follow-ups and yoga with set review points. Enrolled counts everyone on a programme ({pluralize(PROGRAMMES.reduce((n, p) => n + enrolledIn(p).length, 0), "patient")}); the session packages above are only the {pluralize(active.length, "prepaid package")}. Organ = the primary body system of the patients enrolled, from their records.
+          </p>
         </div>
         <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {PROGRAMMES.map((prog) => {
@@ -280,7 +282,9 @@ export function PackagesView() {
                 <p className="mt-1 text-xs text-muted">
                   {[prog.weeks ? `${prog.weeks} weeks` : null, prog.weeks ? billingLabel(prog).replace(/^P/, "p") : billingLabel(prog), `valid ${Math.round(prog.validityDays / 7)} weeks`].filter(Boolean).join(" · ")}
                 </p>
-                <ul className="mt-4 flex flex-col gap-1.5 rounded-inner bg-sunken p-3">
+                {/* the "includes" box takes any spare row height, so a programme with fewer items
+                    keeps its footer level with its neighbours without an empty gap above it */}
+                <ul className="mt-4 flex flex-1 flex-col gap-1.5 rounded-inner bg-sunken p-3">
                   {prog.includes.map((inc) => (
                     <li key={inc.label} className="flex items-center justify-between gap-3">
                       <DisciplineTag discipline={inc.discipline} label={inc.label} />

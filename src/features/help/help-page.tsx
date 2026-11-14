@@ -390,7 +390,7 @@ export function HelpPage() {
               {CLINIC.legal} with {BRANCHES.length} branches: {BRANCHES.map((b) => b.name).join(" and ")}.
             </Fact>
             <Fact icon={<Clock size={18} />} title={`Today is ${formatDayLabel(TODAY.toISOString())}, ${formatTime(TODAY.toISOString())} IST`}>
-              The clock is fixed so the diary ({WEEK_APPOINTMENTS.length} appointments this week), {TASKS.length} tasks and {DOCUMENTS.length} documents always look current.
+              The clock is fixed so the diary ({WEEK_APPOINTMENTS.filter((a) => a.status !== "cancelled").length} bookings this week), {TASKS.filter((t) => t.status !== "done").length} open tasks and {DOCUMENTS.filter((d) => d.status === "awaiting-review" || d.status === "unclassified").length} documents waiting for review always look current.
             </Fact>
             <Fact icon={<Database size={18} />} title="No backend">
               Registrations, care-team changes and drafts are kept in this browser session only. Close the tab and they&apos;re gone.

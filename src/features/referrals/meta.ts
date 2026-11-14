@@ -2,7 +2,7 @@ import type { ReferralStage, Role } from "@/data/types";
 import { REFERRAL_STAGES } from "@/data/care";
 import { staffById } from "@/data/staff";
 import { TODAY, formatTime } from "@/lib/format";
-import { byTime, dayName, dayPhrase, hoursSince } from "@/features/tasks/time";
+import { TODAY_KEY, byTime, dayKey, dayName, dayPhrase, hoursSince } from "@/features/tasks/time";
 import type { CareReferral } from "./store";
 
 /**
@@ -58,7 +58,9 @@ export function referralState(r: CareReferral): ReferralState {
   const stalled = !!pending && !visitUpcoming && hours > 48;
   const waitingOn = pending === "acknowledged" ? r.fromId : pending ? r.toId : null;
   const health: Health = !pending ? "closed" : overdue ? "overdue" : stalled ? "stalled" : "on-track";
-  return { idx, pending, since, waitingDays: Math.floor(hours / 24), overdue, stalled, visitUpcoming, waitingOn, health };
+  // Calendar days (IST), the same count the dashboards show: requested 4 Nov → "9 days" on 13 Nov.
+  const waitingDays = Math.round((Date.parse(TODAY_KEY) - Date.parse(dayKey(since))) / 86_400_000);
+  return { idx, pending, since, waitingDays, overdue, stalled, visitUpcoming, waitingOn, health };
 }
 
 const HEALTH_RANK: Record<Health, number> = { overdue: 0, stalled: 1, "on-track": 2, closed: 3 };
@@ -69,7 +71,7 @@ export function byUrgency(a: CareReferral, b: CareReferral) {
   return HEALTH_RANK[sa.health] - HEALTH_RANK[sb.health] || byTime(sa.since, sb.since);
 }
 
-export const waitText = (days: number) => (days < 1 ? "under a day" : days === 1 ? "1 day" : `${days} days`);
+export const waitText = (days: number) => (days < 1 ? "since today" : days === 1 ? "1 day" : `${days} days`);
 
 /** When something is due: "today 18:00", "tomorrow 18:00", "Sun, 15 Nov". */
 export const dueText = (iso: string) => {

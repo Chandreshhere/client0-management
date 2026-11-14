@@ -252,7 +252,8 @@ function Waitlist() {
         />
         <Stat
           tone="dark"
-          label={`Slots to offer by ${shortDay(DIARY_TO).replace(/ \w+$/, "")}`}
+          // the value counts requests (people); the context lists how many free slots each could take
+          label={`Can be offered a slot by ${shortDay(DIARY_TO).replace(/ \w+$/, "")}`}
           value={canOffer.length}
           icon={<CalendarCheck />}
           context={
@@ -261,7 +262,7 @@ function Waitlist() {
                   .map((w) => {
                     const m = matches.get(w.id)!;
                     const n = m.kind === "slots" ? m.count : m.kind === "class" ? m.free : 0;
-                    return `${person(w.patientId)?.name ?? "Patient"} (${n})`;
+                    return `${person(w.patientId)?.name ?? "Patient"} (${n} ${m.kind === "class" ? (n === 1 ? "place" : "places") : n === 1 ? "slot" : "slots"})`;
                   })
                   .join(", ")
               : "No request has a matching free slot this week"

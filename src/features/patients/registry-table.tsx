@@ -119,7 +119,7 @@ export function RegistryTable({
                   <div className="flex min-w-0 items-center gap-3">
                     <OrganGlyph patient={p} />
                     <div className="min-w-0">
-                      <p className="truncate text-ink-2" title={p.primaryConcern}>
+                      <p className="text-pretty text-ink-2">
                         {p.primaryConcern}
                       </p>
                       <p className="truncate text-xs text-muted @[1240px]:hidden">{p.local ? "Registered in this session" : (p.program ?? "No programme")}</p>

@@ -164,7 +164,7 @@ function StaffReferrals() {
             onChange={setScope}
             className="w-max"
             items={[
-              { value: "all", label: "All", count: counts.all },
+              { value: "all", label: "Whole clinic", count: counts.all }, // incoming + outgoing are only yours; the rest are between colleagues
               { value: "incoming", label: "Incoming", count: counts.incoming },
               { value: "outgoing", label: "Outgoing", count: counts.outgoing },
             ]}

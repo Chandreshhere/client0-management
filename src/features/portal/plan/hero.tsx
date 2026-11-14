@@ -119,6 +119,24 @@ export function PlanHero({ system, conditionId, onSelectCondition }: { system: P
             </GlassCard>
           ) : null}
         </div>
+        {/* The two most recent released records for this condition: uses the height the taller
+            tiles column leaves beside the organ, instead of empty bands above and below it. */}
+        {records.length ? (
+          <div className="mx-auto mt-4 w-full max-w-[520px]">
+            <p className="mb-1.5 text-xs text-muted">Latest in your record</p>
+            <ul className="flex flex-col gap-1.5">
+              {records
+                .slice(-2)
+                .reverse()
+                .map((r) => (
+                  <li key={r.id} className="flex items-center justify-between gap-3 rounded-[14px] bg-surface/70 px-3 py-2 text-xs shadow-[inset_0_0_0_1px_var(--color-line)]">
+                    <span className="min-w-0 truncate text-ink">{r.title}</span>
+                    <span className="shrink-0 whitespace-nowrap text-muted">{longDate(`${r.date}T12:00:00+05:30`)}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       <div role="radiogroup" aria-label={`Conditions in ${system.area}`} className="flex flex-wrap gap-2">

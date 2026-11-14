@@ -115,11 +115,17 @@ export function ClassesWeek() {
             value={today.length}
             context={today.length ? `${today.filter((c) => c.kind === "group").length} group · ${today.filter((c) => c.kind === "individual").length} one-to-one · ${today.filter((c) => phaseOf(s, c) === "ended").length} done` : "No sessions today"}
           />
+          {/* People, sessions and per-session reviews are different counts — say all three so the
+              "Clearance to review" chip (sessions) and each card's "N to review" reconcile. */}
           <Stat
-            label="Clearance issues"
+            label="People to clear"
             icon={issues.length ? <ShieldWarning className="text-warning" /> : <ShieldCheck />}
             value={issues.length}
-            context={issues.length ? issues.map(([pid, v]) => `${patientById(pid)?.name.split(" ")[0]} (${v.clearance})`).join(" · ") : "All upcoming precautions acknowledged"}
+            context={
+              issues.length
+                ? `${pluralize(issues.reduce((n, [, v]) => n + v.sessions, 0), "review")} across ${pluralize(upcoming.filter((c) => openIssues(s, c).length > 0).length, "session")} · ${issues.map(([pid, v]) => `${patientById(pid)?.name.split(" ")[0]} (${v.clearance})`).join(" · ")}`
+                : "All upcoming precautions acknowledged"
+            }
           />
           <Stat label="Waitlisted" icon={<Hourglass />} value={waitlisted} context={waitlisted ? upcoming.filter((c) => c.waitlist.length).map((c) => `${c.title} · ${formatDate(c.start, { weekday: "short" })}`).join(" · ") : "Nobody waiting"} />
         </div>
