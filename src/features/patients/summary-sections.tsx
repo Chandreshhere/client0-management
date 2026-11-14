@@ -353,9 +353,7 @@ export function ProgrammeGroup({
                 {pkg.total - pkg.used} sessions left · expires {formatDate(`${pkg.expires}T00:00:00+05:30`)}
               </p>
             </Inset>
-          ) : (
-            <LockedInset feature="packages">Session packages and balances are hidden on this plan.</LockedInset>
-          )
+          ) : null
         ) : null}
         {!classes.length && !pkg ? <EmptyInset>No classes or session package on file for this programme.</EmptyInset> : null}
         {classes.length ? (

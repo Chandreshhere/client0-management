@@ -1,6 +1,7 @@
 import type { Role, Staff } from "@/data/types";
+import type { FeatureId } from "@/data/plans";
 import { PATIENTS } from "@/data/patients";
-import { BRANCHES } from "@/data/staff";
+import { BRANCHES, staffById } from "@/data/staff";
 
 /**
  * Demo permission model (deny by default). This mirrors the product brief: account administration
@@ -32,7 +33,7 @@ export interface PermissionRow {
   grants: Record<Role, Grant>;
 }
 
-const SELF_GRANT = "Account administration never includes clinical content. A clinical lead approves clinical access — administrators can't grant it to themselves.";
+const SELF_GRANT = "Account administration never includes clinical content. A doctor can grant an admin clinical access to one of their patients for a limited time — administrators can't grant it to themselves.";
 const none: Grant = { level: "none" };
 const adminClinical: Grant = { level: "none", scope: "Can't self-grant", why: SELF_GRANT, locked: true };
 
@@ -129,7 +130,7 @@ export const PERMISSIONS: PermissionRow[] = [
     id: "billing", group: "Operations", label: "Invoices & payments", description: "Invoices, receipts, balances and manual payment entry.", clinical: false,
     grants: {
       admin: { level: "full" },
-      doctor: { level: "none", why: "On the Clinic plan billing sits with the front desk. A solo doctor on Starter manages it." },
+      doctor: { level: "none", why: "Billing sits with Reception and the admin. Clinicians never need invoices to treat a patient." },
       nutritionist: none,
       yoga: { level: "meta", scope: "Package balances", why: "Sees session balances where permitted (doc §2D) — not invoices." },
       frontdesk: { level: "scoped", scope: "Own branch" },
@@ -154,10 +155,10 @@ export const PERMISSIONS: PermissionRow[] = [
     grants: { admin: { level: "full", scope: "Not own account" , why: "Administrators manage other accounts. Changes to their own role need another administrator." }, doctor: none, nutritionist: none, yoga: none, frontdesk: none, coordinator: none, patient: none },
   },
   {
-    id: "grant-clinical", group: "Administration", label: "Grant clinical access", description: "Approve who can open clinical sections.", clinical: false,
+    id: "grant-clinical", group: "Administration", label: "Grant clinical access", description: "Give an admin or coordinator access to one patient's clinical record, for a limited time.", clinical: false,
     grants: {
       admin: adminClinical,
-      doctor: { level: "scoped", scope: "Clinical lead · not to self", why: "The clinical lead (Dr. Ananya Rao) approves clinical access for others, never for herself." },
+      doctor: { level: "scoped", scope: "Own patients · expires", why: "A doctor can grant an admin or coordinator clinical access to a specific patient. The access expires and is recorded in the activity log." },
       nutritionist: none,
       yoga: none,
       frontdesk: none,
@@ -170,7 +171,7 @@ export const PERMISSIONS: PermissionRow[] = [
     grants: { admin: { level: "full" }, doctor: { level: "scoped", scope: "Clinical sections" }, nutritionist: none, yoga: none, frontdesk: none, coordinator: none, patient: none },
   },
   {
-    id: "audit", group: "Administration", label: "Audit log", description: "Attributed account, record and export actions.", clinical: false,
+    id: "audit", group: "Administration", label: "Activity log", description: "Who did what, when, to which record.", clinical: false,
     grants: { admin: { level: "full", scope: "Read-only", why: "Entries can't be edited or deleted — not even by administrators." }, doctor: none, nutritionist: none, yoga: none, frontdesk: none, coordinator: none, patient: none },
   },
   {
@@ -180,6 +181,34 @@ export const PERMISSIONS: PermissionRow[] = [
 ];
 
 export const PERMISSION_GROUPS: PermissionGroup[] = ["Patient record", "Operations", "Administration"];
+
+/** Permission rows that only exist on plans with the feature (appointments, billing: Clinic; patient logs: Pro). */
+const ROW_NEEDS: Record<string, FeatureId> = { diary: "calendar", billing: "billing", logs: "self-report" };
+
+/**
+ * The matrix as it applies on a plan: only the plan's roles and features, and — below Pro, with a
+ * single clinic location — branch scopes read as "all patients".
+ */
+export function permissionsForPlan(has: (f: FeatureId) => boolean): PermissionRow[] {
+  const branches = has("branches");
+  const fix = (g: Grant): Grant => {
+    if (branches || !g.scope) return g;
+    if (g.scope === "All branches" || g.scope === "Own branch") return { ...g, scope: "All patients", why: g.why && /branch/i.test(g.why) ? "One clinic location: every patient's contact details and visits." : g.why };
+    return g;
+  };
+  const coordinators = has("coordinator");
+  const describe = (d: string) => {
+    let out = d;
+    if (!branches) out = out.replace(", roles and branch membership", " and roles");
+    if (!coordinators) out = out.replace("an admin or coordinator", "an admin");
+    return out;
+  };
+  return PERMISSIONS.filter((p) => !ROW_NEEDS[p.id] || has(ROW_NEEDS[p.id])).map((p) => ({
+    ...p,
+    description: describe(p.description),
+    grants: Object.fromEntries(Object.entries(p.grants).map(([r, g]) => [r, fix(g)])) as Record<Role, Grant>,
+  }));
+}
 
 export const LEVEL_LABEL: Record<Level, string> = {
   full: "Full access",
@@ -263,3 +292,23 @@ export const ACCESS_REVIEWS: AccessReview[] = [
   { id: "ar-sneha", staffId: "s-sneha", patientScope: `Front desk at Indiranagar (${IND} patients)`, patientCount: IND, sections: ["Identity & contact", "Appointments & diary", "Invoices & payments", "Document routing"], lastReviewed: "2026-10-01" },
   { id: "ar-farhan", staffId: "s-farhan", patientScope: `Coordination for ${team("s-farhan")} programme patients`, patientCount: team("s-farhan"), sections: ["Identity & contact", "Care-plan status", "Tasks & referrals"], lastReviewed: "2026-10-01" },
 ];
+
+/**
+ * Access reviews on a plan: only staff in roles the plan has, only sections it includes, and —
+ * with one clinic location below Pro — no branch moves to review.
+ */
+export function accessReviewsFor(has: (f: FeatureId) => boolean, roles: Role[]): AccessReview[] {
+  const branches = has("branches");
+  const drop = new Set([...(has("calendar") ? [] : ["Appointments & diary"]), ...(has("billing") ? [] : ["Invoices & payments"])]);
+  return ACCESS_REVIEWS.filter((r) => {
+    const role = staffById(r.staffId)?.role;
+    return !!role && roles.includes(role);
+  }).map((r) => {
+    const sections = r.sections.filter((x) => !drop.has(x));
+    if (branches) return { ...r, sections };
+    const total = PATIENTS.length;
+    if (r.id === "ar-ishaan" || r.id === "ar-sneha") return { ...r, sections, patientScope: `Reception · all ${total} patients`, patientCount: total, flag: undefined };
+    if (r.id === "ar-neha") return { ...r, sections, patientScope: `All patients · identity${has("calendar") ? ", diary" : ""}${has("billing") ? " and billing" : ""} · no clinical content` };
+    return { ...r, sections };
+  });
+}

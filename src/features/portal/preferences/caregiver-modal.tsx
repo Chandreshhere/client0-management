@@ -59,7 +59,7 @@ export function CaregiverModal({ open, onOpenChange }: { open: boolean; onOpenCh
     onOpenChange(false);
     toast({
       title: `${cg.name} added · invite not sent`,
-      description: "Saved in this browser session. In the live portal they'd get a text to confirm before seeing anything.",
+      description: "Saved in this browser session. In the live app they confirm it's them before seeing anything.",
       action: { label: "Undo", onClick: () => removeCaregiver(cg.id) },
     });
   };
@@ -69,7 +69,7 @@ export function CaregiverModal({ open, onOpenChange }: { open: boolean; onOpenCh
       <ModalContent
         size="md"
         title="Add someone who helps with your care"
-        description="They only see the parts you tick. You can change or remove access at any time."
+        description="They see and act for you only in the parts you tick. Your consent is recorded, and you can change or remove access at any time."
         footer={
           <>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
@@ -90,12 +90,12 @@ export function CaregiverModal({ open, onOpenChange }: { open: boolean; onOpenCh
               {(f) => <Select id={f.id} aria-invalid={f["aria-invalid"]} aria-describedby={f["aria-describedby"]} value={relation} onValueChange={setRelation} placeholder="Choose" options={RELATIONS} />}
             </Field>
           </div>
-          <Field label="Their mobile number" error={errors.phone} hint="We send them a code to confirm it's them">
+          <Field label="Their mobile number" error={errors.phone} hint="They confirm it's them when they first sign in">
             {(f) => <Input {...f} type="tel" inputMode="tel" value={phone} maxLength={16} onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s-]/g, ""))} placeholder="+91 98765 43210" />}
           </Field>
 
           <fieldset className="flex flex-col gap-2" aria-describedby={errors.scopes ? "cg-scopes-err" : undefined}>
-            <legend className="mb-2 text-sm text-ink">What they can see</legend>
+            <legend className="mb-2 text-sm text-ink">What they can see and do</legend>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {(Object.keys(SCOPE_LABEL) as Scope[]).map((s) => (
                 <label key={s} className="flex cursor-pointer items-start gap-3 rounded-[12px] bg-sunken p-3 hover:bg-sunken-2">
@@ -119,9 +119,9 @@ export function CaregiverModal({ open, onOpenChange }: { open: boolean; onOpenCh
           </Field>
 
           <label className="flex cursor-pointer items-start gap-3">
-            <Checkbox checked={agree} onCheckedChange={(v) => setAgree(v === true)} className="mt-0.5" aria-invalid={errors.agree ? true : undefined} aria-label="I agree to share these parts of my record with this person" />
+            <Checkbox checked={agree} onCheckedChange={(v) => setAgree(v === true)} className="mt-0.5" aria-invalid={errors.agree ? true : undefined} aria-label="I consent to this person seeing and acting for me in these parts of my care" />
             <span className="text-sm text-ink-2">
-              I agree to share these parts of my record with this person.
+              I consent to this person seeing and acting for me in these parts of my care.
               {errors.agree ? <span className="mt-1 block text-xs text-danger">{errors.agree}</span> : null}
             </span>
           </label>

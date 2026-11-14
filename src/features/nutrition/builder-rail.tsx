@@ -1,13 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Briefcase, ClockCounterClockwise, CookingPot, ForkKnife, Stethoscope, Wallet, Warning } from "@phosphor-icons/react";
+import { Briefcase, ClockCounterClockwise, CookingPot, Flag, ForkKnife, Stethoscope, Wallet, Warning } from "@phosphor-icons/react";
 import type { Patient } from "@/data/types";
 import { PLAN_STATUS_LABEL } from "@/data/programs";
 import { staffById } from "@/data/staff";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Card, Group, GroupHeader, Inset } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/input";
 import { Pill } from "@/components/ui/pill";
@@ -85,26 +86,36 @@ function RailLabel({ icon, label, extra }: { icon: ReactNode; label: string; ext
 
 /* ------------------------------------------------------------------ guidance */
 
-/** Current doctor guidance; publishing requires acknowledging this exact version (doc §2C). */
+/**
+ * The doctor's guidance, shown beside the plan (spec F5/F6); publishing requires acknowledging this
+ * exact version. A question about it goes back to the doctor as a flag (F8).
+ */
 export function GuidanceCard({
   guidance,
   plan,
   editable,
   onAck,
+  onFlag,
 }: {
   guidance: Guidance | undefined;
   plan: PlanRecord;
   editable: boolean;
   onAck: (checked: boolean) => void;
+  onFlag?: () => void;
 }) {
   if (!guidance) {
     return (
-      <Card>
+      <Card id="doctor-guidance" className="scroll-mt-28">
         <div className="flex items-center gap-2 text-sm text-ink">
           <Stethoscope size={18} className="text-ink-2" aria-hidden="true" />
-          Doctor guidance
+          Doctor&apos;s guidance
         </div>
-        <p className="mt-3 text-sm text-muted">No clinical guidance is on record for this patient. Ask the referring doctor before publishing if there are medical conditions.</p>
+        <p className="mt-3 text-sm text-muted">No guidance from the doctor is on record for this patient. Flag the doctor before publishing if there are medical conditions.</p>
+        {onFlag ? (
+          <Button size="sm" variant="secondary" leading={<Flag />} className="mt-4" onClick={onFlag}>
+            Flag to doctor
+          </Button>
+        ) : null}
       </Card>
     );
   }
@@ -115,7 +126,7 @@ export function GuidanceCard({
   return (
     <Card id="doctor-guidance" className="scroll-mt-28">
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-lg font-normal tracking-[-0.01em] text-ink">Doctor guidance</h2>
+        <h2 className="text-lg font-normal tracking-[-0.01em] text-ink">Doctor&apos;s guidance</h2>
         {guidance.changed ? <StatusBadge tone="warning">Changed {formatDate(guidance.changed.at, { day: "numeric", month: "short" })}</StatusBadge> : <StatusBadge tone="success">Current</StatusBadge>}
       </div>
       <div className="mt-4 flex items-center gap-3">
@@ -156,6 +167,52 @@ export function GuidanceCard({
           </p>
         </div>
       </div>
+      {onFlag ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted">Question or concern about this guidance?</p>
+          <Button size="sm" variant="ghost" leading={<Flag />} onClick={onFlag}>
+            Flag to doctor
+          </Button>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+/** Read-only summary of the doctor's guidance for the plan list's side panel. */
+export function GuidanceSummary({ guidance, className }: { guidance: Guidance | undefined; className?: string }) {
+  if (!guidance) {
+    return (
+      <Card className={className}>
+        <p className="flex items-center gap-2 text-sm text-ink">
+          <Stethoscope size={18} className="text-ink-2" aria-hidden="true" />
+          Doctor&apos;s guidance
+        </p>
+        <p className="mt-2 text-sm text-muted">None on record for this patient.</p>
+      </Card>
+    );
+  }
+  const doc = staffById(guidance.by);
+  return (
+    <Card className={className}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="flex items-center gap-2 text-sm text-ink">
+          <Stethoscope size={18} className="text-ink-2" aria-hidden="true" />
+          Doctor&apos;s guidance
+        </p>
+        {guidance.changed ? <StatusBadge tone="warning">Changed {formatDate(guidance.changed.at, { day: "numeric", month: "short" })}</StatusBadge> : null}
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        {doc?.name} · {guidance.version} · effective {formatDate(guidance.effective, { day: "numeric", month: "short" })}
+      </p>
+      <ul className="mt-3 flex flex-col gap-1.5">
+        {guidance.lines.map((l) => (
+          <li key={l} className="flex gap-2 text-sm leading-relaxed text-ink-2">
+            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-medical" aria-hidden="true" />
+            {l}
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }
@@ -176,9 +233,9 @@ function DiffLine({ line }: { line: string }) {
 }
 
 /** What changed, why, who changed it and which version the patient follows (doc §2C). */
-export function VersionHistory({ plan, sessionChanges }: { plan: PlanRecord; sessionChanges: string[] }) {
+export function VersionHistory({ plan, sessionChanges, showRelease = false }: { plan: PlanRecord; sessionChanges: string[]; showRelease?: boolean }) {
   const follows = followedVersion(plan);
-  const patientFollows = follows ? `Patient follows v${follows}` : "No published version yet — the patient sees nothing";
+  const patientFollows = follows ? `Current: v${follows} · each version keeps its reason` : "No published version yet — the patient has no plan";
   const versions = [...plan.history].sort((a, b) => b.version - a.version);
   return (
     <Group>
@@ -194,14 +251,22 @@ export function VersionHistory({ plan, sessionChanges }: { plan: PlanRecord; ses
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-ink">v{v.version}</span>
                   <StatusBadge tone={PLAN_TONE[v.status]}>{PLAN_STATUS_LABEL[v.status]}</StatusBadge>
-                  {follows === v.version ? <Pill size="sm" tone="primary">Patient follows</Pill> : null}
+                  {follows === v.version ? <Pill size="sm" tone="primary">Current</Pill> : null}
+                  {showRelease && plan.released?.version === v.version ? <Pill size="sm" tone="outline">In patient app</Pill> : null}
                   <span className="ml-auto text-xs text-muted">{formatDate(v.at, { day: "numeric", month: "short" })}</span>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   <Avatar src={author?.avatar} name={author?.name ?? "Staff"} size="xs" />
                   <span className="text-xs text-ink-2">{author?.name ?? "Unknown"}</span>
                 </div>
-                {v.why ? <p className="mt-2 text-sm leading-relaxed text-ink-2">{v.why}</p> : null}
+                {v.why ? (
+                  <p className="mt-2 text-sm leading-relaxed text-ink-2">
+                    <span className="text-muted">Reason · </span>
+                    {v.why}
+                  </p>
+                ) : current && plan.status !== "published" ? (
+                  <p className="mt-2 text-xs text-muted">Reason for the change is recorded when this version is published.</p>
+                ) : null}
                 {v.changes.length ? (
                   <ul className="mt-2 flex flex-col gap-1" aria-label={`Changes in v${v.version}`}>
                     {v.changes.map((c) => (

@@ -1,11 +1,11 @@
 import type { PlanStatus } from "@/data/types";
-import { FOOD_LOGS, GUIDANCE, PAST_REVIEWS, type AdherenceReview, type FoodLog, type LogComment, type SlotId } from "./data";
+import { FOLLOW_UPS, FOOD_LOGS, GUIDANCE, type FollowUpEntry, type FoodLog, type LogComment, type SlotId } from "./data";
 import { buildInitialPlans, emptySlots, slotsFromTemplate, type PlanRecord, type SlotItems } from "./model";
 import { createSessionStore, useSessionStore } from "./session-store";
 
 /**
- * Nutrition demo state for this browser session: plan edits, status changes, food-log reviews,
- * adherence reviews and follow-up tasks. Nothing leaves the browser.
+ * Nutrition demo state for this browser session: plan edits, versions, releases, follow-up
+ * entries, food-log reviews (Pro) and follow-up tasks. Nothing leaves the browser.
  */
 export interface LocalTask {
   id: string;
@@ -20,7 +20,8 @@ export interface NutritionState {
   plans: Record<string, PlanRecord>;
   order: string[];
   logs: Record<string, FoodLog>;
-  reviews: AdherenceReview[];
+  /** follow-up entries (weight, adherence, notes), newest first */
+  followUps: FollowUpEntry[];
   tasks: LocalTask[];
 }
 
@@ -30,7 +31,7 @@ const INITIAL: NutritionState = {
   plans: initialPlans,
   order: Object.keys(initialPlans),
   logs: Object.fromEntries(FOOD_LOGS.map((l) => [l.id, l])),
-  reviews: PAST_REVIEWS,
+  followUps: FOLLOW_UPS,
   tasks: [],
 };
 
@@ -66,8 +67,13 @@ export const planActions = {
   newVersion(id: string, by: string, at: string) {
     patchPlan(id, (p) => {
       const version = p.version + 1;
-      return { ...p, version, status: "draft", updatedAt: at, ack: null, history: [...p.history, { version, status: "draft", by, at, why: "New version started from the published plan.", changes: [] }] };
+      return { ...p, version, status: "draft", updatedAt: at, ack: null, history: [...p.history, { version, status: "draft", by, at, why: "", changes: [] }] };
     });
+  },
+
+  /** Pro (F13): release the published version to the patient app — a separate step from publishing. */
+  release(id: string, by: string, at: string) {
+    patchPlan(id, (p) => (p.status === "published" ? { ...p, released: { version: p.version, by, at } } : p));
   },
 
   acknowledge(id: string, guidanceVersion: string, by: string, at: string) {
@@ -139,9 +145,9 @@ export const logActions = {
   },
 };
 
-export const reviewActions = {
-  save(review: AdherenceReview) {
-    nutritionStore.set((s) => ({ ...s, reviews: [review, ...s.reviews] }));
+export const followUpActions = {
+  add(entry: FollowUpEntry) {
+    nutritionStore.set((s) => ({ ...s, followUps: [entry, ...s.followUps] }));
   },
 };
 

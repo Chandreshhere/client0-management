@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { PLANS } from "@/data/plans";
+import { formatINR } from "@/lib/format";
 import { AnatomySection } from "@/features/marketing/anatomy-section";
 import { CtaBand } from "@/features/marketing/cta-band";
 import { Disciplines } from "@/features/marketing/disciplines";
@@ -13,7 +15,7 @@ import { Modules } from "@/features/marketing/modules";
 
 const TITLE = "Carelane — clinic management software for doctors, nutritionists and yoga instructors";
 const DESCRIPTION =
-  "One shared patient record for doctors, nutritionists and yoga instructors. Referrals, shared care plans, report review, a front-desk queue and a patient portal for outpatient clinics in India. Try the live demo.";
+  `One shared patient record for doctors, nutritionists and yoga instructors in Indian outpatient clinics: notes, report review, nutrition plans and yoga sessions on one timeline. From ${formatINR(PLANS[0].price.annual)} per practitioner a month. Try the live demo.`;
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },

@@ -80,7 +80,7 @@ export function SummaryColumn({
         <motion.div key={active} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={spring} className="flex flex-col gap-4">
           {/* Vital signs */}
           <Group>
-            <GroupHeader icon={<Pulse />} title="Vital Signs" subtitle={featured.short} href={`${base}/vitals`} actionLabel="Open vital signs" />
+            <GroupHeader icon={<Pulse />} title="Vital Signs" subtitle={featured.short} href={`${base}/medical/vitals`} actionLabel="Open vital signs" />
             <div className="flex flex-col gap-2">
               {sys.vitals.map((v) => (
                 <Inset key={v.label} className="pb-3 pt-2">
@@ -100,7 +100,7 @@ export function SummaryColumn({
 
           {/* Records */}
           <Group>
-            <GroupHeader icon={<ClipboardText />} title="Records" subtitle={featured.short} href={`${base}/documents`} actionLabel="Open records" />
+            <GroupHeader icon={<ClipboardText />} title="Records" subtitle={featured.short} href={`${base}/reports`} actionLabel="Open records" />
             {sys.records.length === 0 ? <p className="px-2 pb-2 text-xs text-muted">No documents for this system yet.</p> : null}
             <div className="grid grid-cols-2 gap-2">
               {sys.records.map((r) => (
@@ -120,7 +120,7 @@ export function SummaryColumn({
 
           {/* Imaging */}
           <Group>
-            <GroupHeader icon={<Scan />} title="Imaging" subtitle={featured.short} href={`${base}/imaging`} actionLabel="Open imaging" />
+            <GroupHeader icon={<Scan />} title="Imaging" subtitle={featured.short} href={`${base}/reports/imaging`} actionLabel="Open imaging" />
             {sys.imaging.length === 0 ? <p className="px-2 pb-2 text-xs text-muted">No imaging on record for this system — nothing has been requested.</p> : null}
             <div className="grid grid-cols-2 gap-2">
               {sys.imaging.map((img) => (
@@ -137,7 +137,7 @@ export function SummaryColumn({
         </motion.div>
       </AnimatePresence>
 
-      <Link href={`${base}/notes`} className={cn("sr-only focus:not-sr-only")}>Go to notes</Link>
+      <Link href={`${base}/medical`} className={cn("sr-only focus:not-sr-only")}>Go to notes</Link>
     </div>
   );
 }

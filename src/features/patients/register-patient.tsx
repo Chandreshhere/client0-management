@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowUpRight, CalendarPlus, Users, Warning } from "@phosphor-icons/react";
+import { ArrowUpRight, CalendarPlus, ShieldCheck, Users, Warning } from "@phosphor-icons/react";
 import type { Appointment, BranchId, Patient } from "@/data/types";
 import { STAFF, staffById } from "@/data/staff";
-import { minPlanFor } from "@/data/plans";
-import { TODAY, formatTime } from "@/lib/format";
+import { TODAY, formatDate, formatTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { spring } from "@/lib/motion";
 import { usePlan, useRole } from "@/components/shell/role-context";
+import { useClinic } from "@/features/settings/store";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, ModalContent } from "@/components/ui/dialog";
@@ -28,6 +28,7 @@ import {
   formatAbha,
   freeSlots,
   isIndianMobile,
+  localityOf,
   maskPhone,
   nextClinicNumber,
   phoneDigits,
@@ -42,11 +43,14 @@ type Form = {
   sex: Sex | "";
   phone: string;
   email: string;
-  area: string;
+  address: string;
+  emergencyName: string;
+  emergencyPhone: string;
   concern: string;
   language: string;
   branch: BranchId;
   abha: string;
+  doctor: string;
   consent: boolean;
 };
 
@@ -54,10 +58,26 @@ type Booking = { on: boolean; service: string; staff: string; slot: string };
 type ErrorKey = keyof Form | "duplicate" | "service" | "staff" | "slot";
 type Errors = Partial<Record<ErrorKey, string>>;
 
-const EMPTY_FORM: Form = { name: "", dob: "", sex: "", phone: "", email: "", area: "", concern: "", language: "English", branch: "indiranagar", abha: "", consent: false };
+const EMPTY_FORM: Form = {
+  name: "",
+  dob: "",
+  sex: "",
+  phone: "",
+  email: "",
+  address: "",
+  emergencyName: "",
+  emergencyPhone: "",
+  concern: "",
+  language: "English",
+  branch: "indiranagar",
+  abha: "",
+  doctor: "",
+  consent: false,
+};
 const EMPTY_BOOKING: Booking = { on: false, service: "", staff: "", slot: "" };
 /** Order used to focus the first invalid field after a submit attempt. */
-const FIELD_ORDER: ErrorKey[] = ["name", "dob", "sex", "phone", "email", "duplicate", "area", "language", "concern", "branch", "abha", "service", "staff", "slot", "consent"];
+const FIELD_ORDER: ErrorKey[] = ["name", "dob", "sex", "phone", "email", "duplicate", "address", "emergencyName", "emergencyPhone", "language", "concern", "branch", "abha", "doctor", "service", "staff", "slot", "consent"];
+const DOCTORS = STAFF.filter((s) => s.role === "doctor");
 
 export interface Registration {
   patient: RegistryPatient;
@@ -65,7 +85,13 @@ export interface Registration {
   flaggedDuplicate: boolean;
 }
 
-/** Register a patient — opened from the page header, the "+" menu, ⌘K, or /patients?new=1. */
+/**
+ * Register a patient (F2) — Doctor, Admin or Reception; opened from the page header, the "+" menu,
+ * ⌘K, or /patients?new=1. Name, phone, date of birth, sex, address and emergency contact → a
+ * duplicate check by phone shows any possible match before saving (the admin merges later, never
+ * automatically) → DPDP consent recorded with the date and who recorded it → clinic ID generated,
+ * ABHA optional → primary doctor assigned, so the patient appears in that doctor's list.
+ */
 export function RegisterPatientModal({
   open,
   onOpenChange,
@@ -84,7 +110,10 @@ export function RegisterPatientModal({
   onOpenLocal: (id: string) => void;
 }) {
   const { has } = usePlan();
-  const { user } = useRole();
+  const { user, role } = useRole();
+  const clinic = useClinic();
+  const clinicalForm = role === "doctor";
+  const canBook = has("calendar");
   const [form, setForm] = useState<Form>(EMPTY_FORM);
   const [booking, setBooking] = useState<Booking>(EMPTY_BOOKING);
   const [ackKey, setAckKey] = useState<string | null>(null);
@@ -96,7 +125,8 @@ export function RegisterPatientModal({
   // Fresh form each time the modal opens (state survives the closing animation, then resets).
   useEffect(() => {
     if (open) {
-      setForm(EMPTY_FORM);
+      // A doctor registering is usually the patient's doctor.
+      setForm({ ...EMPTY_FORM, doctor: role === "doctor" ? user.id : "" });
       setBooking(EMPTY_BOOKING);
       setAckKey(null);
       setAttempt(0);
@@ -138,6 +168,12 @@ export function RegisterPatientModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per submit attempt
   }, [attempt]);
 
+  // Booking a consultation: the primary doctor is the natural practitioner.
+  useEffect(() => {
+    if (booking.service === "consult" && !booking.staff && form.doctor && available.some((s) => s.id === form.doctor)) setBooking((b) => ({ ...b, staff: form.doctor }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the service or doctor changes
+  }, [booking.service, form.doctor]);
+
   const submit = () => {
     const e = validate(form, booking, matches.length > 0 && !continued);
     if (Object.keys(e).length) {
@@ -162,8 +198,8 @@ export function RegisterPatientModal({
             formsComplete: false,
           }
         : null;
-    const careTeam: Patient["careTeam"] = {};
-    if (visit && service) careTeam[service.role] = visit.staffId;
+    const careTeam: Patient["careTeam"] = { doctor: form.doctor };
+    if (visit && service && service.role !== "doctor") careTeam[service.role] = visit.staffId;
     const patient: RegistryPatient = {
       id,
       name: form.name.trim().replace(/\s+/g, " "),
@@ -171,8 +207,8 @@ export function RegisterPatientModal({
       sex: form.sex || "Other",
       avatar: null,
       phone: maskPhone(phoneDigits(form.phone)),
-      area: form.area.trim(),
-      primaryConcern: form.concern.trim(),
+      area: localityOf(form.address),
+      primaryConcern: clinicalForm ? form.concern.trim() : "",
       conditions: [],
       allergies: null,
       program: null,
@@ -192,12 +228,15 @@ export function RegisterPatientModal({
         email: form.email.trim() || null,
         language: form.language,
         abha: abhaDigits(form.abha) || null,
+        address: form.address.trim().replace(/\s+/g, " "),
+        emergency: { name: form.emergencyName.trim(), phone: maskPhone(phoneDigits(form.emergencyPhone)) },
         consentAt: TODAY.toISOString(),
+        consentBy: user.name,
         duplicateOf: continued ? matches.map((m) => m.patient.id) : [],
         registeredBy: user.name,
       },
     };
-    onRegistered({ patient, visit, flaggedDuplicate: continued });
+    onRegistered({ patient, visit: canBook ? visit : null, flaggedDuplicate: continued });
   };
 
   return (
@@ -212,11 +251,11 @@ export function RegisterPatientModal({
           }
         }}
         title="Register patient"
-        description="Creates a clinic record. ABHA is optional and stays separate from the clinic number."
+        description="Creates the patient's record with a clinic ID. ABHA is optional and kept separate."
         footer={
           <>
             <p className="mr-auto text-xs text-muted">
-              Clinic number on save <span className="ml-1 font-mono text-ink-2">{clinicNo}</span>
+              Clinic ID on save <span className="ml-1 font-mono text-ink-2">{clinicNo}</span>
             </p>
             {hasErrors ? (
               <p className="w-full text-xs text-danger sm:order-first sm:w-auto" role="alert">
@@ -224,8 +263,8 @@ export function RegisterPatientModal({
               </p>
             ) : null}
             <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button variant="dark" onClick={submit} leading={booking.on ? <CalendarPlus /> : undefined}>
-              {booking.on ? "Register & book" : "Register patient"}
+            <Button variant="dark" onClick={submit} leading={booking.on && canBook ? <CalendarPlus /> : undefined}>
+              {booking.on && canBook ? "Register & book" : "Register patient"}
             </Button>
           </>
         }
@@ -280,7 +319,7 @@ export function RegisterPatientModal({
                 errors.phone ? undefined : matches.some((m) => m.reasons.some((r) => r.startsWith("Same mobile"))) ? (
                   <DupHint count={matches.length} continued={continued} onReview={revealDuplicates} />
                 ) : (
-                  "Used to spot existing records — never merged automatically."
+                  "Checked against existing records before saving."
                 )
               }
             >
@@ -324,20 +363,30 @@ export function RegisterPatientModal({
             ) : null}
           </AnimatePresence>
 
-          <SectionLabel>Care</SectionLabel>
-          <Cell k="area">
-            <Field label="Area / locality" error={errors.area}>
-              {(p) => <Input value={form.area} onChange={(e) => set("area", e.target.value)} autoComplete="address-level3" placeholder="e.g. Domlur" {...p} />}
+          <SectionLabel>Contact</SectionLabel>
+          <Cell k="address" span>
+            <Field label="Address" error={errors.address} hint={!errors.address ? "House, street and area — the last part is used as the locality." : undefined}>
+              {(p) => <Input value={form.address} onChange={(e) => set("address", e.target.value)} autoComplete="street-address" placeholder="e.g. 14, 2nd Cross, Domlur" {...p} />}
+            </Field>
+          </Cell>
+          <Cell k="emergencyName">
+            <Field label="Emergency contact" error={errors.emergencyName}>
+              {(p) => <Input value={form.emergencyName} onChange={(e) => set("emergencyName", e.target.value)} placeholder="Name and relation, e.g. Riya (sister)" {...p} />}
+            </Field>
+          </Cell>
+          <Cell k="emergencyPhone">
+            <Field label="Emergency contact mobile" error={errors.emergencyPhone}>
+              {(p) => (
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-sm text-muted" aria-hidden="true">+91</span>
+                  <Input inputMode="tel" value={form.emergencyPhone} onChange={(e) => set("emergencyPhone", e.target.value)} placeholder="98765 43210" className="pl-12 tabular" {...p} />
+                </div>
+              )}
             </Field>
           </Cell>
           <Cell k="language">
             <Field label="Preferred language">
               {({ id }) => <Select id={id} value={form.language} onValueChange={(v) => set("language", v)} options={LANGUAGES.map((l) => ({ value: l, label: l }))} className="w-full" />}
-            </Field>
-          </Cell>
-          <Cell k="concern" span>
-            <Field label="Primary concern" error={errors.concern} hint={!errors.concern ? "The reason for coming in, in the patient's words if possible." : undefined}>
-              {(p) => <Input value={form.concern} onChange={(e) => set("concern", e.target.value)} placeholder="e.g. Palpitations on climbing stairs" {...p} />}
             </Field>
           </Cell>
           {has("branches") ? (
@@ -354,28 +403,52 @@ export function RegisterPatientModal({
                 )}
               </Field>
             </Cell>
+          ) : (
+            <Cell k="abha">
+              <AbhaField value={form.abha} error={errors.abha} onChange={(v) => set("abha", v)} />
+            </Cell>
+          )}
+          {has("branches") ? (
+            <Cell k="abha" span>
+              <AbhaField value={form.abha} error={errors.abha} onChange={(v) => set("abha", v)} />
+            </Cell>
           ) : null}
-          <Cell k="abha" span={!has("branches")}>
-            <Field
-              label="ABHA number"
-              optional
-              error={errors.abha}
-              hint={!errors.abha ? (abhaDigits(form.abha).length === 14 ? `${formatAbha(abhaDigits(form.abha))} · recorded, not verified (no ABDM link here)` : "Voluntary and consent-based. Separate from the clinic number.") : undefined}
-            >
-              {(p) => <Input inputMode="numeric" value={form.abha} onChange={(e) => set("abha", e.target.value)} placeholder="14 digits" className="tabular" {...p} />}
+
+          <SectionLabel>Care</SectionLabel>
+          <Cell k="doctor" span={!clinicalForm}>
+            <Field label="Primary doctor" error={errors.doctor} hint={!errors.doctor ? "Reviews this patient's reports. The patient appears in their list." : undefined}>
+              {({ id }) => (
+                <Select
+                  id={id}
+                  value={form.doctor || undefined}
+                  placeholder="Choose a doctor"
+                  onValueChange={(v) => set("doctor", v)}
+                  options={DOCTORS.map((d) => ({ value: d.id, label: d.id === user.id ? `${d.name} (you)` : d.name, description: d.status === "on-leave" ? d.workingHours : d.title }))}
+                  className={cn("w-full", errors.doctor && "shadow-[inset_0_0_0_1.5px_var(--color-danger)]")}
+                />
+              )}
             </Field>
           </Cell>
+          {clinicalForm ? (
+            <Cell k="concern">
+              <Field label="Reason for visit" optional>
+                {(p) => <Input value={form.concern} onChange={(e) => set("concern", e.target.value)} placeholder="e.g. Palpitations on climbing stairs" {...p} />}
+              </Field>
+            </Cell>
+          ) : null}
 
-          <div className="flex items-start justify-between gap-4 rounded-inner bg-canvas p-4 sm:col-span-2">
-            <div>
-              <label htmlFor="register-book-now" className="text-sm text-ink">Book first appointment now</label>
-              <p className="mt-0.5 text-xs text-muted">Register while booking — checked against the practitioner's diary and classes.</p>
+          {canBook ? (
+            <div className="flex items-start justify-between gap-4 rounded-inner bg-canvas p-4 sm:col-span-2">
+              <div>
+                <label htmlFor="register-book-now" className="text-sm text-ink">Book first appointment now</label>
+                <p className="mt-0.5 text-xs text-muted">Checked against the practitioner&apos;s diary and classes.</p>
+              </div>
+              <Switch id="register-book-now" checked={booking.on} onCheckedChange={(on) => setBooking((b) => ({ ...b, on }))} />
             </div>
-            <Switch id="register-book-now" checked={booking.on} onCheckedChange={(on) => setBooking((b) => ({ ...b, on }))} />
-          </div>
+          ) : null}
 
           <AnimatePresence initial={false}>
-            {booking.on ? (
+            {booking.on && canBook ? (
               <motion.div
                 key="booking"
                 initial={{ opacity: 0, height: 0 }}
@@ -386,7 +459,7 @@ export function RegisterPatientModal({
               >
                 <div className="grid grid-cols-1 gap-4 pb-1 sm:grid-cols-3">
                   <Cell k="service">
-                    <Field label="Service" error={errors.service} hint={services.length < FIRST_VISIT_SERVICES.length ? `Nutrition and yoga need the ${minPlanFor("nutrition").name} plan.` : undefined}>
+                    <Field label="Service" error={errors.service}>
                       {({ id }) => (
                         <Select
                           id={id}
@@ -439,7 +512,7 @@ export function RegisterPatientModal({
                     .
                   </p>
                 ) : null}
-                <p className="mt-2 text-xs text-muted">Held in this browser session — no confirmation SMS or email is sent.</p>
+                <p className="mt-2 text-xs text-muted">Held in this browser session. Tell the patient the time — SMS confirmations are an add-on.</p>
               </motion.div>
             ) : null}
           </AnimatePresence>
@@ -454,11 +527,17 @@ export function RegisterPatientModal({
                 aria-describedby={errors.consent ? "register-consent-error" : undefined}
                 className="mt-0.5"
               />
-              <div>
+              <div className="min-w-0 flex-1">
                 <label htmlFor="register-consent" className="text-sm text-ink">
-                  The patient consents to Prana keeping this record for their care
+                  The patient consents to {clinic.shortName || clinic.name} keeping this record for their care
                 </label>
-                <p className="mt-0.5 text-xs text-muted">Privacy notice shown and explained. Consent can be withdrawn at any time.</p>
+                <p className="mt-0.5 text-xs text-muted">DPDP consent. Privacy notice shown and explained; consent can be withdrawn at any time.</p>
+                {form.consent ? (
+                  <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-2">
+                    <ShieldCheck size={14} aria-hidden="true" className="shrink-0 text-success" />
+                    Recorded by {user.name} · {formatDate(TODAY.toISOString(), { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                ) : null}
                 {errors.consent ? (
                   <p id="register-consent-error" className="mt-1 text-xs text-danger">
                     {errors.consent}
@@ -487,10 +566,14 @@ function validate(f: Form, b: Booking, unreviewedDuplicates: boolean): Errors {
   if (!d) e.phone = "Enter a mobile number.";
   else if (!isIndianMobile(d)) e.phone = "Enter a 10-digit Indian mobile number starting with 6–9.";
   if (f.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) e.email = "Check the email address.";
-  if (unreviewedDuplicates) e.duplicate = "Open the existing record, or continue as a new patient for review.";
-  if (!f.area.trim()) e.area = "Enter the area or locality.";
-  if (f.concern.trim().length < 3) e.concern = "Add the main reason for the visit.";
+  if (unreviewedDuplicates) e.duplicate = "Open the existing record, or register as a new patient for the admin to review.";
+  if (f.address.trim().length < 4) e.address = "Enter the address.";
+  if (f.emergencyName.trim().length < 2) e.emergencyName = "Enter an emergency contact.";
+  const ed = phoneDigits(f.emergencyPhone);
+  if (!ed) e.emergencyPhone = "Enter their mobile number.";
+  else if (!isIndianMobile(ed)) e.emergencyPhone = "Enter a 10-digit Indian mobile number.";
   if (f.abha.trim() && abhaDigits(f.abha).length !== 14) e.abha = "ABHA numbers have 14 digits — or leave it blank.";
+  if (!f.doctor) e.doctor = "Choose the patient's primary doctor.";
   if (b.on) {
     if (!b.service) e.service = "Choose a service.";
     if (!b.staff) e.staff = "Choose a practitioner.";
@@ -504,11 +587,25 @@ function validate(f: Form, b: Booking, unreviewedDuplicates: boolean): Errors {
 function DupHint({ count, continued, onReview }: { count: number; continued: boolean; onReview: () => void }) {
   return (
     <span className={continued ? "text-muted" : "text-warning"}>
-      {continued ? "Flagged for duplicate review." : `${count} possible existing ${count === 1 ? "record" : "records"}.`}{" "}
+      {continued ? "Flagged for the admin to review." : `${count} possible existing ${count === 1 ? "record" : "records"}.`}{" "}
       <button type="button" onClick={onReview} className="underline decoration-current/40 underline-offset-2 hover:decoration-current">
         Review
       </button>
     </span>
+  );
+}
+
+function AbhaField({ value, error, onChange }: { value: string; error?: string; onChange: (v: string) => void }) {
+  const digits = abhaDigits(value);
+  return (
+    <Field
+      label="ABHA number"
+      optional
+      error={error}
+      hint={!error ? (digits.length === 14 ? `${formatAbha(digits)} · stored, not verified` : "Only if the patient gives it. Kept separate from the clinic ID.") : undefined}
+    >
+      {(p) => <Input inputMode="numeric" value={value} onChange={(e) => onChange(e.target.value)} placeholder="14 digits" className="tabular" {...p} />}
+    </Field>
   );
 }
 
@@ -546,12 +643,12 @@ function DuplicateCard({
         <span className={cn("mt-0.5 shrink-0", continued ? "text-muted" : "text-warning")}>{continued ? <Users size={18} aria-hidden="true" /> : <Warning size={18} aria-hidden="true" />}</span>
         <div className="min-w-0">
           <p className="text-sm text-ink">
-            {continued ? "Will be registered and flagged for duplicate review" : matches.length > 1 ? `${matches.length} possible existing records` : "Possible existing record"}
+            {continued ? "Will be registered and flagged for the admin to review" : matches.length > 1 ? `${matches.length} possible existing records` : "Possible existing record"}
           </p>
           <p className="mt-0.5 text-xs text-ink-2">
             {continued
-              ? "A reviewer compares the records later. Nothing is merged automatically."
-              : "Check before creating a new record. Carelane never merges records on its own — a shared phone number is common in families."}
+              ? "The admin compares the records and decides whether to merge. Nothing is merged automatically."
+              : "Check before creating a new record. Only the admin merges records — a shared phone number is common in families."}
           </p>
         </div>
       </div>
@@ -596,8 +693,8 @@ function DuplicateCard({
             Undo
           </Button>
         ) : (
-          <Button size="sm" variant="dark" onClick={onContinue} className="h-auto min-h-8 w-full whitespace-normal py-1.5 text-center sm:w-auto">
-            Continue as new patient — a reviewer will check
+          <Button size="sm" variant="secondary" onClick={onContinue} className="h-auto min-h-8 w-full whitespace-normal py-1.5 text-center sm:w-auto">
+            Not the same person — register as new
           </Button>
         )}
       </div>
@@ -609,13 +706,15 @@ function DuplicateCard({
 export function registrationToast(r: Registration) {
   const visit = r.visit;
   const staff = visit ? staffById(visit.staffId) : undefined;
-  const parts = [`Clinic number ${clinicNoOf(r.patient)}.`];
+  const doctor = staffById(r.patient.careTeam.doctor);
+  const parts = [`Clinic ID ${clinicNoOf(r.patient)}.`];
+  if (doctor) parts.push(`Added to ${doctor.name}'s patients.`);
   if (visit) {
     const day = dayWord(visit.start);
     const when = day === "Today" || day === "Tomorrow" ? day.toLowerCase() : `on ${day}`;
-    parts.push(`First visit held ${when} at ${formatTime(visit.start)}${staff ? ` with ${staff.name}` : ""} — no confirmation SMS sent.`);
+    parts.push(`First visit held ${when} at ${formatTime(visit.start)}${staff ? ` with ${staff.name}` : ""}.`);
   }
-  else parts.push("Saved in this browser session only.");
-  if (r.flaggedDuplicate) parts.push("Flagged for duplicate review.");
+  parts.push(`Consent recorded by ${r.patient.local?.consentBy ?? "you"}.`);
+  if (r.flaggedDuplicate) parts.push("Flagged for the admin to review as a possible duplicate.");
   return { title: `${r.patient.name} registered`, description: parts.join(" "), tone: r.flaggedDuplicate ? ("warning" as const) : ("success" as const) };
 }

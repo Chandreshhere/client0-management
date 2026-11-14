@@ -20,7 +20,8 @@ import { Logo } from "./logo";
  */
 export function Header({ onOpenSearch, onOpenMobileNav }: { onOpenSearch: () => void; onOpenMobileNav: () => void }) {
   const pathname = usePathname();
-  const tabs = headerTabsFor(pathname);
+  const { has, role } = useRole();
+  const tabs = headerTabsFor(pathname, has, role);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {

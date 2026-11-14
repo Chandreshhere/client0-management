@@ -487,6 +487,7 @@ function useAddendaCount(noteId: string, seeded: number) {
 }
 
 function SignedNote({ note, open, onToggle, canWrite }: { note: SignedNoteData; open: boolean; onToggle: () => void; canWrite: boolean }) {
+  const { has } = useRole();
   const panelId = `note-panel-${note.id}`;
   const addendaCount = useAddendaCount(note.id, note.addenda.length);
   return (
@@ -517,7 +518,7 @@ function SignedNote({ note, open, onToggle, canWrite }: { note: SignedNoteData; 
           <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
             <SealCheck size={16} className="text-success" aria-hidden="true" />
             Signed by {authorName(note.authorId)} · {formatDate(note.signedAt)}, {formatTime(note.signedAt)}
-            {note.released ? (
+            {has("release") && note.released ? (
               <span className="inline-flex items-center gap-1">
                 · <Eye size={14} aria-hidden="true" /> released to patient
               </span>
@@ -537,13 +538,14 @@ function linkHref(patientId: string, e: CareEvent): string | null {
   if (e.type === "imaging") return recordHref(patientId, "imaging");
   if (e.type === "vitals" || e.type === "movement") return e.values?.length ? recordHref(patientId, "vitals") : null;
   if (e.type === "document") return docId ? `${recordHref(patientId, "documents")}?doc=${docId}` : null;
-  if (e.type === "medication") return `/patients/${patientId}/journey`;
+  if (e.type === "medication") return `/patients/${patientId}/medical/conditions`;
   if (e.type === "nutrition") return "/nutrition";
   return null;
 }
 
 /** A signed note from a generated record: the record's text, plus what it documented links to. */
 function DerivedNoteCard({ patientId, note, open, onToggle, canWrite }: { patientId: string; note: DerivedNote; open: boolean; onToggle: () => void; canWrite: boolean }) {
+  const { has } = useRole();
   const panelId = `note-panel-${note.id}`;
   const record = recordOf(patientId);
   const sys = record ? systemOf(record, note.systemId) : undefined;
@@ -614,7 +616,7 @@ function DerivedNoteCard({ patientId, note, open, onToggle, canWrite }: { patien
           <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
             <SealCheck size={16} className="text-success" aria-hidden="true" />
             {letter ? "Written" : "Signed"} by {authorName(note.authorId)} · {formatDate(note.signedAt)}, {formatTime(note.signedAt)} · <span className="font-mono">{note.source}</span>
-            {note.released ? (
+            {has("release") && note.released ? (
               <span className="inline-flex items-center gap-1">
                 · <Eye size={14} aria-hidden="true" /> released to patient
               </span>

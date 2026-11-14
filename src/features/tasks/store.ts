@@ -11,9 +11,21 @@ import { NOW_ISO, byTime } from "./time";
  * (new task modal, "Turn into task" in messages, follow-ups from document review, chasers from
  * referrals). Nothing is sent anywhere.
  */
+export interface FlagInfo {
+  urgency: "routine" | "same-day";
+  /** who raised it (nutritionist or instructor) — they follow it under "Raised by me" */
+  raisedBy: string;
+  context?: string;
+  /** set when the primary doctor was on leave and a covering doctor got it */
+  via?: string | null;
+  response?: { text: string; at: string; by: string };
+}
+
 export interface CareTask extends Task {
   notes?: string;
   local?: boolean;
+  /** F8 flag to doctor: urgency, who raised it and the doctor's reply */
+  flag?: FlagInfo;
 }
 
 interface TaskState {
@@ -47,6 +59,7 @@ export interface NewTaskInput {
   discipline?: Discipline;
   notes?: string;
   status?: TaskStatus;
+  flag?: FlagInfo;
 }
 
 export function createTask(input: NewTaskInput, actorId: string): CareTask {
@@ -64,6 +77,7 @@ export function createTask(input: NewTaskInput, actorId: string): CareTask {
     discipline: input.discipline ?? owner?.discipline ?? "operations",
     notes: input.notes,
     local: true,
+    ...(input.flag ? { flag: input.flag } : {}),
   };
   const manual = input.source.startsWith("Created by");
   const created = entry(actorId, "created", input.notes ? `Created — “${input.notes}”` : manual ? "Created this task." : `Created from ${input.source}.`);

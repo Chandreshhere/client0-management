@@ -1,19 +1,8 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { patientById } from "@/data/patients";
-import { getRecord } from "@/data/record";
-import { JourneyView } from "@/features/patient/journey";
-import { PatientSummary } from "@/features/patients/patient-summary";
+import { redirect } from "next/navigation";
+import { withQuery } from "@/features/patient/profile/session";
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+/** Earlier URL, kept so existing links work: /journey now lives at /timeline in the five-section profile. */
+export default async function LegacyJourney({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { id } = await params;
-  return { title: `${patientById(id)?.name ?? "Patient"} · Journey` };
-}
-
-export default async function JourneyPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const patient = patientById(id);
-  if (!patient) notFound();
-  const record = getRecord(id);
-  return record && record.systems.length ? <JourneyView patient={patient} record={record} /> : <PatientSummary patient={patient} />;
+  redirect(withQuery(`/patients/${id}/timeline`, await searchParams));
 }

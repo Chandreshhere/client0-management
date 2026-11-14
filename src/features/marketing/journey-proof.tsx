@@ -31,8 +31,8 @@ const NODE_W = 188;
 const TOP = 56;
 const SHORT = { day: "numeric", month: "short" } as const;
 /** How a documented link reads from each end (the record stores it on the earlier event). */
-const INCOMING: Record<LinkKind, string> = { ordered: "Ordered at", "reviewed-in": "Reviews", "led-to": "Follows from", referred: "Referred from", revised: "Revises", "follow-up": "Follow-up to" };
-const OUTGOING: Record<LinkKind, string> = { ordered: "Ordered", "reviewed-in": "Reviewed in", "led-to": "Led to", referred: "Referred to", revised: "Revised as", "follow-up": "Followed up by" };
+const INCOMING: Record<LinkKind, string> = { ordered: "Ordered at", "reviewed-in": "Reviews", "led-to": "Follows from", referred: "Assigned from", revised: "Revises", "follow-up": "Follow-up to" };
+const OUTGOING: Record<LinkKind, string> = { ordered: "Ordered", "reviewed-in": "Reviewed in", "led-to": "Led to", referred: "Assigned to", revised: "Revised as", "follow-up": "Followed up by" };
 
 export function JourneyProof() {
   const [pid, setPid] = useState(PROOF_PATIENTS[0].patient.id);

@@ -1,18 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { CaretDown, Gear, Keyboard, SignOut, UserCircle } from "@phosphor-icons/react";
-import type { Role } from "@/data/types";
-import { DEMO_USER, ROLE_ORDER } from "@/data/staff";
+import { CaretDown, Gear, Keyboard, SignOut, Swap, UserCircle } from "@phosphor-icons/react";
+import { DEMO_USER } from "@/data/staff";
 import { planById } from "@/data/plans";
 import { Avatar } from "@/components/ui/avatar";
 import {
   Dropdown,
   DropdownContent,
   DropdownItem,
-  DropdownLabel,
-  DropdownRadioGroup,
-  DropdownRadioItem,
   DropdownSeparator,
   DropdownTrigger,
 } from "@/components/ui/dropdown";
@@ -23,8 +19,7 @@ import { cn } from "@/lib/cn";
 /** Profile menu + demo workspace switcher (the role dropdown is a demo affordance only). */
 /** `compact`: avatar only below 2xl — used when the header row also carries section tabs. */
 export function UserMenu({ compact = false }: { compact?: boolean }) {
-  const { role, setRole, user, plan } = useRole();
-  const allowed = planById(plan).roles;
+  const { role, user, plan } = useRole();
   const { toast } = useToast();
   return (
     <Dropdown>
@@ -51,17 +46,9 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
           </div>
         </div>
         <DropdownSeparator />
-        <DropdownLabel>Switch workspace · demo only</DropdownLabel>
-        <DropdownRadioGroup value={role} onValueChange={(v) => setRole(v as Role)}>
-          {ROLE_ORDER.filter((r) => allowed.includes(r)).map((r) => (
-            <DropdownRadioItem key={r} value={r}>
-              {DEMO_USER[r].label}
-            </DropdownRadioItem>
-          ))}
-        </DropdownRadioGroup>
-        {allowed.length < ROLE_ORDER.length ? (
-          <p className="px-3 pb-1 text-[11px] text-muted">More workspaces on higher plans · <Link href="/pricing" className="text-primary hover:underline">compare</Link></p>
-        ) : null}
+        <DropdownItem asChild icon={<Swap />} description={`${planById(plan).name} plan · ${DEMO_USER[role].label} — each demo is one plan and one role`}>
+          <Link href="/demo">Switch demo login</Link>
+        </DropdownItem>
         <DropdownSeparator />
         <DropdownItem asChild icon={<UserCircle />}>
           <Link href={role === "patient" ? "/portal/preferences" : "/settings"}>{role === "patient" ? "Profile & preferences" : "Profile & settings"}</Link>
@@ -77,7 +64,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
         <DropdownSeparator />
         <DropdownItem
           icon={<SignOut />}
-          onSelect={() => toast({ title: "Sign-in isn't part of this prototype", description: "Authentication is production work; use the workspace switcher above to try other roles." })}
+          onSelect={() => toast({ title: "Sign-in isn't part of this prototype", description: "Authentication is production work; use “Switch demo login” to open another plan or role." })}
         >
           Sign out
         </DropdownItem>

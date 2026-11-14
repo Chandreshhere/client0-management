@@ -104,14 +104,15 @@ export function upcomingCharges(localRequests: PortalAppt[]): UpcomingCharge[] {
 export function receiptText(inv: Invoice) {
   const lines = [
     CLINIC.legal,
-    `Receipt for invoice ${inv.number}`,
+    inv.paid >= inv.total ? `Receipt for invoice ${inv.number}` : `Invoice ${inv.number}`,
     `Issued: ${new Date(inv.issuedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}`,
     `Patient: ${ME.name}`,
     "",
     ...inv.items.map((i) => `${i.label.padEnd(40, " ")} ${formatINR(i.amount)}`),
     "",
     `Total: ${formatINR(inv.total)}`,
-    `Paid: ${formatINR(inv.paid)}${inv.method ? ` (${inv.method})` : ""}`,
+    `Paid: ${formatINR(inv.paid)}${inv.method && inv.paid > 0 ? ` (${inv.method}, recorded by reception)` : inv.method === "Package credit" ? " (package credit)" : ""}`,
+    ...(inv.paid < inv.total ? [`Still to pay: ${formatINR(inv.total - inv.paid)} — at reception by UPI, card or cash`] : []),
     "",
     "Demo receipt — synthetic data, generated in your browser.",
   ];

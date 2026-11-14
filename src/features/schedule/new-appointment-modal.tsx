@@ -8,10 +8,11 @@ import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, ModalContent } from "@/components/ui/dialog";
-import { Field, Input, Select, Switch, Textarea } from "@/components/ui/input";
+import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
-import { usePlan, useRole } from "@/components/shell/role-context";
+import { useRole } from "@/components/shell/role-context";
+import { AddOnNotice } from "@/components/shell/plan-switcher";
 import { DAY_END, DAY_START, DURATIONS, NOW_MIN, PRACTITIONERS, ROOMS, SERVICES, TODAY_KEY, serviceById, servicesFor } from "./data";
 import {
   addDays,
@@ -31,6 +32,7 @@ import {
   type Booking,
   type Conflict,
 } from "./engine";
+import { scheduleAccess, serviceText } from "./access";
 import { PatientPicker } from "./patient-picker";
 import { useSchedule } from "./store";
 import { DisciplineDot } from "./ui";
@@ -64,12 +66,12 @@ export function NewAppointmentModal({
 const START_OPTIONS = Array.from({ length: (DAY_END - DAY_START) / 15 }, (_, i) => DAY_START + i * 15).map((m) => ({ value: String(m), label: hhmm(m) }));
 
 function BookingForm({ prefill, onCancel, onBooked }: { prefill: BookingPrefill; onCancel: () => void; onBooked: (created: Booking[]) => void }) {
-  const { user } = useRole();
-  const { has } = usePlan();
+  const { user, has, role } = useRole();
+  const multiBranch = has("branches");
+  const clinical = scheduleAccess(role).clinical;
   const { occupants, events, person, addBookings } = useSchedule();
   const { toast } = useToast();
-  const multi = has("multi-role");
-  const allowedStaff = multi ? PRACTITIONERS : PRACTITIONERS.filter((p) => p.id === user.id);
+  const allowedStaff = PRACTITIONERS;
   const self = PRACTITIONERS.find((p) => p.id === user.id)?.id;
 
   const [init] = useState(() => {
@@ -95,7 +97,6 @@ function BookingForm({ prefill, onCancel, onBooked }: { prefill: BookingPrefill;
   const [repeat, setRepeat] = useState<"none" | "weekly">("none");
   const [count, setCount] = useState(4);
   const [notes, setNotes] = useState("");
-  const [reminder, setReminder] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const patientRef = useRef<HTMLDivElement>(null);
@@ -157,9 +158,10 @@ function BookingForm({ prefill, onCancel, onBooked }: { prefill: BookingPrefill;
     const who = o.patientId ? person(o.patientId)?.name ?? "a patient" : "group class";
     const when = `${repeat === "weekly" ? `${shortDay(c.date)} · ` : ""}${rangeLabel(o.start, o.end)}`;
     const otherStaff = staffById(o.staffId)?.name ?? "another practitioner";
-    if (c.on.length === 2) return `${staff?.name} and ${room} are booked ${when} — ${who}, ${o.title}.`;
-    if (c.on[0] === "practitioner") return `${staff?.name} is booked ${when} in ${o.room} — ${who}, ${o.title}.`;
-    return `${room} is in use ${when} by ${otherStaff} — ${o.kind === "class" ? o.title : `${who}, ${o.title}`}.`;
+    const what = o.kind === "class" ? o.title : serviceText(o.title, clinical);
+    if (c.on.length === 2) return `${staff?.name} and ${room} are booked ${when} — ${who}, ${what}.`;
+    if (c.on[0] === "practitioner") return `${staff?.name} is booked ${when} in ${o.room} — ${who}, ${what}.`;
+    return `${room} is in use ${when} by ${otherStaff} — ${o.kind === "class" ? o.title : `${who}, ${what}`}.`;
   };
 
   const save = () => {
@@ -188,12 +190,11 @@ function BookingForm({ prefill, onCancel, onBooked }: { prefill: BookingPrefill;
         formsComplete: p ? (p.local ? false : p.intakeComplete) : false,
         notes: notes.trim() || undefined,
         seriesId,
-        reminder,
       })),
     );
     toast({
       title: occurrences > 1 ? `${occurrences} weekly appointments booked` : `Booked · ${shortDay(date)}, ${hhmm(start)}`,
-      description: `${p?.name ?? "Patient"} with ${staff?.name}. Saved in this browser session only. ${reminder ? "No reminder was sent — reminders aren't connected in this prototype." : ""}`.trim(),
+      description: `${p?.name ?? "Patient"} with ${staff?.name}. Give the patient the time at the desk or by phone.`,
       tone: "success",
     });
     onBooked(created);
@@ -256,7 +257,7 @@ function BookingForm({ prefill, onCancel, onBooked }: { prefill: BookingPrefill;
         <Field
           label="Practitioner"
           className="sm:col-span-3"
-          hint={`${multi ? `${pluralBookings(dayLoad)} on ${shortDay(date)}` : "Other practitioners' diaries are part of the Team plan."}${staffHours ? ` · works ${hoursLabel(staffHours)}` : ""}`}
+          hint={`${pluralBookings(dayLoad)} on ${shortDay(date)}${staffHours ? ` · works ${hoursLabel(staffHours)}` : ""}`}
         >
           {(p) => (
             <Select
@@ -303,7 +304,7 @@ function BookingForm({ prefill, onCancel, onBooked }: { prefill: BookingPrefill;
               ariaLabel="Room"
               value={room}
               onValueChange={setRoom}
-              options={ROOMS.map((r) => ({ value: r.room, label: r.room, description: r.branchName }))}
+              options={ROOMS.map((r) => ({ value: r.room, label: r.room, description: multiBranch ? r.branchName : undefined }))}
             />
           )}
         </Field>
@@ -391,7 +392,7 @@ function BookingForm({ prefill, onCancel, onBooked }: { prefill: BookingPrefill;
                 <li key={`${e.id}-${d}`} className="flex items-start gap-2">
                   <UserCircleMinus size={14} className="mt-px shrink-0 text-warning" aria-hidden="true" />
                   <span>
-                    {person(patientId ?? "")?.name ?? "This patient"} {e.cls ? "is enrolled in" : "already has"} {e.cls ? e.cls.title : e.booking?.service ?? "a booking"}
+                    {person(patientId ?? "")?.name ?? "This patient"} {e.cls ? "is enrolled in" : "already has"} {e.cls ? e.cls.title : e.booking ? serviceText(e.booking.service, clinical) : "a booking"}
                     {" "}with {staffById(e.staffId)?.name ?? "another practitioner"}, {repeat === "weekly" ? `${shortDay(d)} ` : ""}
                     {rangeLabel(e.start, e.end)} — allowed for joint care, but the times overlap.
                   </span>
@@ -433,17 +434,9 @@ function BookingForm({ prefill, onCancel, onBooked }: { prefill: BookingPrefill;
           {(p) => <Textarea rows={2} className="min-h-20" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Bring last ECG report; prefers Hindi" {...p} />}
         </Field>
 
-        <div className="flex items-start gap-3 rounded-inner bg-sunken p-4 sm:col-span-6">
-          <Switch id="reminder-switch" checked={reminder} onCheckedChange={setReminder} aria-describedby="reminder-note" />
-          <div className="min-w-0">
-            <label htmlFor="reminder-switch" className="text-sm text-ink">
-              Send reminder
-            </label>
-            <p id="reminder-note" className="text-xs text-muted">
-              Reminders aren&apos;t connected in this prototype — nothing will be sent. The preference is saved with the booking.
-            </p>
-          </div>
-        </div>
+        <AddOnNotice addOn="messaging" className="sm:col-span-6">
+          Appointment confirmations and reminders by WhatsApp or SMS. Without it, give the patient the time at the desk or by phone.
+        </AddOnNotice>
         <button type="submit" className="sr-only">
           Book appointment
         </button>

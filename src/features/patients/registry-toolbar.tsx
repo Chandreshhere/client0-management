@@ -132,6 +132,8 @@ export function RegistryToolbar({
   onFilter,
   sort,
   onSort,
+  browse = true,
+  placeholder = "Name, clinic ID or phone",
 }: {
   scope: Scope;
   onScope: (s: Scope) => void;
@@ -145,6 +147,9 @@ export function RegistryToolbar({
   onFilter: (key: FacetKey, values: string[]) => void;
   sort: SortKey;
   onSort: (s: SortKey) => void;
+  /** Browse previews the clinical record — offered to clinical roles only. */
+  browse?: boolean;
+  placeholder?: string;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -160,31 +165,33 @@ export function RegistryToolbar({
           onChange={onView}
           className="hidden shrink-0 @[880px]:flex"
           items={[
-            { value: "table", label: "Table", icon: <Rows /> },
-            { value: "cards", label: "Cards", icon: <SquaresFour /> },
-            { value: "browse", label: "Browse", icon: <SidebarSimple /> },
+            { value: "table" as const, label: "Table", icon: <Rows /> },
+            { value: "cards" as const, label: "Cards", icon: <SquaresFour /> },
+            ...(browse ? [{ value: "browse" as const, label: "Browse", icon: <SidebarSimple /> }] : []),
           ]}
         />
         {/* Narrow screens have no table: cards or browse. */}
-        <Segmented
-          variant="tray"
-          size="sm"
-          ariaLabel="Layout"
-          value={view === "browse" ? "browse" : "cards"}
-          onChange={onView}
-          className="shrink-0 @[880px]:hidden"
-          items={[
-            { value: "cards", label: <span className="sr-only">Cards</span>, icon: <SquaresFour aria-hidden="true" /> },
-            { value: "browse", label: <span className="sr-only">Browse</span>, icon: <SidebarSimple aria-hidden="true" /> },
-          ]}
-        />
+        {browse ? (
+          <Segmented
+            variant="tray"
+            size="sm"
+            ariaLabel="Layout"
+            value={view === "browse" ? "browse" : "cards"}
+            onChange={onView}
+            className="shrink-0 @[880px]:hidden"
+            items={[
+              { value: "cards", label: <span className="sr-only">Cards</span>, icon: <SquaresFour aria-hidden="true" /> },
+              { value: "browse", label: <span className="sr-only">Browse</span>, icon: <SidebarSimple aria-hidden="true" /> },
+            ]}
+          />
+        ) : null}
       </div>
       <div className="flex flex-col gap-2 @[880px]:flex-row @[880px]:items-center">
         <SearchInput
           value={query}
           onChange={(e) => onQuery(e.target.value)}
-          placeholder="Name, clinic number or concern"
-          aria-label="Search patients by name, clinic number or concern"
+          placeholder={placeholder}
+          aria-label={`Search patients by ${placeholder.toLowerCase()}`}
           className="w-full shrink-0 @[880px]:w-[300px]"
         />
         <div className="scrollbar-none -mx-4 -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto px-4 py-1 lg:mx-0 lg:px-0">

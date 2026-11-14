@@ -341,7 +341,7 @@ export const GUIDANCE: Record<string, Guidance> = {
   "p-tanvi": {
     by: "s-vikram", version: "v1", effective: "2026-11-12T10:00:00+05:30", review: "2027-01-12",
     lines: ["Ferritin 9 ng/mL — iron-rich foods with vitamin C at the same meal.", "Tea or coffee at least 1 h away from meals.", "Iron tablet as prescribed; guardian consent pending for under-21 programme."],
-    changed: { at: "2026-11-12T10:00:00+05:30", summary: "New guidance from the referral on 12 Nov." },
+    changed: { at: "2026-11-12T10:00:00+05:30", summary: "New guidance with the assignment on 12 Nov." },
     targets: { kcal: 1800, protein: 60, fibre: 25 },
   },
   "p-ishita": {
@@ -375,13 +375,13 @@ export const PLAN_HISTORY: Record<string, VersionEntry[]> = {
     { version: 3, status: "in-review", by: "s-meera", at: "2026-11-12T12:40:00+05:30", why: "Dr. Vikram Iyer raised the protein target to 70 g (guidance v2). Breakfast skipped 3 of 7 days (self-reported).", changes: ["+ Curd at breakfast", "+ Roasted chana mid-morning (portable)", "~ Dinner: paneer → egg bhurji", "~ Protein 60 → 78 g"] },
   ],
   "np-kabir": [
-    { version: 1, status: "superseded", by: "s-meera", at: "2026-09-12T12:00:00+05:30", why: "Referral from Dr. Ananya Rao — LDL 142 mg/dL at baseline.", changes: ["+ Created from “Heart-healthy · South Indian vegetarian”"] },
+    { version: 1, status: "superseded", by: "s-meera", at: "2026-09-12T12:00:00+05:30", why: "Assigned by Dr. Ananya Rao — LDL 142 mg/dL at baseline.", changes: ["+ Created from “Heart-healthy · South Indian vegetarian”"] },
     { version: 2, status: "superseded", by: "s-meera", at: "2026-09-30T10:00:00+05:30", why: "Weight stable; patient asked for more variety at dinner.", changes: ["+ Phulka dinner option", "− Second rice serving"] },
     { version: 3, status: "superseded", by: "s-meera", at: "2026-10-21T16:30:00+05:30", why: "Fibre below 25 g on office days.", changes: ["+ Guava mid-morning", "+ Sprouts chaat evening"] },
     { version: 4, status: "published", by: "s-meera", at: "2026-11-12T17:05:00+05:30", why: "Dinner timing slipping on work-from-office days.", changes: ["~ Office days: dinner by 19:30, eaten before the commute", "+ Ragi malt evening (keeps dinner light)"] },
   ],
   "np-arun": [
-    { version: 1, status: "draft", by: "s-meera", at: "2026-11-12T16:00:00+05:30", why: "Drafted ahead of accepting Dr. Ananya Rao's referral (post-MI).", changes: ["+ Created from “DASH-style · low sodium”"] },
+    { version: 1, status: "draft", by: "s-meera", at: "2026-11-12T16:00:00+05:30", why: "Drafted ahead of the visit from Dr. Ananya Rao's assignment (post-MI).", changes: ["+ Created from “DASH-style · low sodium”"] },
   ],
   "np-rajesh": [
     { version: 1, status: "superseded", by: "s-rohan", at: "2025-11-24T11:00:00+05:30", why: "Initial diabetes plan.", changes: ["+ Created from “Diabetes · Kerala meals”"] },
@@ -576,4 +576,36 @@ export const PAST_REVIEWS: AdherenceReview[] = [
     followed: ["Oil 3 tsp/day", "Coffee 1 cup before noon", "Fruit or salad every day"], barriers: ["Early meetings / time pressure"],
     notes: "Dinner after 21:00 on two office days.", changes: "Eat dinner at the office before the commute on Mon/Wed/Thu.", nextReview: "2026-11-13", source: "11 self-reported entries",
   },
+];
+
+/* ------------------------------------------------------------------ follow-up entries (F6) */
+
+/** How closely the patient followed the plan since the last visit — the nutritionist's call, not a score. */
+export type Adherence = "good" | "partly" | "poor";
+export const ADHERENCE_LABEL: Record<Adherence, string> = { good: "Mostly followed", partly: "Partly followed", poor: "Not followed" };
+
+/**
+ * One follow-up entry per visit (spec F6): weight, adherence and notes. Works on every plan —
+ * on Core and Clinic it is the only adherence record (food logs are Pro, with the patient app).
+ */
+export interface FollowUpEntry {
+  id: string;
+  patientId: string;
+  by: string;
+  at: string;
+  /** kg; null when not weighed at this visit */
+  weightKg: number | null;
+  adherence: Adherence;
+  notes: string;
+  /** IST date "YYYY-MM-DD" */
+  nextReview: string;
+}
+
+export const FOLLOW_UPS: FollowUpEntry[] = [
+  { id: "fu-aditi-1106", patientId: "p-aditi", by: "s-meera", at: L(6, "12:30"), weightKg: 68.4, adherence: "partly", notes: "Breakfast skipped on both office days. Agreed: pack roasted chana; soak chilla batter the night before.", nextReview: "2026-11-20" },
+  { id: "fu-aditi-1016", patientId: "p-aditi", by: "s-meera", at: "2026-10-16T12:00:00+05:30", weightKg: 69.1, adherence: "partly", notes: "Sweet breakfasts were being skipped; canteen lunches on office days. Plan revised to v2.", nextReview: "2026-11-06" },
+  { id: "fu-kabir-1030", patientId: "p-kabir", by: "s-meera", at: "2026-10-30T11:00:00+05:30", weightKg: 74.9, adherence: "good", notes: "Oil and coffee limits kept. Dinner after 21:00 on two office days — eat at the office before the commute.", nextReview: "2026-11-13" },
+  { id: "fu-rajesh-1022", patientId: "p-rajesh", by: "s-rohan", at: "2026-10-22T10:00:00+05:30", weightKg: 81.0, adherence: "poor", notes: "Lunch rice portions large; sweetened tea twice a day. Plan revised to v2 with measured portions.", nextReview: "2026-11-13" },
+  { id: "fu-sameer-1101", patientId: "p-sameer", by: "s-rohan", at: "2026-11-01T19:00:00+05:30", weightKg: 92.4, adherence: "good", notes: "Down 1.6 kg in 4 weeks. Weekend snacking is the main gap; travel-day breakfasts added in v2.", nextReview: "2026-11-26" },
+  { id: "fu-ishita-1109", patientId: "p-ishita", by: "s-meera", at: "2026-11-09T10:40:00+05:30", weightKg: 63.2, adherence: "good", notes: "Nausea improved. Iron tablets taken 6 of 7 days. Small, frequent meals working.", nextReview: "2026-11-23" },
 ];

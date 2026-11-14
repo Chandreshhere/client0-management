@@ -7,32 +7,35 @@ import { ArrowUpRight, BowlFood, FileText, PersonSimpleTaiChi, Stethoscope, Test
 import { Avatar } from "@/components/ui/avatar";
 import { Pill } from "@/components/ui/pill";
 import { FEATURED_PATIENT_ID, patientById } from "@/data/patients";
-import { REFERRALS, REFERRAL_STAGES, REFERRAL_STAGE_LABEL } from "@/data/care";
+import { ASSIGNMENT_RETURN_HOURS, REFERRALS, assignmentState } from "@/data/care";
 import { staffById } from "@/data/staff";
 import { formatDate } from "@/lib/format";
 import { pop, snappy, spring } from "@/lib/motion";
 import { cn } from "@/lib/cn";
+import { seenAt } from "@/features/marketing/assignment-track";
 
 /**
  * Cobalt showcase for the sign-in screens: a calm vignette assembled from the app's own pieces
- * (patient identity card, glass referral card with its five-stage stepper, a sliver of the care
- * timeline) joined by the reference's threads. Threads stand for documented associations
- * (stage → event), never causation. Decorative, so it is hidden from assistive tech; the one
+ * (patient identity card, glass assignment card with its two states — assigned → seen — and the
+ * doctor's goals, a sliver of the care timeline) joined by the reference's threads. Threads stand
+ * for documented associations (state → event), never causation. Decorative, so it is hidden from assistive tech; the one
  * sentence below it carries the meaning.
  *
  * Geometry is a fixed 600×440 stage (xl+) so every thread endpoint is known exactly.
  */
 
 const patient = patientById(FEATURED_PATIENT_ID);
-const referral = REFERRALS.find((r) => r.patientId === FEATURED_PATIENT_ID && r.toDiscipline === "nutrition");
+const assignment = REFERRALS.find((r) => r.patientId === FEATURED_PATIENT_ID && r.toDiscipline === "nutrition");
 const movementReferral = REFERRALS.find((r) => r.patientId === FEATURED_PATIENT_ID && r.toDiscipline === "movement");
 
 const W = 600;
 const H = 440;
 const CARD_W = 300;
-/** Glass referral card top; stepper rows are 24px tall starting 124px below it. */
+/** Glass assignment card top; its two state rows are 24px tall starting 124px below it, then the 52px goals box. */
 const GLASS_Y = 88;
 const stageY = (i: number) => GLASS_Y + 124 + 12 + 24 * i;
+const GOALS_H = 52;
+const goalsY = GLASS_Y + 124 + 48 + 16 + GOALS_H / 2;
 /** Timeline sliver card. */
 const TL = { x: 360, y: 24, w: 240, rowH: 88, pad: 16 };
 const rowY = (row: number) => TL.y + TL.pad + TL.rowH * row + TL.rowH / 2;
@@ -64,10 +67,9 @@ const centre = (id: string): [number, number] => {
 };
 
 const THREADS: { id: string; from: [number, number]; to: string }[] = [
-  { id: "requested", from: [CARD_W, stageY(0)], to: "sep-consult" },
-  { id: "booked", from: [CARD_W, stageY(2)], to: "sep-nutrition" },
-  { id: "completed", from: [CARD_W, stageY(3)], to: "sep-nutrition" },
-  { id: "acknowledged", from: [CARD_W, stageY(4)], to: "sep-note" },
+  { id: "assigned", from: [CARD_W, stageY(0)], to: "sep-consult" },
+  { id: "seen", from: [CARD_W, stageY(1)], to: "sep-nutrition" },
+  { id: "goals", from: [CARD_W, goalsY], to: "sep-note" },
   { id: "yoga-1", from: [CHIP.x + CHIP.w, CHIP.y + CHIP.h / 2], to: "oct-yoga-1" },
   { id: "yoga-2", from: [CHIP.x + CHIP.w, CHIP.y + CHIP.h / 2], to: "oct-yoga-2" },
 ];
@@ -93,12 +95,12 @@ export function AuthShowcase() {
       </div>
 
       <div aria-hidden="true" className="flex flex-1 items-center py-8 short:py-4">
-        {patient && referral ? (
+        {patient && assignment ? (
           <>
             <Stage />
             <div className="flex w-[300px] flex-col gap-4 xl:hidden">
               <PatientCard />
-              <ReferralCard />
+              <AssignmentCard />
               <YogaChip />
             </div>
           </>
@@ -215,7 +217,7 @@ function Stage() {
         <PatientCard />
       </motion.div>
       <motion.div {...rise(0.12)} className="absolute left-0" style={{ top: GLASS_Y }}>
-        <ReferralCard />
+        <AssignmentCard />
       </motion.div>
       <motion.div {...rise(0.28)} className="absolute" style={{ left: CHIP.x, top: CHIP.y }}>
         <YogaChip />
@@ -243,48 +245,60 @@ function PatientCard() {
   );
 }
 
-function ReferralCard() {
-  if (!referral) return null;
-  const from = staffById(referral.fromId);
-  const to = staffById(referral.toId);
+function AssignmentCard() {
+  if (!assignment) return null;
+  const from = staffById(assignment.fromId);
+  const to = staffById(assignment.toId);
+  const seen = seenAt(assignment);
+  const [title, ...goals] = assignment.reason.split(";").map((x) => x.trim());
+  const hours = seen ? Math.max(0, (new Date(seen).getTime() - new Date(assignment.requestedAt).getTime()) / 3_600_000) : null;
+  const states = [
+    { label: "Assigned", date: assignment.requestedAt },
+    { label: "Seen", date: seen },
+  ];
   return (
     <div className="glass-dark rounded-card p-4 text-white" style={{ width: CARD_W }}>
       <div className="flex h-8 items-center justify-between">
         <Pill tone="instances-light" className="text-white">
-          Referral · Nutrition
+          Assignment · Nutrition
         </Pill>
         <span className="flex size-8 items-center justify-center rounded-full bg-white text-ink">
           <ArrowUpRight size={16} />
         </span>
       </div>
-      <p className="mt-4 truncate text-[18px] font-light leading-6 tracking-[-0.01em]">Heart-healthy vegetarian plan</p>
+      <p className="mt-4 truncate text-[18px] font-light leading-6 tracking-[-0.01em]">{title}</p>
       <p className="mt-1 truncate text-xs leading-4 text-white/75">
         {from?.name ?? "Doctor"} → {to?.name ?? "Nutritionist"}
       </p>
       <ol className="relative mt-4">
-        {REFERRAL_STAGES.map((stage, i) => {
-          const date = referral.stageDates[stage];
+        {states.map((st, i) => {
           const delay = 0.6 + i * 0.3;
           return (
-            <li key={stage} className="relative flex h-6 items-center gap-3">
+            <li key={st.label} className="relative flex h-6 items-center gap-3">
               {i > 0 ? <Segment delay={delay - 0.12} /> : null}
               <motion.span
                 initial={{ opacity: 0.3, scale: 0.6 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ ...pop, delay }}
-                className="relative z-[1] size-2.5 shrink-0 rounded-full bg-white"
+                className={cn("relative z-[1] size-2.5 shrink-0 rounded-full", st.date ? "bg-white" : "bg-white/30")}
               />
-              <span className="text-xs">{REFERRAL_STAGE_LABEL[stage]}</span>
-              <span className="ml-auto text-[11px] tabular text-white/75">{date ? formatDate(date, { day: "numeric", month: "short" }) : "—"}</span>
+              <span className="text-xs">{st.label}</span>
+              <span className="ml-auto text-[11px] tabular text-white/75">{st.date ? formatDate(st.date, { day: "numeric", month: "short" }) : "—"}</span>
             </li>
           );
         })}
       </ol>
+      <div className="mt-4 flex flex-col justify-center rounded-[8px] bg-white/10 px-3" style={{ height: GOALS_H }}>
+        <p className="truncate text-[11px] leading-4 text-white/75">Goals · {goals.join("; ") || title}</p>
+        <p className="mt-1 truncate text-[11px] leading-4">
+          {hours !== null ? `Opened ${hours < 1 ? "within the hour" : `${Math.round(hours)} h after assigning`} · inside ${ASSIGNMENT_RETURN_HOURS} h` : `Unseen after ${ASSIGNMENT_RETURN_HOURS} h, it goes back to the doctor`}
+        </p>
+      </div>
     </div>
   );
 }
 
-/** Line between two stepper dots; fills top-down as the referral advances. */
+/** Line between the two state dots; fills top-down once the assignment is seen. */
 function Segment({ delay }: { delay: number }) {
   return (
     <span className="absolute left-[4px] top-[-12px] h-6 w-0.5 overflow-hidden rounded-full bg-white/20">
@@ -297,7 +311,7 @@ function YogaChip(): ReactNode {
   return (
     <Pill tone="condition" icon={<PersonSimpleTaiChi />} className="h-8 justify-start bg-white/90 text-ink" style={{ width: CHIP.w }}>
       Cardiac rehab yoga
-      <span className="text-muted">· {movementReferral?.stage === "completed" ? "Completed" : "In progress"}</span>
+      <span className="text-muted">· {movementReferral && assignmentState(movementReferral) === "seen" ? "Seen" : "Assigned"}</span>
     </Pill>
   );
 }

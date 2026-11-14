@@ -25,6 +25,7 @@ export function SessionPlanCard({ cls, plan, editable, onSave }: { cls: YogaClas
   const [stepError, setStepError] = useState<string | null>(null);
 
   const view = editing ? draft : plan;
+  const empty = !editing && !plan.steps.length && !plan.objectives.length && !plan.modifications.length && !plan.props.length;
   const total = view.steps.reduce((n, st) => n + st.minutes, 0);
   const over = total - cls.durationMin;
 
@@ -70,6 +71,10 @@ export function SessionPlanCard({ cls, plan, editable, onSave }: { cls: YogaClas
         ) : null}
       </div>
 
+      {empty ? (
+        <p className="mt-4 rounded-inner bg-canvas p-4 text-sm text-muted">{editable ? "No plan yet — add the sequence, modifications and props with the pencil." : "No session plan."}</p>
+      ) : (
+      <>
       {view.objectives.length ? (
         <div className="mt-4 flex flex-wrap gap-1.5" aria-label="Objectives">
           {view.objectives.map((o) => (
@@ -132,7 +137,7 @@ export function SessionPlanCard({ cls, plan, editable, onSave }: { cls: YogaClas
         </div>
       ) : null}
 
-      <h3 className="mt-6 text-sm text-ink">Class modifications</h3>
+      <h3 className="mt-6 text-sm text-ink">Modifications for everyone</h3>
       <ul className="mt-2 flex flex-col gap-1.5">
         {view.modifications.map((m) => (
           <li key={m} className="flex gap-2 text-sm text-ink-2">
@@ -163,6 +168,8 @@ export function SessionPlanCard({ cls, plan, editable, onSave }: { cls: YogaClas
           );
         })}
       </div>
+      </>
+      )}
 
       {editing ? (
         <div className="mt-6 flex justify-end gap-2">

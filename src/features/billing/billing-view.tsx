@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, DownloadSimple, Receipt, WarningOctagon } from "@phosphor-icons/react";
+import { DownloadSimple, Receipt } from "@phosphor-icons/react";
 import type { Role } from "@/data/types";
 import { patientById } from "@/data/patients";
 import { pluralize } from "@/lib/format";
@@ -15,19 +15,18 @@ import { useToast } from "@/components/ui/toast";
 import { useRole } from "@/components/shell/role-context";
 import { FilterPill, ROLE_LABEL } from "@/features/settings/ui";
 import { logAudit } from "@/features/settings/audit";
-import { TODAY_KEY, daysAgo, istDayKey, newestFirst, whenInline } from "@/features/settings/time";
+import { TODAY_KEY, daysAgo, istDayKey, newestFirst } from "@/features/settings/time";
 import { ALL_METHODS, OPEN_STATUSES, type DisplayStatus, type PayMethod } from "./data";
-import { money } from "./meta";
 import { InvoiceTable } from "./invoice-table";
 import { InvoiceSheet } from "./invoice-sheet";
 import { RecordPaymentModal } from "./record-payment";
 import { CollectionsCard, OldestOpenTile, OutstandingFocal, StatusCard, TodayTile } from "./overview";
-import { useBillingSession, useInvoices } from "./store";
+import { useInvoices } from "./store";
 
-/** Roles whose workspace includes invoices (doc §3A "permitted billing"; the solo doctor on Starter). */
-const BILLING_ROLES: Role[] = ["admin", "frontdesk", "doctor"];
+/** Billing is the front desk's (Reception) with the administrator; no clinical role works here. */
+const BILLING_ROLES: Role[] = ["admin", "frontdesk"];
 
-type View = "all" | "open" | "due" | "overdue" | "partial" | "failed" | "settled" | "refunded";
+type View = "all" | "open" | "due" | "overdue" | "partial" | "settled" | "refunded";
 type MethodFilter = "all" | "none" | PayMethod;
 type DateFilter = "all" | "today" | "7d" | "30d";
 
@@ -37,8 +36,7 @@ const VIEW_MATCH: Record<View, (s: DisplayStatus) => boolean> = {
   due: (s) => s === "due",
   overdue: (s) => s === "overdue",
   partial: (s) => s === "partially-paid",
-  failed: (s) => s === "failed",
-  settled: (s) => s === "paid" || s === "recorded",
+  settled: (s) => s === "paid",
   refunded: (s) => s === "refunded",
 };
 
@@ -78,7 +76,7 @@ export function BillingView() {
           <EmptyState
             icon={<Receipt />}
             title={`Billing isn't part of the ${ROLE_LABEL(role).toLowerCase()} workspace`}
-            description="Invoices, receipts and outstanding balances are handled by the front desk and administrators. Ask them if a patient has a billing question."
+            description="Invoices, receipts and outstanding balances are handled by Reception and administrators. Ask them if a patient has a billing question."
           />
         </Card>
       </div>
@@ -91,7 +89,6 @@ function BillingWorkspace() {
   const { toast } = useToast();
   const { user } = useRole();
   const invoices = useInvoices();
-  const session = useBillingSession();
   const [view, setView] = useState<View>("all");
   const [method, setMethod] = useState<MethodFilter>("all");
   const [date, setDate] = useState<DateFilter>("all");
@@ -112,7 +109,7 @@ function BillingWorkspace() {
 
   /** From the focal card: narrow the list to one status and bring it into view. */
   const focusStatus = (s: DisplayStatus) => {
-    const next: View = s === "failed" ? "failed" : s === "overdue" ? "overdue" : s === "partially-paid" ? "partial" : s === "due" ? "due" : "all";
+    const next: View = s === "overdue" ? "overdue" : s === "partially-paid" ? "partial" : s === "due" ? "due" : "all";
     setView(next);
     setMethod("all");
     setDate("all");
@@ -133,11 +130,10 @@ function BillingWorkspace() {
         .filter((i) => (method === "all" ? true : method === "none" ? i.method === null : i.method === method))
         .filter((i) => DATE_MATCH[date](i.issuedAt))
         .filter((i) => !q || `${i.number} ${patientById(i.patientId)?.name ?? ""} ${i.items.map((x) => x.label).join(" ")}`.toLowerCase().includes(q))
-        .sort((a, b) => Number(b.draft) - Number(a.draft) || newestFirst(a.issuedAt, b.issuedAt)),
+        .sort((a, b) => Number(b.local) - Number(a.local) || newestFirst(a.issuedAt, b.issuedAt)),
     [invoices, view, method, date, q],
   );
 
-  const failedInvoices = invoices.filter((i) => i.display === "failed");
   const opened = invoices.find((i) => i.id === openId) ?? null;
   const recording = invoices.find((i) => i.id === recordId) ?? null;
   const filtered = view !== "all" || method !== "all" || date !== "all" || q !== "";
@@ -147,7 +143,7 @@ function BillingWorkspace() {
       <PageHeader
         eyebrow="Billing"
         title="Invoices"
-        description="Invoices, receipts and outstanding balances. A payment counts only when a gateway, the bank or the desk confirms it — a browser redirect is never proof of payment."
+        description="Invoices, receipts and balances due. Record cash, UPI and card payments as you take them — an invoice shows as paid only once its payment is recorded."
         actions={
           <Button
             variant="secondary"
@@ -167,44 +163,16 @@ function BillingWorkspace() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <OutstandingFocal invoices={invoices} onFocusStatus={focusStatus} />
-        <CollectionsCard session={session.payments} />
+        <CollectionsCard invoices={invoices} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <TodayTile session={session.payments} />
+        <TodayTile invoices={invoices} />
         <OldestOpenTile invoices={invoices} onOpen={(i) => setOpenId(i.id)} />
         <div className="sm:col-span-2">
           <StatusCard invoices={invoices} />
         </div>
       </div>
-
-      {failedInvoices.length ? (
-        <ul className="flex flex-col gap-2" aria-label="Payments not confirmed">
-          {failedInvoices.map((inv) => {
-            const p = patientById(inv.patientId);
-            const attempts = inv.events.filter((e) => e.kind === "attempt");
-            const attempt = attempts[attempts.length - 1]; // events are newest first → the original request
-            return (
-              <li key={inv.id} className="flex flex-col gap-4 rounded-card bg-surface p-4 sm:flex-row sm:items-center sm:px-6">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-danger-soft text-danger">
-                  <WarningOctagon size={18} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-ink">
-                    Payment not confirmed · <span className="font-mono text-[13px]">{inv.number}</span> · {p?.name} · <span className="tabular">{money(inv.balance)}</span>
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted">
-                    {inv.method} request {attempt ? `sent ${whenInline(attempt.at)}` : "sent"} — the gateway never confirmed it. Not marked paid until the gateway confirms.
-                  </p>
-                </div>
-                <Button variant="secondary" size="sm" className="w-max" trailing={<ArrowUpRight />} onClick={() => setOpenId(inv.id)}>
-                  Open invoice
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
 
       <div ref={listRef} className="flex scroll-mt-28 flex-col gap-3">
         <div className="scrollbar-none -mx-4 overflow-x-auto px-4 py-1 lg:-mx-6 lg:px-6">
@@ -218,8 +186,7 @@ function BillingWorkspace() {
               { value: "open", label: "Open", count: counts.open },
               { value: "due", label: "Due", count: counts.due },
               { value: "overdue", label: "Overdue", count: counts.overdue },
-              { value: "partial", label: "Partially paid", count: counts.partial },
-              { value: "failed", label: "Not confirmed", count: counts.failed },
+              { value: "partial", label: "Partly paid", count: counts.partial },
               { value: "settled", label: "Paid", count: counts.settled },
               { value: "refunded", label: "Refunded", count: counts.refunded },
             ]}
@@ -277,7 +244,7 @@ function BillingWorkspace() {
       )}
 
       <p className="text-xs text-muted">
-        {pluralize(list.length, "invoice")} shown · synthetic data · amounts in INR. Payments recorded here are saved in this browser session only.
+        {pluralize(list.length, "invoice")} shown · synthetic data · amounts in INR. Payments you record are saved in this browser session only.
       </p>
 
       <InvoiceSheet invoice={opened} canRecord onClose={() => setOpenId(null)} onRecord={(i) => setRecordId(i.id)} />

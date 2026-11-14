@@ -1,11 +1,11 @@
-import { OBSERVATIONS, type Observation, type SessionPlan } from "./data";
-import { NEEDS_REASON, key, type ClassesState, type Decision, type Escalation, type Mark } from "./model";
+import { PROGRESS_NOTES, type ProgressNote, type SessionPlan } from "./data";
+import { key, type ClassesState, type Decision, type LoggedClass, type Mark } from "./model";
 import { createSessionStore, useSessionStore } from "./session-store";
 
 /**
- * Classes demo state for this browser session: attendance, clearance decisions, session status,
- * escalations, coordinator routing, private observations and session-plan edits. Nothing leaves
- * the browser.
+ * Sessions demo state for this browser session: attendance, precaution acknowledgements, session
+ * status, repeated-absence routing, progress notes, session-plan edits and logged sessions.
+ * Nothing leaves the browser. (Flags to the doctor live in the shared tasks store.)
  */
 const INITIAL: ClassesState = {
   marks: {},
@@ -14,14 +14,14 @@ const INITIAL: ClassesState = {
   acks: {},
   holds: {},
   sessions: {},
-  escalations: [],
   routed: {},
-  observations: OBSERVATIONS,
+  notes: PROGRESS_NOTES,
   plans: {},
   offers: {},
+  created: [],
 };
 
-export const classesStore = createSessionStore<ClassesState>("carelane.classes.v1", INITIAL);
+export const classesStore = createSessionStore<ClassesState>("carelane.classes.v2", INITIAL);
 export const useClasses = () => useSessionStore(classesStore);
 
 export const classActions = {
@@ -37,22 +37,15 @@ export const classActions = {
     });
   },
 
-  /** Commits drafts; returns patient ids still missing a required reason (nothing is saved then). */
-  save(classId: string, at: string): string[] {
-    let missing: string[] = [];
+  save(classId: string, at: string) {
     classesStore.set((s) => {
       const draft = s.drafts[classId] ?? {};
-      missing = Object.entries(draft)
-        .filter(([, m]) => NEEDS_REASON.includes(m.state) && !m.reason.trim())
-        .map(([pid]) => pid);
-      if (missing.length) return s;
       const marks = { ...s.marks };
       for (const [pid, m] of Object.entries(draft)) marks[key(classId, pid)] = { state: m.state, reason: m.reason.trim() };
       const drafts = { ...s.drafts };
       delete drafts[classId];
       return { ...s, marks, drafts, savedAt: { ...s.savedAt, [classId]: at } };
     });
-    return missing;
   },
 
   acknowledge(patientId: string, decision: Decision) {
@@ -63,7 +56,7 @@ export const classActions = {
     classesStore.set((s) => ({
       ...s,
       holds: { ...s.holds, [key(classId, patientId)]: decision },
-      marks: { ...s.marks, [key(classId, patientId)]: { state: "rescheduled", reason: `Held from session — ${decision.note || "clearance under review"}` } },
+      marks: { ...s.marks, [key(classId, patientId)]: { state: "rescheduled", reason: `Held from this session — ${decision.note || "precaution approval expired"}` } },
     }));
   },
 
@@ -78,16 +71,12 @@ export const classActions = {
     });
   },
 
-  escalate(e: Escalation) {
-    classesStore.set((s) => ({ ...s, escalations: [e, ...s.escalations] }));
-  },
-
   route(patientId: string, to: string, by: string, at: string) {
     classesStore.set((s) => ({ ...s, routed: { ...s.routed, [patientId]: { to, by, at } } }));
   },
 
-  observe(o: Observation) {
-    classesStore.set((s) => ({ ...s, observations: [o, ...s.observations] }));
+  addNote(n: ProgressNote) {
+    classesStore.set((s) => ({ ...s, notes: [n, ...s.notes] }));
   },
 
   updatePlan(classId: string, plan: SessionPlan) {
@@ -96,5 +85,9 @@ export const classActions = {
 
   offer(classId: string, patientId: string, by: string, at: string) {
     classesStore.set((s) => ({ ...s, offers: { ...s.offers, [key(classId, patientId)]: { by, at } } }));
+  },
+
+  log(c: LoggedClass) {
+    classesStore.set((s) => ({ ...s, created: [...s.created, c] }));
   },
 };

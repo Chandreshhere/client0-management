@@ -6,6 +6,7 @@ import { Bell, ChatCircleDots, CheckCircle, FloppyDisk, ShieldCheck, Translate, 
 import { cn } from "@/lib/cn";
 import { spring } from "@/lib/motion";
 import { formatTime, pluralize } from "@/lib/format";
+import { AddOnBadge } from "@/components/shell/plan-switcher";
 import { Button } from "@/components/ui/button";
 import { Dialog, ModalContent } from "@/components/ui/dialog";
 import { Field, Input, Select, Switch } from "@/components/ui/input";
@@ -130,19 +131,30 @@ export function PreferencesView() {
                         <span className="block text-sm text-ink">{t.label}</span>
                         <span className="block text-xs text-muted">{t.detail}</span>
                       </span>
-                      <ChipGroup<Channel>
-                        ariaLabel={`Channels for ${t.label.toLowerCase()}`}
-                        variant="dot"
-                        value={value}
-                        onChange={(v) => change((p) => ({ ...p, channels: { ...p.channels, [t.id]: v } }))}
-                        options={options.map((c) => ({ value: c, label: CHANNEL_LABEL[c] }))}
-                        className="shrink-0"
-                      />
+                      {options.length ? (
+                        <ChipGroup<Channel>
+                          ariaLabel={`Channels for ${t.label.toLowerCase()}`}
+                          variant="dot"
+                          value={value}
+                          onChange={(v) => change((p) => ({ ...p, channels: { ...p.channels, [t.id]: v } }))}
+                          options={options.map((c) => ({ value: c, label: CHANNEL_LABEL[c] }))}
+                          className="shrink-0"
+                        />
+                      ) : (
+                        <span className="shrink-0 text-xs text-muted">Sent by email — add one above</span>
+                      )}
                     </li>
                   );
                 })}
+                <li className="flex flex-col gap-3 border-t border-line py-4 md:flex-row md:items-center md:justify-between">
+                  <span className="min-w-0">
+                    <span className="block text-sm text-ink">WhatsApp and SMS</span>
+                    <span className="block text-xs text-muted">Reminders, form links and plan sharing by WhatsApp or SMS — your clinic hasn&apos;t added these</span>
+                  </span>
+                  <AddOnBadge addOn="messaging" className="self-start md:self-auto" />
+                </li>
               </ul>
-              <DemoNote className="px-2 pb-2">Results themselves are never sent by message — only a note that something is ready in your portal.</DemoNote>
+              <DemoNote className="px-2 pb-2">Results themselves are never sent by message — only a note that something is ready in the app.</DemoNote>
             </Panel>
           </Reveal>
 
@@ -195,13 +207,13 @@ export function PreferencesView() {
                   </AnimatePresence>
                 </ul>
               ) : (
-                <p className="rounded-inner bg-surface p-4 text-sm text-muted">Nobody else can see your care. Add a family member or friend to share appointments or your plan.</p>
+                <p className="rounded-inner bg-surface p-4 text-sm text-muted">Nobody else can see your care. Add a family member who helps — they act for you only in the parts you choose.</p>
               )}
               <div className="rounded-inner bg-surface p-4">
                 <p className="text-sm text-ink">What they can never do</p>
                 <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-xs text-ink-2 marker:text-faint">
                   <li>See anything you haven&apos;t ticked — consultation notes stay between you and your clinicians</li>
-                  <li>Message the clinic as you, or change your plan or bookings</li>
+                  <li>Change your consents, or who else can see your care</li>
                   <li>Keep access after the end date you chose</li>
                 </ul>
               </div>
@@ -240,30 +252,37 @@ export function PreferencesView() {
                   return (
                     <li key={id} className={cn("flex items-start gap-4 py-4", i > 0 && "border-t border-line")}>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm text-ink">{info.label}</span>
-                        <span className="block text-xs text-muted">{info.detail}</span>
+                        <span className="flex flex-wrap items-center gap-2 text-sm text-ink">
+                          {info.label}
+                          {info.addOn ? <AddOnBadge addOn={info.addOn} /> : null}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted">{info.detail}</span>
                         <span className="mt-1 block text-xs text-ink-2">
-                          {changed
-                            ? `${c.given ? "Given" : "Withdrawn"} just now · not saved yet`
-                            : c.at
-                              ? `${c.given ? "Given" : "Withdrawn"} ${longDate(c.at)} · ${info.source}`
-                              : c.given
-                                ? `${id === "abha" ? "Linked" : "Given"} · date not recorded`
-                                : "Not given"}
+                          {info.unavailable
+                            ? info.unavailable
+                            : changed
+                              ? `${c.given ? "Given" : "Withdrawn"} just now · not saved yet`
+                              : c.at
+                                ? `${c.given ? "Given" : "Withdrawn"} ${longDate(c.at)} · ${info.source}`
+                                : c.given
+                                  ? `${id === "abha" ? "On your record" : "Given"} · date not recorded`
+                                  : "Not given"}
                         </span>
                         {locked && info.locked ? <span className="mt-1 block text-[11px] text-muted">{info.locked}</span> : null}
-                        {id === "abha" ? <span className="mt-1 block text-[11px] text-muted">Linking and unlinking happens in your ABHA app.</span> : null}
+                        {id === "abha" ? <span className="mt-1 block text-[11px] text-muted">To add or change it, ask at reception.</span> : null}
                       </span>
-                      <Switch
-                        checked={c.given}
-                        disabled={locked}
-                        aria-label={info.label}
-                        onCheckedChange={(v) => {
-                          if (!v && info.withdrawWarning) setConfirm({ kind: "consent", id });
-                          else setConsent(id, v);
-                        }}
-                        className="mt-1"
-                      />
+                      {info.unavailable ? null : (
+                        <Switch
+                          checked={c.given}
+                          disabled={locked}
+                          aria-label={info.label}
+                          onCheckedChange={(v) => {
+                            if (!v && info.withdrawWarning) setConfirm({ kind: "consent", id });
+                            else setConsent(id, v);
+                          }}
+                          className="mt-1"
+                        />
+                      )}
                     </li>
                   );
                 })}

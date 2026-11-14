@@ -1,21 +1,20 @@
 "use client";
 
-import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { useId, useState } from "react";
-import { CaretDown, ChatCircleDots, CreditCard, DownloadSimple, Info, Receipt, Wallet } from "@phosphor-icons/react";
+import { CaretDown, DownloadSimple, Info, Receipt, Wallet } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { pop, spring } from "@/lib/motion";
 import { formatINR, formatTime, pluralize } from "@/lib/format";
 import { CLINIC } from "@/data/staff";
 import { INVOICE_STATUS_LABEL } from "@/data/records";
+import { AddOnBadge } from "@/components/shell/plan-switcher";
 import { Button } from "@/components/ui/button";
-import { Dialog, ModalContent } from "@/components/ui/dialog";
 import { EmptyState, ProgressRing } from "@/components/ui/misc";
 import { StatusBadge, invoiceTone } from "@/components/ui/status";
 import { Tip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
-import { DemoNote, FocalCard, Panel, PortalHeader, Reveal, downloadFile } from "../ui";
+import { FocalCard, MessageButton, Panel, PortalHeader, Reveal, downloadFile } from "../ui";
 import { usePortalStore } from "../store";
 import { apptStore } from "../appointments/store";
 import { dayLabel, daysFromToday, longDate, shortDate } from "../time";
@@ -24,11 +23,12 @@ import { BALANCE_DUE, BOOKED_SESSIONS, CELLS, CLASS_DAY_NAMES, COVERS_UNTIL, FRE
 
 /**
  * /portal/billing — the patient's invoices, package balance and what will be charged next.
- * Online payment isn't connected in the demo, and the page says so instead of faking success.
+ * Bills are paid at reception and show as paid only once reception records the payment. Paying
+ * online (and confirmed UPI) is the payment-gateway add-on, so it appears as an add-on — never as
+ * a working button.
  */
 export function BillingView() {
   const appts = usePortalStore(apptStore);
-  const [payOpen, setPayOpen] = useState(false);
   const charges = upcomingCharges(appts.requests);
   const nextCharge = charges.find((c) => c.confirmed);
   const left = PACKAGE ? PACKAGE.total - PACKAGE.used : 0;
@@ -38,14 +38,7 @@ export function BillingView() {
       <PortalHeader
         title="Billing"
         description={`${BALANCE_DUE ? `${formatINR(BALANCE_DUE)} to pay` : "Nothing to pay right now"}${PACKAGE ? ` · ${left} of ${PACKAGE.total} sessions left · package expires ${longDate(`${PACKAGE.expires}T12:00:00+05:30`)}` : ""}.`}
-        actions={
-          <Button asChild variant="secondary">
-            <Link href="/messages?new=1">
-              <ChatCircleDots />
-              Ask about a bill
-            </Link>
-          </Button>
-        }
+        actions={<MessageButton>Ask about a bill</MessageButton>}
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
@@ -59,15 +52,15 @@ export function BillingView() {
             <div>
               <p className="text-[32px] font-light leading-none tracking-[-0.02em] text-ink tabular">{formatINR(BALANCE_DUE)}</p>
               <p className="mt-2 text-xs text-muted">
-                {BALANCE_DUE ? "Pay at reception or ask the front desk for a payment link." : MY_INVOICES.length === 1 ? "Your invoice is settled." : `All ${MY_INVOICES.length} invoices are settled.`}
+                {BALANCE_DUE ? "Pay at reception by UPI, card or cash." : MY_INVOICES.length === 1 ? "Your invoice is settled." : `All ${MY_INVOICES.length} invoices are settled.`}
                 {nextCharge ? ` Next: ${formatINR(nextCharge.amount)} after your ${nextCharge.label.toLowerCase()} ${dayLabel(nextCharge.at).toLowerCase()}.` : ""}
               </p>
             </div>
-            {/* Quiet on purpose: there's nothing to pay online here (no gateway in the demo). It used to be a
-                dark primary in the header, which contradicted a ₹0 balance; it now only explains. */}
-            <Button variant="secondary" size="sm" className="self-start text-muted" leading={<CreditCard />} onClick={() => setPayOpen(true)}>
-              Online payment · not available
-            </Button>
+            {/* Paying online is the payment-gateway add-on: named as an add-on, never a working button. */}
+            <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
+              Pay online <AddOnBadge addOn="payments" />
+              <span>Not set up by your clinic</span>
+            </p>
           </section>
 
           <Panel icon={<Receipt />} title="Coming up" subtitle={charges.length ? `${pluralize(charges.length, "visit")} with a charge` : "Nothing scheduled to be charged"}>
@@ -118,50 +111,22 @@ export function BillingView() {
             </h2>
             <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-ink-2 marker:text-faint">
               <li>At reception after your visit — UPI, card or cash.</li>
+              <li>A bill shows as paid only once reception has recorded your payment.</li>
               <li>Invoices are issued by {CLINIC.legal}.</li>
               <li>Package sessions are taken when you attend, not when you book. Cancelling with 24 hours&apos; notice keeps the session.</li>
             </ul>
           </div>
           <div className="flex flex-col gap-3 rounded-card bg-surface p-6">
-            <h2 className="text-lg font-normal tracking-[-0.01em] text-ink">Saved payment methods</h2>
-            <p className="text-sm text-muted">None. Online payment isn&apos;t connected in this demo, so no card or UPI ID is stored.</p>
-            <Button variant="secondary" className="self-start" onClick={() => setPayOpen(true)}>
-              Why can&apos;t I pay online?
-            </Button>
+            <h2 className="flex flex-wrap items-center gap-2 text-lg font-normal tracking-[-0.01em] text-ink">
+              Paying online
+              <AddOnBadge addOn="payments" />
+            </h2>
+            <p className="text-sm text-muted">
+              Online payment and confirmed UPI come with the clinic&apos;s payment-gateway add-on, which your clinic hasn&apos;t set up. Nothing can be paid here, and no card or UPI ID is stored.
+            </p>
           </div>
         </section>
       </Reveal>
-
-      <Dialog open={payOpen} onOpenChange={setPayOpen}>
-        <ModalContent
-          size="sm"
-          title="Online payment isn't connected"
-          description="This demo has no payment gateway, so nothing can be charged or saved here."
-          footer={
-            <>
-              <Button asChild variant="ghost">
-                <Link href="/messages?new=1">Message the front desk</Link>
-              </Button>
-              <Button variant="dark" onClick={() => setPayOpen(false)}>
-                Got it
-              </Button>
-            </>
-          }
-        >
-          <div className="flex flex-col gap-4">
-            <div className="rounded-inner bg-sunken p-4">
-              <p className="text-xs text-muted">Balance today</p>
-              <p className="mt-1 text-title font-light text-ink tabular">{formatINR(BALANCE_DUE)}</p>
-              {nextCharge ? (
-                <p className="mt-2 text-sm text-ink-2">
-                  After your {nextCharge.label.toLowerCase()} ({dayLabel(nextCharge.at).toLowerCase()}, {formatTime(nextCharge.at)}) you&apos;ll get an invoice for {formatINR(nextCharge.amount)}.
-                </p>
-              ) : null}
-            </div>
-            <DemoNote>Pay at reception by UPI, card or cash. A real portal would hand you to a payment provider and only mark a bill paid once the provider confirms it.</DemoNote>
-          </div>
-        </ModalContent>
-      </Dialog>
     </div>
   );
 }
@@ -341,9 +306,9 @@ function InvoicesSection() {
                           <Info size={16} className="shrink-0" aria-hidden="true" />
                           {inv.method === "Package credit"
                             ? "Settled from your package — no money changed hands."
-                            : inv.payments?.length
-                              ? `${inv.payments.filter((p) => p.confirmed).length} confirmed payment(s).`
-                              : "No payment recorded yet."}
+                            : inv.paid > 0
+                              ? `${formatINR(inv.paid)} recorded by reception${inv.method ? ` · ${inv.method}` : ""}${inv.paid < inv.total ? ` · ${formatINR(inv.total - inv.paid)} still to pay` : ""}.`
+                              : "No payment recorded yet — it shows as paid once reception records it."}
                         </p>
                         <Button
                           size="sm"
@@ -352,10 +317,11 @@ function InvoicesSection() {
                           leading={<DownloadSimple />}
                           onClick={() => {
                             const ok = downloadFile(`${inv.number}.txt`, receiptText(inv), "text/plain");
-                            toast(ok ? { title: "Receipt created", description: "Made in your browser — nothing was sent." } : { tone: "warning", title: "Couldn't create the receipt" });
+                            const what = inv.paid >= inv.total ? "Receipt" : "Invoice";
+                            toast(ok ? { title: `${what} created`, description: "Made in your browser — nothing was sent." } : { tone: "warning", title: `Couldn't create the ${what.toLowerCase()}` });
                           }}
                         >
-                          Download receipt
+                          {inv.paid >= inv.total ? "Download receipt" : "Download invoice"}
                         </Button>
                       </div>
                     </motion.div>

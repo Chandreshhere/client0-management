@@ -73,3 +73,14 @@ export function waitMatch(entry: WaitEntry, occupants: Occupant[], classSeats: R
 }
 
 export const offerable = (m: WaitMatch) => (m.kind === "slots" && m.count > 0) || (m.kind === "class" && m.free > 0);
+
+/**
+ * The request as a role may read it: practitioners see the desk's free text; Reception and Admin
+ * see the service it maps to (or the class), never a condition typed into the request.
+ */
+export const wantText = (w: WaitEntry, clinical: boolean) => {
+  if (clinical) return w.want;
+  const cls = w.classId ? CLASSES.find((c) => c.id === w.classId) : undefined;
+  if (cls) return `${cls.title} (class full)`;
+  return serviceById(w.serviceId)?.label ?? w.want;
+};

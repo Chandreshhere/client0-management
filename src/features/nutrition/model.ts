@@ -39,6 +39,8 @@ export interface PlanRecord extends NutritionPlanSummary {
   /** set when a reusable template was applied: every slot needs individual review before publishing */
   templateReview: Partial<Record<SlotId, boolean>> | null;
   createdLocally?: boolean;
+  /** Pro only: the version released to the patient app (release is separate from publishing) */
+  released?: { version: number; by: string; at: string } | null;
 }
 
 export const PLAN_TONE: Record<PlanStatus, Tone> = { draft: "draft", "in-review": "warning", published: "success", superseded: "neutral" };
@@ -120,7 +122,9 @@ export function buildInitialPlans(): Record<string, PlanRecord> {
   for (const p of NUTRITION_PLANS) {
     const src = PLAN_SOURCE[p.id];
     const slots = src ? slotsFromTemplate(src.template, p.id, src.notes) : emptySlots();
-    out[p.id] = { ...p, slots, baseline: slots, history: PLAN_HISTORY[p.id] ?? [], ack: null, templateReview: null };
+    // Published fixtures were released to the patient app when published (only shown on Pro).
+    const released = p.status === "published" ? { version: p.version, by: p.authorId, at: p.updatedAt } : null;
+    out[p.id] = { ...p, slots, baseline: slots, history: PLAN_HISTORY[p.id] ?? [], ack: null, templateReview: null, released };
   }
   return out;
 }

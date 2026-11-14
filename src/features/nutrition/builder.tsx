@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { LayoutGroup, motion } from "motion/react";
-import { ArrowCounterClockwise, ArrowLeft, CaretDown, Check, CheckCircle, CircleNotch, Eye, LockSimple, PaperPlaneTilt, Stack, Warning } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, ArrowLeft, CaretDown, Check, CheckCircle, CircleNotch, DeviceMobile, Eye, LockSimple, PaperPlaneTilt, Stack, Warning } from "@phosphor-icons/react";
 import { PLAN_STATUS_LABEL } from "@/data/programs";
 import { patientById } from "@/data/patients";
 import { DEMO_USER, staffById } from "@/data/staff";
@@ -23,24 +23,29 @@ import { StatusBadge } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { useRole } from "@/components/shell/role-context";
 import { SectionLabel } from "@/components/viz/cards";
-import { GUIDANCE, ROUTINES, SLOTS, SLOT_LABEL, TEMPLATES, type FoodLog, type SlotId, type TemplateDef } from "./data";
+import { GUIDANCE, ROUTINES, SLOTS, SLOT_LABEL, TEMPLATES, type FollowUpEntry, type FoodLog, type SlotId, type TemplateDef } from "./data";
 import { PLAN_TONE, altFromFood, diffSlots, followedVersion, itemFromFood, kcal, newId, nowIso, totals, type PlanItem, type PlanRecord } from "./model";
 import { planActions, useNutrition } from "./store";
 import { FoodPicker, type PickerTarget } from "./food-picker";
 import { MealSlot } from "./meal-slot";
 import { GuidanceCard, RoutinePanel, VersionHistory } from "./builder-rail";
-import { LogsTile, MacroTiles, PlanOrganCard } from "./viz";
+import { LogsTile, MacroTiles } from "./viz";
+import { FollowUpCard } from "./adherence-form";
+import { PlanPdfButton } from "./plan-pdf";
+import { FlagToDoctorModal } from "@/features/tasks/flag-modal";
 
 /**
- * /nutrition/builder — structured meal-plan builder (doc §2C): meal slots with household portions,
- * reviewed alternatives, routine-aware timings, doctor-guidance acknowledgement, live totals,
- * version history and the Draft → In review → Published flow. Everything stays in this session.
+ * /nutrition/builder — the plan builder (spec F6): meal slots with alternatives, the doctor's
+ * guidance alongside (acknowledged before publishing), live totals, follow-up entries, versions
+ * with a reason for each change, the Plan PDF, and — on Pro only — release to the patient app as a
+ * separate step. Food logs (self-report) appear on Pro only. Everything stays in this session.
  */
 export function MealPlanBuilder({ planId }: { planId: string }) {
   const state = useNutrition();
   const plan = state.plans[planId];
   const plans = useMemo(() => state.order.map((id) => state.plans[id]).filter(Boolean), [state.order, state.plans]);
   const logs = useMemo(() => Object.values(state.logs), [state.logs]);
+  const followUps = state.followUps;
   if (!plan) {
     return (
       <EmptyState
@@ -52,12 +57,12 @@ export function MealPlanBuilder({ planId }: { planId: string }) {
       />
     );
   }
-  return <Builder key={plan.id} plan={plan} plans={plans} logs={logs} />;
+  return <Builder key={plan.id} plan={plan} plans={plans} logs={logs} followUps={followUps} />;
 }
 
 type SaveState = "idle" | "saving" | "saved";
 
-function Builder({ plan, plans, logs }: { plan: PlanRecord; plans: PlanRecord[]; logs: FoodLog[] }) {
+function Builder({ plan, plans, logs, followUps }: { plan: PlanRecord; plans: PlanRecord[]; logs: FoodLog[]; followUps: FollowUpEntry[] }) {
   const router = useRouter();
   const { toast } = useToast();
   const { role, user, has } = useRole();
@@ -75,6 +80,9 @@ function Builder({ plan, plans, logs }: { plan: PlanRecord; plans: PlanRecord[];
   const [autoEditId, setAutoEditId] = useState<string | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [templateAsk, setTemplateAsk] = useState<TemplateDef | null>(null);
+  const [flagOpen, setFlagOpen] = useState(false);
+  const canRelease = has("release");
+  const released = canRelease && plan.released?.version === plan.version;
   const [save, setSave] = useState<SaveState>("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -173,15 +181,37 @@ function Builder({ plan, plans, logs }: { plan: PlanRecord; plans: PlanRecord[];
       </Button>
     </>
   ) : (
-    <Button
-      variant="dark"
-      onClick={() => {
-        planActions.newVersion(plan.id, user.id, nowIso());
-        toast({ title: `v${plan.version + 1} draft started`, description: follows ? `${first} keeps following v${follows} until you publish.` : "Saved in this browser session." });
-      }}
-    >
-      Start v{plan.version + 1}
-    </Button>
+    <>
+      {plan.status === "published" && canRelease ? (
+        released ? (
+          <StatusBadge tone="success" dot={false}>
+            <DeviceMobile size={14} aria-hidden="true" /> v{plan.version} in the patient app
+          </StatusBadge>
+        ) : (
+          <Button
+            variant="primary"
+            leading={<DeviceMobile />}
+            onClick={() => {
+              planActions.release(plan.id, user.id, nowIso());
+              toast({ title: `v${plan.version} released to ${first}'s app`, description: "Recorded in this browser session — nothing was sent in this prototype.", tone: "success" });
+            }}
+          >
+            Release to patient app
+          </Button>
+        )
+      ) : plan.status === "published" ? (
+        <span className="text-xs text-muted">Give {first} the Plan PDF</span>
+      ) : null}
+      <Button
+        variant="secondary"
+        onClick={() => {
+          planActions.newVersion(plan.id, user.id, nowIso());
+          toast({ title: `v${plan.version + 1} draft started`, description: follows ? `${first} keeps following v${follows} until you publish v${plan.version + 1} with a reason for the change.` : "Saved in this browser session." });
+        }}
+      >
+        Start v{plan.version + 1}
+      </Button>
+    </>
   );
 
   return (
@@ -195,8 +225,9 @@ function Builder({ plan, plans, logs }: { plan: PlanRecord; plans: PlanRecord[];
           </IconButton>
           <PatientSwitcher plan={plan} plans={plans} onSwitch={(id) => router.push(`/nutrition/builder?plan=${id}`)} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <SaveIndicator state={save} canEdit={canEdit} />
+          <PlanPdfButton plan={plan} />
           <Dropdown>
             <DropdownTrigger asChild>
               <Button variant="secondary" leading={<Stack />} trailing={<CaretDown size={14} />} disabled={!canEdit}>
@@ -306,13 +337,11 @@ function Builder({ plan, plans, logs }: { plan: PlanRecord; plans: PlanRecord[];
           aria-label="Plan context"
           className="flex min-w-0 flex-col gap-4 @[1040px]:sticky @[1040px]:top-20 @[1040px]:max-h-[calc(100dvh-96px)] @[1040px]:self-start @[1040px]:overflow-y-auto scrollbar-thin"
         >
-          <PlanOrganCard patientId={plan.patientId} header={<p className="mb-2 text-sm text-ink">What this plan addresses</p>} />
-          <LogsTile logs={logs} patientId={plan.patientId} />
-          {patient ? <RoutinePanel patient={patient} routine={routine} /> : null}
           <GuidanceCard
             guidance={guidance}
             plan={plan}
             editable={canEdit}
+            onFlag={isNutritionist ? () => setFlagOpen(true) : undefined}
             onAck={(checked) => {
               if (!guidance) return;
               if (checked) planActions.acknowledge(plan.id, guidance.version, user.id, nowIso());
@@ -320,7 +349,10 @@ function Builder({ plan, plans, logs }: { plan: PlanRecord; plans: PlanRecord[];
               touch();
             }}
           />
-          <VersionHistory plan={plan} sessionChanges={sessionChanges} />
+          <FollowUpCard patientId={plan.patientId} entries={followUps} canWrite={isNutritionist} />
+          {has("self-report") ? <LogsTile logs={logs} patientId={plan.patientId} /> : null}
+          <VersionHistory plan={plan} sessionChanges={sessionChanges} showRelease={canRelease} />
+          {patient ? <RoutinePanel patient={patient} routine={routine} /> : null}
         </aside>
       </div>
 
@@ -384,16 +416,25 @@ function Builder({ plan, plans, logs }: { plan: PlanRecord; plans: PlanRecord[];
         follows={follows}
         changes={[...(currentEntry?.changes ?? []), ...sessionChanges]}
         defaultWhy={currentEntry?.why ?? ""}
-        hasPortal={has("portal")}
+        hasRelease={canRelease}
         onPublish={(why) => {
           planActions.publish(plan.id, user.id, nowIso(), why, [...(currentEntry?.changes ?? []), ...sessionChanges]);
           setPublishOpen(false);
           toast({
-            title: "Published in this demo session",
-            description: `${first} now follows v${plan.version}. Nothing was sent to the patient — this prototype has no backend.`,
+            title: `v${plan.version} published`,
+            description: canRelease
+              ? `It's the current version. ${first} sees it once you release it to the patient app — a separate step. Saved in this browser session.`
+              : `It's the current version — give ${first} the Plan PDF (print or save it). Saved in this browser session.`,
             tone: "success",
           });
         }}
+      />
+      <FlagToDoctorModal
+        open={flagOpen}
+        onOpenChange={setFlagOpen}
+        patients={[{ id: plan.patientId, hint: `${plan.title} · v${plan.version}` }]}
+        context={`Nutrition plan v${plan.version}`}
+        placeholder="e.g. Fasting sugars rising on the new dinner timing — does the metformin dose need a review?"
       />
     </div>
   );
@@ -531,7 +572,7 @@ function PublishDialog({
   follows,
   changes,
   defaultWhy,
-  hasPortal,
+  hasRelease,
   onPublish,
 }: {
   open: boolean;
@@ -542,12 +583,12 @@ function PublishDialog({
   follows: number | null;
   changes: string[];
   defaultWhy: string;
-  hasPortal: boolean;
+  hasRelease: boolean;
   onPublish: (why: string) => void;
 }) {
   const [why, setWhy] = useState(defaultWhy);
   const [tried, setTried] = useState(false);
-  const error = tried && !why.trim() ? "Say why this version changed — it is shown in the version history." : null;
+  const error = tried && !why.trim() ? (plan.version > 1 ? "Give the reason for the change — it's kept with this version." : "Say what this plan is for — it's kept with this version.") : null;
   return (
     <Dialog
       open={open}
@@ -561,7 +602,7 @@ function PublishDialog({
     >
       <ModalContent
         title={`Publish v${plan.version} for ${patientName}?`}
-        description={follows ? `v${follows} becomes superseded and ${first} follows v${plan.version} from today.` : `This becomes the first version ${first} can see.`}
+        description={follows ? `v${follows} is superseded and v${plan.version} becomes the current plan. Only one version is current.` : `This becomes ${first}'s first current plan.`}
         footer={
           <>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -580,7 +621,7 @@ function PublishDialog({
         }
       >
         <div className="flex flex-col gap-4">
-          <Field label="Why this version" error={error}>
+          <Field label={plan.version > 1 ? `Reason for the change from v${plan.version - 1}` : "Reason for this plan"} error={error}>
             {(a) => <Textarea {...a} value={why} onChange={(e) => setWhy(e.target.value)} rows={3} />}
           </Field>
           <div>
@@ -598,11 +639,11 @@ function PublishDialog({
               <p className="mt-2 text-sm text-muted">No item changes recorded for this version.</p>
             )}
           </div>
-          <p className="flex items-start gap-2 rounded-inner bg-warning-soft p-4 text-xs text-warning">
-            <Warning size={16} className="mt-px shrink-0" aria-hidden="true" />
-            {hasPortal
-              ? "In a live system the patient app would show this version. In this prototype nothing is sent — publishing is recorded in this browser session only."
-              : "The patient portal is a Clinic-plan feature, so share the printed plan in clinic. In this prototype nothing is sent — publishing is recorded in this browser session only."}
+          <p className="flex items-start gap-2 rounded-inner bg-canvas p-4 text-xs text-ink-2">
+            <Warning size={16} className="mt-px shrink-0 text-muted" aria-hidden="true" />
+            {hasRelease
+              ? "Publishing doesn't show it to the patient — release it to the patient app as a separate step. Nothing is sent in this prototype."
+              : "Give the patient the Plan PDF after publishing (print it or save it). Nothing is sent in this prototype."}
           </p>
         </div>
       </ModalContent>

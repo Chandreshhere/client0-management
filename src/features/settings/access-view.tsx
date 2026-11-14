@@ -15,17 +15,19 @@ import { Segmented } from "@/components/ui/segmented";
 import { StatusBadge } from "@/components/ui/status";
 import { Tip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
-import { useRole } from "@/components/shell/role-context";
+import { usePlan, useRole } from "@/components/shell/role-context";
+import { planById } from "@/data/plans";
 import { ROLE_LABEL, ReadOnlyBanner, TableCard } from "./ui";
-import { ACCESS_REVIEWS, LEVEL_LABEL, MATRIX_ROLES, PERMISSIONS, PERMISSION_GROUPS, type Grant, type Level } from "./permissions";
+import { LEVEL_LABEL, MATRIX_ROLES, PERMISSION_GROUPS, accessReviewsFor, permissionsForPlan, type Grant, type Level } from "./permissions";
 import { daysAgo } from "./time";
 import { useAuditEvents } from "./audit";
 import { decideReview, undoReview, useSettingsState } from "./store";
 
 /**
- * Settings → Access (doc §2A, §7): the role × permission matrix (read-only, deny by default),
- * and the access review — who can see which patients, with flagged items to confirm or revoke.
- * Decisions are recorded locally and in the audit log; no real permission changes.
+ * Settings → Access (every plan — compliance is never an upsell): the role × permission matrix for
+ * the plan's roles (read-only, deny by default), and the access review — who can see which
+ * patients, with flagged items to confirm or revoke. Decisions are recorded locally and in the
+ * activity log; no real permission changes.
  */
 
 function Glyph({ level, locked }: { level: Level; locked?: boolean }) {
@@ -62,14 +64,19 @@ const ROLE_COUNT = (r: Role) => (r === "patient" ? PATIENTS.length : STAFF.filte
 
 export function AccessView() {
   const { role, user } = useRole();
+  const { plan, has } = usePlan();
   const { toast } = useToast();
   const audit = useAuditEvents();
   const state = useSettingsState();
   const [filter, setFilter] = useState<"review" | "all">("review");
   const isAdmin = role === "admin";
+  const planRoles = planById(plan).roles;
+  const MATRIX = useMemo(() => MATRIX_ROLES.filter((r) => planRoles.includes(r)), [planRoles]);
+  const PERMISSIONS = useMemo(() => permissionsForPlan(has), [has]);
+  const ACCESS_REVIEWS = useMemo(() => accessReviewsFor(has, planRoles), [has, planRoles]);
 
-  const cells = PERMISSIONS.length * MATRIX_ROLES.length;
-  const refused = PERMISSIONS.reduce((s, p) => s + MATRIX_ROLES.filter((r) => p.grants[r].level === "none").length, 0);
+  const cells = PERMISSIONS.length * MATRIX.length;
+  const refused = PERMISSIONS.reduce((s, p) => s + MATRIX.filter((r) => p.grants[r].level === "none").length, 0);
   const clinicalRows = PERMISSIONS.filter((p) => p.clinical);
   const adminContent = clinicalRows.filter((p) => p.grants.admin.level === "full" || p.grants.admin.level === "scoped").length;
   const adminRouting = clinicalRows.filter((p) => p.grants.admin.level === "meta").length;
@@ -80,7 +87,7 @@ export function AccessView() {
       ACCESS_REVIEWS.map((r) => ({ r, s: staffById(r.staffId)!, decision: state.reviews[r.id] ?? null }))
         .filter((x) => !!x.s)
         .sort((a, b) => Number(!!b.r.flag && !b.decision) - Number(!!a.r.flag && !a.decision) || b.r.patientCount - a.r.patientCount),
-    [state.reviews],
+    [state.reviews, ACCESS_REVIEWS],
   );
   const open = reviews.filter((x) => x.r.flag && !x.decision);
   const shown = filter === "review" ? reviews.filter((x) => x.r.flag) : reviews;
@@ -114,7 +121,7 @@ export function AccessView() {
           </span>
           <div>
             <h2 className="text-sm text-ink">Admins can&apos;t grant themselves clinical access</h2>
-            <p className="mt-1 text-sm text-muted">Administration never includes clinical content. The clinical lead approves clinical access — never for themselves.</p>
+            <p className="mt-1 text-sm text-muted">Administration never includes clinical content. A doctor can grant access to one patient for a limited time; it expires and is logged.</p>
           </div>
           <p className="mt-auto text-xs text-muted">
             <span className="text-[22px] font-light text-ink tabular">{adminContent}</span> of {clinicalRows.length} clinical sections open to administrators · {adminRouting} routing-only
@@ -126,7 +133,7 @@ export function AccessView() {
           </span>
           <div>
             <h2 className="text-sm text-ink">Every change is logged</h2>
-            <p className="mt-1 text-sm text-muted">Grants, cover, record opens and exports go to the audit log. Entries can&apos;t be edited or deleted.</p>
+            <p className="mt-1 text-sm text-muted">Grants, cover, record opens, merges and exports go to the activity log. Entries can&apos;t be edited or deleted.</p>
           </div>
           <p className="mt-auto flex items-baseline justify-between gap-2 text-xs text-muted">
             <span>
@@ -134,7 +141,7 @@ export function AccessView() {
             </span>
             {isAdmin ? (
               <Link href="/settings/audit" className="inline-flex items-center gap-1 text-ink underline-offset-2 hover:underline">
-                Audit log <ArrowUpRight size={12} aria-hidden="true" />
+                Activity log <ArrowUpRight size={12} aria-hidden="true" />
               </Link>
             ) : null}
           </p>
@@ -162,14 +169,14 @@ export function AccessView() {
             </li>
           </ul>
         </div>
-        {/* Fits a 944px card (1280px window with the sidebar open); narrower than that it scrolls sideways. */}
+        {/* Fits a 944px card (1280px window with the sidebar open); narrower than that it scrolls sideways. Fewer roles below Pro need less. */}
         <div className="@container">
-          <TableCard minWidth={944}>
+          <TableCard minWidth={MATRIX.length >= 7 ? 944 : 192 + MATRIX.length * 128}>
             <table className="w-full table-fixed text-sm">
               <caption className="sr-only">Permissions by role</caption>
               <colgroup>
                 <col className="w-[192px] @[1040px]:w-[224px]" />
-                {MATRIX_ROLES.map((r) => (
+                {MATRIX.map((r) => (
                   <col key={r} />
                 ))}
               </colgroup>
@@ -178,7 +185,7 @@ export function AccessView() {
                   <th scope="col" className="sticky left-0 z-[1] bg-surface py-4 pl-6 pr-3 text-xs font-normal text-muted">
                     Permission
                   </th>
-                  {MATRIX_ROLES.map((r) => (
+                  {MATRIX.map((r) => (
                     <th key={r} scope="col" className={cn("px-2 py-4 font-normal", r === role && "bg-sunken/70")}>
                       <span className="block text-sm text-ink">{ROLE_LABEL(r)}</span>
                       <span className="block text-xs text-muted">
@@ -193,7 +200,7 @@ export function AccessView() {
                 {PERMISSION_GROUPS.map((g) => (
                   <Fragment key={g}>
                     <tr className="border-t border-line bg-canvas/60">
-                      <th scope="colgroup" colSpan={MATRIX_ROLES.length + 1} className="sticky left-0 py-2 pl-6 text-left text-xs font-normal text-muted">
+                      <th scope="colgroup" colSpan={MATRIX.length + 1} className="sticky left-0 py-2 pl-6 text-left text-xs font-normal text-muted">
                         {g}
                         {g === "Patient record" ? " · clinical content marked" : ""}
                       </th>
@@ -208,7 +215,7 @@ export function AccessView() {
                           </span>
                           <span className="mt-0.5 block text-xs text-muted">{p.description}</span>
                         </th>
-                        {MATRIX_ROLES.map((r) => (
+                        {MATRIX.map((r) => (
                           <td key={r} className={cn("px-2 py-3", r === role && "bg-sunken/70")}>
                             <Cell grant={p.grants[r]} />
                           </td>
@@ -289,7 +296,7 @@ export function AccessView() {
                         leading={<CheckCircle />}
                         onClick={() => {
                           decideReview(r.id, "confirmed", user.id, "Confirmed", s.name);
-                          toast({ tone: "success", title: `Access confirmed for ${s.name}`, description: "Recorded in this browser session and the audit log.", action: { label: "Undo", onClick: () => undoReview(r.id, user.id, s.name) } });
+                          toast({ tone: "success", title: `Access confirmed for ${s.name}`, description: "Recorded in this browser session and the activity log.", action: { label: "Undo", onClick: () => undoReview(r.id, user.id, s.name) } });
                         }}
                       >
                         Confirm
@@ -329,7 +336,7 @@ export function AccessView() {
                           leading={<ShieldCheck />}
                           onClick={() => {
                             decideReview(r.id, "confirmed", user.id, "Kept as is", s.name);
-                            toast({ title: `Kept ${s.name}'s access as it is`, description: "Recorded in this browser session and the audit log.", action: { label: "Undo", onClick: () => undoReview(r.id, user.id, s.name) } });
+                            toast({ title: `Kept ${s.name}'s access as it is`, description: "Recorded in this browser session and the activity log.", action: { label: "Undo", onClick: () => undoReview(r.id, user.id, s.name) } });
                           }}
                         >
                           Keep as is
@@ -346,7 +353,7 @@ export function AccessView() {
             );
           })}
         </ul>
-        <p className="text-xs text-muted">Patient counts come from care teams and branch registrations in the shared registry. Decisions are saved in this browser session and written to the audit log.</p>
+        <p className="text-xs text-muted">Patient counts come from care teams{has("branches") ? " and branch registrations" : ""} in the shared registry. Decisions are saved in this browser session and written to the activity log.</p>
       </section>
     </div>
   );

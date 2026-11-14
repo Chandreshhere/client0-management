@@ -1,92 +1,86 @@
 import { useMemo } from "react";
-import type { Referral, ReferralStage } from "@/data/types";
-import { REFERRALS } from "@/data/care";
+import type { Discipline, Referral } from "@/data/types";
+import { ASSIGNMENT_RETURN_HOURS, REFERRALS } from "@/data/care";
 import { createSessionStore, localId, useSessionStore } from "@/features/tasks/session-store";
 import { NOW_ISO } from "@/features/tasks/time";
-import { REFERRAL_EXTRAS, type ReferralNote } from "./data";
+import { ASSIGNMENT_EXTRAS } from "./data";
 
-/** Referrals = shared fixtures + extras + changes made in this browser session. */
+/**
+ * Assignments (spec F5) = the shared REFERRALS fixtures + changes made in this browser session.
+ * Two states only: assigned → seen. "Seen" is stored as the fixture's stage moving past
+ * "requested" (see `assignmentState` in src/data/care.ts), so every screen reads it the same way.
+ */
 export interface CareReferral extends Referral {
-  bookedFor?: string;
-  room?: string;
-  actors: Partial<Record<ReferralStage, string>>;
-  notes: ReferralNote[];
-  linkedTaskId?: string;
+  goals: string;
+  /** nutrition guidance or yoga precautions */
+  guidance: string;
+  seenAt?: string;
+  seenBy?: string;
+  remindedAt?: string;
+  /** set when the doctor or a coordinator moved it to someone else */
+  reassigned?: { fromId: string; at: string; by: string };
   local?: boolean;
 }
 
-interface ReferralState {
+interface AssignmentState {
   created: CareReferral[];
   patches: Record<string, Partial<CareReferral>>;
-  notes: Record<string, ReferralNote[]>;
 }
 
-const SEED: ReferralState = { created: [], patches: {}, notes: {} };
-export const referralStore = createSessionStore<ReferralState>("carelane.care.referrals.v1", SEED);
+const SEED: AssignmentState = { created: [], patches: {} };
+export const referralStore = createSessionStore<AssignmentState>("carelane.care.assignments.v2", SEED);
 
 const BASE: CareReferral[] = REFERRALS.map((r) => {
-  const x = REFERRAL_EXTRAS[r.id];
-  return { ...r, bookedFor: x?.bookedFor, room: x?.room, actors: x?.actors ?? { requested: r.fromId }, notes: x?.notes ?? [], linkedTaskId: x?.linkedTaskId };
+  const x = ASSIGNMENT_EXTRAS[r.id];
+  const seen = r.stage !== "requested";
+  return {
+    ...r,
+    goals: x?.goals ?? r.reason,
+    guidance: x?.guidance ?? "",
+    seenAt: seen ? (r.stageDates.accepted ?? r.stageDates[r.stage]) : undefined,
+    seenBy: seen ? (x?.seenBy ?? r.toId) : undefined,
+  };
 });
 
 export function useReferrals(): CareReferral[] {
   const s = useSessionStore(referralStore);
-  return useMemo(
-    () =>
-      [...s.created, ...BASE].map((r) => {
-        const p = s.patches[r.id];
-        const extra = s.notes[r.id] ?? [];
-        const merged = p ? { ...r, ...p, stageDates: { ...r.stageDates, ...p.stageDates }, actors: { ...r.actors, ...p.actors } } : r;
-        return extra.length ? { ...merged, notes: [...merged.notes, ...extra] } : merged;
-      }),
-    [s],
-  );
+  return useMemo(() => [...s.created, ...BASE].map((r) => (s.patches[r.id] ? { ...r, ...s.patches[r.id], stageDates: { ...r.stageDates, ...s.patches[r.id].stageDates } } : r)), [s]);
 }
 
-const note = (actorId: string, text: string): ReferralNote => ({ id: localId("rn"), at: NOW_ISO, actorId, text });
+const patch = (id: string, p: Partial<CareReferral>) => referralStore.update((s) => ({ ...s, patches: { ...s.patches, [id]: { ...s.patches[id], ...p } } }));
 
-/** Move a referral to `stage`, stamping who and when (plus optional booking details). */
-export function advanceReferral(r: CareReferral, stage: ReferralStage, actorId: string, extra?: { bookedFor?: string; room?: string; text?: string }) {
-  referralStore.update((s) => {
-    const prev = s.patches[r.id] ?? {};
-    return {
-      ...s,
-      patches: {
-        ...s.patches,
-        [r.id]: {
-          ...prev,
-          stage,
-          stageDates: { ...prev.stageDates, [stage]: NOW_ISO },
-          actors: { ...prev.actors, [stage]: actorId },
-          ...(extra?.bookedFor ? { bookedFor: extra.bookedFor, room: extra.room } : {}),
-        },
-      },
-      notes: extra?.text ? { ...s.notes, [r.id]: [...(s.notes[r.id] ?? []), note(actorId, extra.text)] } : s.notes,
-    };
-  });
+/** The recipient opened it → seen. Opening it again changes nothing. */
+export function markSeen(r: CareReferral, userId: string) {
+  // Check the live session state too, so a repeat open (or a stale copy) never re-stamps it.
+  if (r.stage !== "requested" || userId !== r.toId || referralStore.get().patches[r.id]?.seenAt) return false;
+  patch(r.id, { stage: "accepted", stageDates: { accepted: NOW_ISO }, seenAt: NOW_ISO, seenBy: userId });
+  return true;
 }
 
-export function patchReferral(id: string, patch: Partial<CareReferral>, log?: { actorId: string; text: string }) {
-  referralStore.update((s) => ({
-    ...s,
-    patches: { ...s.patches, [id]: { ...s.patches[id], ...patch } },
-    notes: log ? { ...s.notes, [id]: [...(s.notes[id] ?? []), note(log.actorId, log.text)] } : s.notes,
-  }));
+export function remind(r: CareReferral) {
+  patch(r.id, { remindedAt: NOW_ISO });
 }
 
-export function addReferralNote(id: string, actorId: string, text: string) {
-  referralStore.update((s) => ({ ...s, notes: { ...s.notes, [id]: [...(s.notes[id] ?? []), note(actorId, text)] } }));
+/** Move an unseen assignment to someone else; the 48-hour window starts again. */
+export function reassign(r: CareReferral, toId: string, byId: string) {
+  patch(r.id, { toId, stage: "requested", requestedAt: NOW_ISO, stageDates: { requested: NOW_ISO }, seenAt: undefined, seenBy: undefined, remindedAt: undefined, reassigned: { fromId: r.toId, at: NOW_ISO, by: byId } });
 }
 
-export function createReferral(input: Omit<CareReferral, "id" | "stage" | "requestedAt" | "stageDates" | "actors" | "notes" | "local">): CareReferral {
+export function createAssignment(input: { patientId: string; fromId: string; toId: string; toDiscipline: Discipline; goals: string; guidance: string }): CareReferral {
   const r: CareReferral = {
-    ...input,
-    id: localId("ref"),
+    id: localId("asg"),
+    patientId: input.patientId,
+    fromId: input.fromId,
+    toId: input.toId,
+    toDiscipline: input.toDiscipline,
+    reason: input.goals,
+    goals: input.goals,
+    guidance: input.guidance,
     stage: "requested",
     requestedAt: NOW_ISO,
     stageDates: { requested: NOW_ISO },
-    actors: { requested: input.fromId },
-    notes: [],
+    dueBy: new Date(Date.parse(NOW_ISO) + ASSIGNMENT_RETURN_HOURS * 3_600_000).toISOString(),
+    priority: "normal",
     local: true,
   };
   referralStore.update((s) => ({ ...s, created: [r, ...s.created] }));

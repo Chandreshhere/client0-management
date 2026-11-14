@@ -1,19 +1,8 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { patientById } from "@/data/patients";
-import { VitalsTab } from "@/features/patient-record/vitals-tab";
+import { redirect } from "next/navigation";
+import { withQuery } from "@/features/patient/profile/session";
 
-type Props = { params: Promise<{ id: string }> };
-
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+/** Earlier URL, kept so existing links work: /vitals now lives at /medical/vitals in the five-section profile. */
+export default async function LegacyVitals({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { id } = await params;
-  const p = patientById(id);
-  return { title: p ? `${p.name} · Vital signs` : "Vital signs" };
-}
-
-/** Patient record → Vital Signs: latest readings, trends with targets, self-reported markers. */
-export default async function PatientVitalsPage({ params }: Props) {
-  const { id } = await params;
-  if (!patientById(id)) notFound();
-  return <VitalsTab patientId={id} />;
+  redirect(withQuery(`/patients/${id}/medical/vitals`, await searchParams));
 }

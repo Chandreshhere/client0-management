@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarX, ClockCountdown, LockSimple } from "@phosphor-icons/react";
+import { CalendarX, ClockCountdown } from "@phosphor-icons/react";
 import { staffById } from "@/data/staff";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, ModalContent } from "@/components/ui/dialog";
 import { Checkbox, Field, Select, Textarea } from "@/components/ui/input";
-import { usePlan, useRole } from "@/components/shell/role-context";
+import { useRole } from "@/components/shell/role-context";
+import { AddOnBadge } from "@/components/shell/plan-switcher";
+import { scheduleAccess, serviceText } from "./access";
 import { CANCEL_REASONS, PRACTITIONERS, ROOMS, TODAY_KEY, serviceForLabel } from "./data";
 import { addDays, dateOf, durationLabel, freeSlots, hhmm, isSunday, isoAt, minOf, onLeave, rangeLabel, shortDay, type Booking } from "./engine";
 import { displayName, useSchedule } from "./store";
@@ -26,11 +28,10 @@ export function RescheduleModal({ bookingId, onClose, onDone }: { bookingId: str
 
 function RescheduleForm({ booking, onClose, onDone }: { booking: Booking; onClose: () => void; onDone: (next: Booking, prev: Booking) => void }) {
   const { occupants, person, patchBooking, privacy } = useSchedule();
-  const { has } = usePlan();
-  const { user } = useRole();
+  const { has, role } = useRole();
+  const multiBranch = has("branches");
   const svc = serviceForLabel(booking.service);
-  const pool = has("multi-role") ? PRACTITIONERS : PRACTITIONERS.filter((p) => p.id === user.id || p.id === booking.staffId);
-  const eligible = pool.filter((p) => (svc ? svc.staffIds.includes(p.id) : p.discipline === booking.discipline) || p.id === booking.staffId);
+  const eligible = PRACTITIONERS.filter((p) => (svc ? svc.staffIds.includes(p.id) : p.discipline === booking.discipline) || p.id === booking.staffId);
   const [staffId, setStaffId] = useState(booking.staffId);
   const [room, setRoom] = useState(booking.room);
   const startDay = dateOf(booking.start) > TODAY_KEY ? dateOf(booking.start) : TODAY_KEY;
@@ -54,7 +55,9 @@ function RescheduleForm({ booking, onClose, onDone }: { booking: Booking; onClos
 
   const confirm = () => {
     if (slot === null) return;
-    const prev = patchBooking(booking.id, { start: isoAt(date, slot), staffId, room });
+    const from = `${shortDay(dateOf(booking.start))}, ${hhmm(minOf(booking.start))}`;
+    const moved = staffId !== booking.staffId ? ` with ${staffById(staffId)?.name}` : "";
+    const prev = patchBooking(booking.id, { start: isoAt(date, slot), staffId, room }, `Moved from ${from} to ${shortDay(date)}, ${hhmm(slot)}${moved}`);
     if (prev) onDone({ ...booking, start: isoAt(date, slot), staffId, room }, prev);
   };
 
@@ -62,7 +65,7 @@ function RescheduleForm({ booking, onClose, onDone }: { booking: Booking; onClos
     <ModalContent
       size="md"
       title="Reschedule appointment"
-      description={`${displayName(who?.name ?? "Patient", privacy)}${privacy ? "" : ` · ${booking.service}`}`}
+      description={`${displayName(who?.name ?? "Patient", privacy)}${privacy ? "" : ` · ${serviceText(booking.service, scheduleAccess(role).clinical)}`}`}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -113,7 +116,7 @@ function RescheduleForm({ booking, onClose, onDone }: { booking: Booking; onClos
                   setRoom(v);
                   setSlot(null);
                 }}
-                options={ROOMS.map((r) => ({ value: r.room, label: r.room, description: r.branchName }))}
+                options={ROOMS.map((r) => ({ value: r.room, label: r.room, description: multiBranch ? r.branchName : undefined }))}
               />
             )}
           </Field>
@@ -176,13 +179,16 @@ function RescheduleForm({ booking, onClose, onDone }: { booking: Booking; onClos
             </p>
           )}
         </div>
-        <p className="text-xs text-muted">The patient isn&apos;t notified — messaging isn&apos;t connected in this prototype.</p>
+        <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
+          The move is kept in the booking history. Tell the patient by phone — WhatsApp and SMS updates are an add-on.
+          <AddOnBadge addOn="messaging" />
+        </p>
       </div>
     </ModalContent>
   );
 }
 
-/** Cancel with a reason (required), an optional note and — on Team plans — a nudge to offer the slot. */
+/** Cancel with a reason (required, kept in the history), an optional note and a nudge to offer the slot to the waitlist. */
 export function CancelModal({ bookingId, onClose, onDone }: { bookingId: string | null; onClose: () => void; onDone: (prev: Booking, offer: boolean) => void }) {
   const { bookings } = useSchedule();
   const booking = bookingId ? bookings.find((b) => b.id === bookingId) : undefined;
@@ -195,7 +201,7 @@ export function CancelModal({ bookingId, onClose, onDone }: { bookingId: string 
 
 function CancelForm({ booking, onClose, onDone }: { booking: Booking; onClose: () => void; onDone: (prev: Booking, offer: boolean) => void }) {
   const { person, patchBooking, waitlist, privacy } = useSchedule();
-  const { has } = usePlan();
+  const { has } = useRole();
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [offer, setOffer] = useState(true);
@@ -209,7 +215,7 @@ function CancelForm({ booking, onClose, onDone }: { booking: Booking; onClose: (
       setError("Choose a reason — it's kept with the appointment history.");
       return;
     }
-    const prev = patchBooking(booking.id, { status: "cancelled", cancelReason: reason, cancelNote: note.trim() || undefined });
+    const prev = patchBooking(booking.id, { status: "cancelled", cancelReason: reason, cancelNote: note.trim() || undefined }, `Cancelled — ${reason}`);
     if (prev) onDone(prev, has("waitlist") && offer && matches > 0);
   };
 
@@ -258,13 +264,11 @@ function CancelForm({ booking, onClose, onDone }: { booking: Booking; onClose: (
               </span>
             </span>
           </label>
-        ) : (
-          <p className="flex items-center gap-2 rounded-inner bg-sunken p-4 text-xs text-muted">
-            <LockSimple size={14} aria-hidden="true" />
-            Offering freed slots to a waitlist is part of the Team plan.
-          </p>
-        )}
-        <p className="text-xs text-muted">No cancellation message is sent — messaging isn&apos;t connected in this prototype.</p>
+        ) : null}
+        <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
+          Tell the patient by phone — cancellation messages by WhatsApp or SMS are an add-on.
+          <AddOnBadge addOn="messaging" />
+        </p>
       </div>
     </ModalContent>
   );

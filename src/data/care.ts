@@ -23,6 +23,8 @@ export const TASKS: Task[] = [
   { id: "t16", title: "Access review: Ishaan Gupta moved to HSR", ownerId: "s-neha", createdBy: "s-neha", due: T(20), priority: "low", status: "todo", source: "Role change", discipline: "operations" },
   { id: "t17", title: "Book 2-week follow-up before checkout", patientId: "p-lakshmi-n", ownerId: "s-sneha", createdBy: "s-meera", due: T(13, "10:45"), priority: "normal", status: "todo", source: "Consultation outcome", discipline: "operations" },
   { id: "t18", title: "Home-practice sheet released", patientId: "p-kabir", ownerId: "s-kavya", createdBy: "s-kavya", due: T(11), priority: "low", status: "done", source: "Session plan", discipline: "movement" },
+  // F8: a nutritionist's flag to the primary doctor (routine) — on Meera's "flags you raised" and Dr. Ananya's "flags raised to you"
+  { id: "t19", title: "Clinical review: dinner after 21:00 on office days — check evening metoprolol timing with meals", patientId: "p-kabir", ownerId: "s-ananya", createdBy: "s-meera", due: T(15), priority: "normal", status: "todo", source: "Flag from Meera Krishnan · nutrition follow-up", discipline: "medical" },
 ];
 
 export const REFERRAL_STAGES: ReferralStage[] = ["requested", "accepted", "booked", "completed", "acknowledged"];
@@ -33,6 +35,16 @@ export const REFERRAL_STAGE_LABEL: Record<ReferralStage, string> = {
   completed: "Completed",
   acknowledged: "Acknowledged",
 };
+
+/**
+ * Spec F5 / rule 5: an assignment (doctor → nutritionist or instructor) has two states,
+ * assigned → seen. It counts as seen once the recipient has opened it — any stored stage past
+ * "requested". Booking the visit happens in scheduling, not as an assignment state.
+ * An assignment not seen within 48 hours goes back to the assigning doctor's pending list.
+ */
+export type AssignmentState = "assigned" | "seen";
+export const ASSIGNMENT_RETURN_HOURS = 48;
+export const assignmentState = (r: Referral): AssignmentState => (r.stage === "requested" ? "assigned" : "seen");
 
 export const REFERRALS: Referral[] = [
   { id: "r1", patientId: "p-kabir", fromId: "s-ananya", toId: "s-meera", toDiscipline: "nutrition", reason: "Heart-healthy vegetarian plan; LDL 96 mg/dL on 16 Aug, target < 70", stage: "acknowledged", requestedAt: "2026-09-08T10:00:00+05:30", stageDates: { requested: "2026-09-08T10:00:00+05:30", accepted: "2026-09-08T15:20:00+05:30", booked: "2026-09-09T09:00:00+05:30", completed: "2026-09-12T12:00:00+05:30", acknowledged: "2026-09-13T09:30:00+05:30" }, dueBy: "2026-09-15T18:00:00+05:30", priority: "normal" },
@@ -48,14 +60,14 @@ export const REFERRALS: Referral[] = [
 ];
 
 export const NOTIFICATIONS: AppNotification[] = [
-  { id: "n1", kind: "report-review", title: "Lipid panel waiting for your review", body: "Kabir Malhotra · reported 11 Nov, uploaded 12 Nov by lab partner", at: "2026-11-12T18:20:00+05:30", read: false, actionLabel: "Review report", href: "/documents", patientId: "p-kabir", roles: ["doctor", "admin"] },
-  { id: "n2", kind: "referral-pending", title: "Referral not accepted for 2 days", body: "Arun Kumar → Nutrition (Meera Krishnan)", at: "2026-11-13T09:00:00+05:30", read: false, actionLabel: "Open referral", href: "/referrals", patientId: "p-arun", roles: ["doctor", "nutritionist", "coordinator", "admin"] },
-  { id: "n3", kind: "guidance-changed", title: "Session guidance changed", body: "Rekha Iyengar · SpO₂ floor raised to 92% — review before 17:00 session", at: "2026-11-13T08:45:00+05:30", read: false, actionLabel: "Review precautions", href: "/classes", patientId: "p-rekha", roles: ["yoga", "coordinator", "doctor"] },
-  { id: "n4", kind: "missed-follow-up", title: "Missed follow-up, not rebooked", body: "Rajesh Pillai · no-show at 09:00 nutrition review", at: "2026-11-13T09:20:00+05:30", read: false, actionLabel: "Log contact attempt", href: "/tasks", patientId: "p-rajesh", roles: ["coordinator", "frontdesk", "nutritionist"] },
-  { id: "n5", kind: "payment-failed", title: "Payment confirmation failed", body: "INV-2611-0412 · UPI callback not received — not marked paid", at: "2026-11-13T08:05:00+05:30", read: false, actionLabel: "Reconcile", href: "/billing", patientId: "p-harish", roles: ["frontdesk", "admin"] },
-  { id: "n6", kind: "intake-missing", title: "2 intake forms incomplete for today", body: "Priya Venkatesh (14:00), Tanvi Rao (16:30)", at: "2026-11-13T08:30:00+05:30", read: true, actionLabel: "Open queue", href: "/schedule/queue", roles: ["frontdesk", "admin"] },
-  { id: "n7", kind: "message", title: "New message from Kabir Malhotra", body: "“Can I swap the Saturday class for Sunday this week?”", at: "2026-11-13T07:55:00+05:30", read: true, actionLabel: "Reply", href: "/messages", patientId: "p-kabir", roles: ["yoga", "coordinator", "frontdesk"] },
-  { id: "n8", kind: "report-review", title: "Unidentified report in intake queue", body: "Scanned PDF, 3 pages — patient not matched", at: "2026-11-13T09:05:00+05:30", read: false, actionLabel: "Identify patient", href: "/documents", roles: ["frontdesk", "admin"] },
+  { id: "n1", kind: "report-review", title: "Lipid panel waiting for your review", body: "Kabir Malhotra · issued 11 Nov, uploaded 12 Nov", at: "2026-11-12T18:20:00+05:30", read: false, actionLabel: "Review report", href: "/documents", patientId: "p-kabir", roles: ["doctor"] },
+  { id: "n2", kind: "referral-pending", title: "Assignment not seen for 2 days", body: "Arun Kumar → Nutrition (Meera Krishnan) · back on your list after 48 h", at: "2026-11-13T09:00:00+05:30", read: false, actionLabel: "Open assignment", href: "/referrals", patientId: "p-arun", roles: ["doctor"] },
+  { id: "n3", kind: "guidance-changed", title: "Session guidance changed", body: "Rekha Iyengar · SpO₂ floor raised to 92% — review before 17:00 session", at: "2026-11-13T08:45:00+05:30", read: false, actionLabel: "Review precautions", href: "/classes", patientId: "p-rekha", roles: ["yoga"] },
+  { id: "n4", kind: "missed-follow-up", title: "Missed follow-up, not rebooked", body: "Rajesh Pillai · no-show at 09:00 nutrition review", at: "2026-11-13T09:20:00+05:30", read: false, actionLabel: "Log contact attempt", href: "/tasks", patientId: "p-rajesh", roles: ["nutritionist"], feature: "calendar" },
+  { id: "n5", kind: "payment-failed", title: "Payment not recorded yet", body: "INV-2611-0412 · ₹3,200 still due — record it once you receive it", at: "2026-11-13T08:05:00+05:30", read: false, actionLabel: "Record payment", href: "/billing", patientId: "p-harish", roles: ["frontdesk"], feature: "billing" },
+  { id: "n6", kind: "intake-missing", title: "2 intake forms incomplete for today", body: "Priya Venkatesh (14:00), Tanvi Rao (16:30)", at: "2026-11-13T08:30:00+05:30", read: true, actionLabel: "Open queue", href: "/schedule/queue", roles: ["frontdesk"], feature: "queue" },
+  { id: "n7", kind: "message", title: "New message from Kabir Malhotra", body: "“Can I swap the Saturday class for Sunday this week?”", at: "2026-11-13T07:55:00+05:30", read: true, actionLabel: "Reply", href: "/messages", patientId: "p-kabir", roles: ["yoga"], feature: "messages" },
+  { id: "n8", kind: "report-review", title: "Unidentified report in intake queue", body: "Scanned PDF, 3 pages — patient not matched", at: "2026-11-13T09:05:00+05:30", read: false, actionLabel: "Identify patient", href: "/documents", roles: ["admin"] },
   { id: "n9", kind: "message", title: "Your plan was updated", body: "Meera Krishnan published nutrition plan v4", at: "2026-11-12T17:10:00+05:30", read: false, actionLabel: "View plan", href: "/portal/plan", roles: ["patient"] },
   { id: "n10", kind: "missed-follow-up", title: "Reminder: Heart Health review today", body: "11:00 with Dr. Ananya Rao · Consult 1", at: "2026-11-13T07:00:00+05:30", read: true, actionLabel: "View appointment", href: "/portal/appointments", roles: ["patient"] },
 ];

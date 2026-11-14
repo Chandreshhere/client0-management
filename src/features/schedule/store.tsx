@@ -4,7 +4,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { WAITLIST } from "@/data/appointments";
 import { CLASSES } from "@/data/programs";
 import { PATIENTS, clinicNumber } from "@/data/patients";
+import { staffById } from "@/data/staff";
 import type { Appointment, AppointmentStatus, Discipline, Priority } from "@/data/types";
+import { useRole } from "@/components/shell/role-context";
+import { logAudit, type AuditCategory } from "@/features/settings/audit";
 import { NOW_ISO, NOW_MIN, SEED_APPOINTMENTS, WAITLIST_MATCH, type TimePreference } from "./data";
 import { buildEvents, dateOf, doubleBooked, isoAt, minOf, nextToken, occupantsFrom, type Booking, type DiaryEvent, type Occupant } from "./engine";
 
@@ -63,6 +66,8 @@ type Ctx = {
   localPatients: Person[];
   classSeats: Record<string, number>;
   recentIds: string[];
+  /** recurring group classes are in the plan (Clinic and Pro) */
+  groupClasses: boolean;
   privacy: boolean;
   setPrivacy: (v: boolean) => void;
   queueDisplay: boolean;
@@ -72,7 +77,8 @@ type Ctx = {
   person: (id: string) => Person | undefined;
   allPeople: () => Person[];
   addBookings: (drafts: Omit<Booking, "id">[]) => Booking[];
-  patchBooking: (id: string, patch: Partial<Booking>) => Booking | undefined;
+  /** `action` (e.g. "Cancelled — Patient unwell") is added to the booking's history and the activity log */
+  patchBooking: (id: string, patch: Partial<Booking>, action?: string, category?: AuditCategory) => Booking | undefined;
   restoreBooking: (prev: Booking) => void;
   checkIn: (id: string, withToken: boolean) => string | undefined;
   issueToken: () => string;
@@ -138,6 +144,8 @@ const fromPatient = (id: string): Person | undefined => {
 };
 
 export function ScheduleProvider({ children }: { children: ReactNode }) {
+  const { has, user } = useRole();
+  const groupClasses = has("group-classes");
   const [bookings, setBookings, bookingsRef] = useMirror(seedBookings);
   const [waitlist, setWaitlist, waitlistRef] = useMirror(seedWaitlist);
   const [localPatients, setLocalPatients, localRef] = useMirror<Person[]>(() => []);
@@ -151,36 +159,62 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => window.clearTimeout(recentTimer.current), []);
 
-  const events = useMemo(() => buildEvents(bookings, CLASSES), [bookings]);
+  // Group classes are recurring and plan-gated; 1:1 sessions are ordinary diary bookings.
+  const classes = useMemo(() => (groupClasses ? CLASSES : CLASSES.filter((c) => c.kind === "individual")), [groupClasses]);
+  const events = useMemo(() => buildEvents(bookings, classes), [bookings, classes]);
   const occupants = useMemo(() => occupantsFrom(events), [events]);
   const doubleIds = useMemo(() => doubleBooked(events), [events]);
 
   const person = useCallback((id: string) => fromPatient(id) ?? localRef.current.find((p) => p.id === id), [localRef]);
   const allPeople = useCallback(() => [...localRef.current, ...PATIENTS.map((p) => fromPatient(p.id)!)], [localRef]);
 
+  /** Activity-log entry for a booking change (metadata only — no clinical content). */
+  const audit = useCallback(
+    (b: Pick<Booking, "patientId">, action: string, category: AuditCategory = "schedule") => {
+      const name = fromPatient(b.patientId)?.name ?? localRef.current.find((p) => p.id === b.patientId)?.name ?? "Patient";
+      logAudit({ actorId: user.id, category, action, target: { kind: "patient", id: b.patientId, label: name }, scope: category === "payment" ? "financial" : "metadata" });
+    },
+    [user.id, localRef],
+  );
+  const entry = useCallback((action: string) => ({ at: NOW_ISO, by: user.name, action }), [user.name]);
+
   const addBookings = useCallback(
     (drafts: Omit<Booking, "id">[]) => {
-      const created = drafts.map((d) => ({ ...d, id: `local-a-${++seq.current}`, local: true }));
+      const created = drafts.map((d) => ({ ...d, id: `local-a-${++seq.current}`, local: true, history: d.history ?? [entry(d.kind === "walk-in" ? `Walk-in added · token ${d.token ?? "—"}` : "Booked")] }));
+      const first = created[0];
+      const withWho = first ? ` with ${staffById(first.staffId)?.name ?? "a practitioner"}` : "";
+      if (first) audit(first, created.length > 1 ? `Booked ${created.length} weekly appointments${withWho}` : first.kind === "walk-in" ? `Added a walk-in${withWho} · token ${first.token ?? "—"}` : `Booked an appointment${withWho}`);
       setBookings((xs) => [...xs, ...created].sort((a, b) => a.start.localeCompare(b.start)));
       setRecentIds(created.map((c) => c.id));
       window.clearTimeout(recentTimer.current);
       recentTimer.current = window.setTimeout(() => setRecentIds([]), 2400);
       return created;
     },
-    [setBookings],
+    [setBookings, audit, entry],
   );
 
   const patchBooking = useCallback(
-    (id: string, patch: Partial<Booking>) => {
+    (id: string, patch: Partial<Booking>, action?: string, category?: AuditCategory) => {
       const prev = bookingsRef.current.find((b) => b.id === id);
       if (!prev) return undefined;
-      setBookings((xs) => xs.map((b) => (b.id === id ? { ...b, ...patch } : b)).sort((a, b) => a.start.localeCompare(b.start)));
+      const next: Partial<Booking> = action ? { ...patch, history: [...(prev.history ?? []), entry(action)] } : patch;
+      setBookings((xs) => xs.map((b) => (b.id === id ? { ...b, ...next } : b)).sort((a, b) => a.start.localeCompare(b.start)));
+      if (action) audit(prev, action, category);
       return prev;
     },
-    [bookingsRef, setBookings],
+    [bookingsRef, setBookings, audit, entry],
   );
 
-  const restoreBooking = useCallback((prev: Booking) => setBookings((xs) => xs.map((b) => (b.id === prev.id ? prev : b)).sort((a, b) => a.start.localeCompare(b.start))), [setBookings]);
+  /** Undo: puts the booking back as it was; an undone logged change is logged as its own entry. */
+  const restoreBooking = useCallback(
+    (prev: Booking) => {
+      const cur = bookingsRef.current.find((b) => b.id === prev.id);
+      const undone = cur?.history?.slice(prev.history?.length ?? 0).at(-1);
+      setBookings((xs) => xs.map((b) => (b.id === prev.id ? prev : b)).sort((a, b) => a.start.localeCompare(b.start)));
+      if (undone) audit(prev, `Undid “${undone.action}”`);
+    },
+    [bookingsRef, setBookings, audit],
+  );
 
   const issueToken = useCallback(() => nextToken(bookingsRef.current), [bookingsRef]);
 
@@ -189,16 +223,18 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       const b = bookingsRef.current.find((x) => x.id === id);
       if (!b) return undefined;
       const token = withToken ? b.token ?? nextToken(bookingsRef.current) : b.token;
-      setBookings((xs) => xs.map((x) => (x.id === id ? { ...x, status: "arrived", arrivedAt: NOW_ISO, token } : x)));
+      const action = `Checked in${token ? ` · token ${token}` : ""}`;
+      setBookings((xs) => xs.map((x) => (x.id === id ? { ...x, status: "arrived", arrivedAt: NOW_ISO, token, history: [...(x.history ?? []), entry(action)] } : x)));
+      audit(b, action);
       return token;
     },
-    [bookingsRef, setBookings],
+    [bookingsRef, setBookings, audit, entry],
   );
 
   const registerPatient = useCallback(
     (input: NewPatientInput) => {
       const n = localRef.current.length + 1;
-      const p: Person = { id: `local-p-${n}`, name: input.name, avatar: null, clinicNo: `NEW-${String(n).padStart(3, "0")}`, age: input.age, sex: input.sex, phone: input.phone, intakeComplete: false, local: true };
+      const p: Person = { id: `local-p-${n}`, name: input.name, avatar: null, clinicNo: `PR-${String(1040 + (PATIENTS.length - 1 + n) * 7).padStart(5, "0")}`, age: input.age, sex: input.sex, phone: input.phone, intakeComplete: false, local: true };
       setLocalPatients((xs) => [p, ...xs]);
       return p;
     },
@@ -249,6 +285,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       localPatients,
       classSeats,
       recentIds,
+      groupClasses,
       privacy,
       setPrivacy,
       queueDisplay,
@@ -269,7 +306,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       restoreWaitlist,
       takeClassSeat,
     }),
-    [bookings, events, occupants, doubleIds, waitlist, localPatients, classSeats, recentIds, privacy, queueDisplay, callingId, person, allPeople, addBookings, patchBooking, restoreBooking, checkIn, issueToken, registerPatient, addWaitlist, patchWaitlist, removeWaitlist, restoreWaitlist, takeClassSeat],
+    [bookings, events, occupants, doubleIds, waitlist, localPatients, classSeats, recentIds, groupClasses, privacy, queueDisplay, callingId, person, allPeople, addBookings, patchBooking, restoreBooking, checkIn, issueToken, registerPatient, addWaitlist, patchWaitlist, removeWaitlist, restoreWaitlist, takeClassSeat],
   );
 
   return <ScheduleCtx.Provider value={value}>{children}</ScheduleCtx.Provider>;

@@ -15,15 +15,15 @@ import { Select } from "@/components/ui/input";
 import { StatusBadge, appointmentTone } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { usePlan, useRole } from "@/components/shell/role-context";
-import { OrganImage } from "@/components/viz/organ";
 import { DisciplineTag, InfoNote, ROLE_LABEL } from "@/features/settings/ui";
 import { DayTrack, DayTrackScale } from "@/features/settings/viz";
-import { LEVEL_LABEL, permissionsFor } from "@/features/settings/permissions";
+import { LEVEL_LABEL, permissionsForPlan } from "@/features/settings/permissions";
 import { NOW_MIN, hhmm } from "@/features/settings/time";
-import { LEAVE, breaksToday, careTeamOf, caseloadByOrgan, durationText, hoursToday, isClinician, nowState, spanText, todayBlocks, todayLoad, usualWeek, type StaffRole } from "./data";
+import { LEAVE, breaksToday, careTeamOf, durationText, hoursToday, isClinician, nowState, spanText, todayBlocks, todayLoad, usualWeek, type StaffRole } from "./data";
+import { invitableRoles } from "./seats";
+import { serviceText } from "@/features/schedule/access";
 import { CLINICAL_ROLES, setDeactivated, setRole, useTeamState } from "./store";
 
-const ROLE_OPTIONS: StaffRole[] = ["doctor", "nutritionist", "yoga", "frontdesk", "coordinator", "admin"];
 
 export function StaffSheet({ staffId, onClose, canManage }: { staffId: string | null; onClose: () => void; canManage: boolean }) {
   const s = staffById(staffId ?? undefined);
@@ -37,8 +37,11 @@ export function StaffSheet({ staffId, onClose, canManage }: { staffId: string | 
 function SheetBody({ staffId, canManage }: { staffId: string; canManage: boolean }) {
   const s = staffById(staffId)!;
   const { toast } = useToast();
-  const { user } = useRole();
+  const { user, role: viewerRole } = useRole();
   const { plan, has } = usePlan();
+  const diary = has("calendar");
+  // Admin and Reception see services without clinical detail.
+  const clinicalViewer = viewerRole === "doctor" || viewerRole === "nutritionist" || viewerRole === "yoga";
   const state = useTeamState();
   const deactivated = !!state.deactivated[s.id];
   const request = state.roles[s.id] ?? null;
@@ -51,10 +54,12 @@ function SheetBody({ staffId, canManage }: { staffId: string; canManage: boolean
   const h = hoursToday(s);
   const load = todayLoad(s.id);
   const team = careTeamOf(s.id);
-  const organs = caseloadByOrgan(team);
-  const grants = permissionsFor(s.role);
+  const grants = permissionsForPlan(has)
+    .map((row) => ({ row, grant: row.grants[s.role] }))
+    .filter((x) => x.grant.level !== "none");
   const leave = LEAVE[s.id];
-  const allowedRoles = ROLE_OPTIONS.filter((r) => plan === "clinic" || r === "doctor" || r === "nutritionist" || r === "yoga" || r === "frontdesk");
+  // Only the roles this plan has (Reception from Clinic; Care coordinator on Pro).
+  const allowedRoles = invitableRoles(plan);
 
   function applyRole() {
     if (role === (request?.role ?? s.role)) return;
@@ -76,7 +81,7 @@ function SheetBody({ staffId, canManage }: { staffId: string; canManage: boolean
   return (
     <SheetContent
       title={s.name}
-      description={`${s.title} · ${BRANCHES.find((b) => b.id === s.branch)?.name}${s.room ? ` · ${s.room}` : ""}`}
+      description={[s.title, has("branches") ? BRANCHES.find((b) => b.id === s.branch)?.name : null, s.room].filter(Boolean).join(" · ")}
       headerExtra={<StatusBadge tone={now.tone} className="mt-1 hidden sm:inline-flex">{now.label}</StatusBadge>}
       footer={
         <DialogClose asChild>
@@ -108,29 +113,29 @@ function SheetBody({ staffId, canManage }: { staffId: string; canManage: boolean
         <section aria-labelledby="sh-today">
           <div className="flex items-baseline justify-between gap-3">
             <h3 id="sh-today" className="text-xs text-muted">Today</h3>
-            <span className="text-xs text-muted">{h ? `${spanText(h)}${isClinician(s) ? ` · ${pluralize(load.count, "appointment")} · ${durationText(load.minutes)} booked` : ""}` : s.workingHours}</span>
+            <span className="text-xs text-muted">{h ? `${spanText(h)}${diary && isClinician(s) ? ` · ${pluralize(load.count, "appointment")} · ${durationText(load.minutes)} booked` : ""}` : s.workingHours}</span>
           </div>
           {h ? (
             <div className="mt-3 flex flex-col gap-1.5">
-              <DayTrack window={h} blocks={todayBlocks(s.id)} breaks={breaksToday(s)} now={NOW_MIN} label={`${s.name} today: ${spanText(h)}`} height="h-4" />
+              <DayTrack window={h} blocks={diary ? todayBlocks(s.id) : []} breaks={breaksToday(s)} now={NOW_MIN} label={`${s.name} today: ${spanText(h)}`} height="h-4" />
               <DayTrackScale />
-              <p className="text-[11px] text-muted">White = working hours · charcoal = booked · hatched = break · line = now ({hhmm(NOW_MIN)})</p>
+              <p className="text-[11px] text-muted">White = working hours{diary ? " · charcoal = booked" : ""} · hatched = break · line = now ({hhmm(NOW_MIN)})</p>
             </div>
           ) : null}
-          {load.all.length ? (
+          {diary && load.all.length ? (
             <ul className="mt-3 flex flex-col divide-y divide-line rounded-inner bg-surface shadow-[inset_0_0_0_1px_var(--color-line)]">
               {load.all.map((a) => (
                 <li key={a.id} className="flex items-center gap-3 px-3 py-2.5">
                   <span className="w-12 shrink-0 font-mono text-xs text-ink-2">{formatTime(a.start)}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-ink">{a.service}</span>
+                    <span className="block truncate text-sm text-ink">{serviceText(a.service, clinicalViewer)}</span>
                     <span className="block truncate text-xs text-muted">{patientById(a.patientId)?.name} · {a.room} · {a.durationMin} min</span>
                   </span>
                   <StatusBadge tone={appointmentTone(a.status)}>{APPOINTMENT_STATUS_LABEL[a.status]}</StatusBadge>
                 </li>
               ))}
             </ul>
-          ) : isClinician(s) && h ? (
+          ) : diary && isClinician(s) && h ? (
             <p className="mt-3 rounded-inner bg-sunken p-3 text-sm text-muted">Nothing in the diary today.</p>
           ) : null}
         </section>
@@ -157,16 +162,7 @@ function SheetBody({ staffId, canManage }: { staffId: string; canManage: boolean
               <h3 id="sh-team" className="text-xs text-muted">Care team · {pluralize(team.length, "patient")}</h3>
               <AvatarStack people={team.map((p) => ({ name: p.name, avatar: p.avatar }))} max={5} size="xs" />
             </div>
-            <ul className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {organs.map((g) => (
-                <li key={g.organ} className="flex flex-col items-center gap-1 rounded-[12px] bg-sunken px-1 pb-2 pt-1 text-center" title={`${g.system}: ${g.patients.map((p) => p.name).join(", ")}`}>
-                  <OrganImage kind={g.organ} className="size-11" />
-                  <span className="text-[11px] leading-tight text-ink-2">{g.label}</span>
-                  <span className="text-xs text-ink tabular">{g.patients.length}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-[11px] text-muted">Grouped by each patient&apos;s primary body system from their record.</p>
+            <p className="mt-2 text-xs text-muted">Clinical details stay on each patient&apos;s record, with their care team.</p>
           </section>
         ) : null}
 

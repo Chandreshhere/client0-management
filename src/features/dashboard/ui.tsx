@@ -3,37 +3,30 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import { useId, type ComponentProps, type ReactNode } from "react";
-import { ArrowUpRight } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { spring } from "@/lib/motion";
-import { TODAY, formatDayLabel, formatTime } from "@/lib/format";
+import { TODAY, formatDayLabel } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
 import { Group, GroupHeader, Inset } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/misc";
-import { StatusBadge, appointmentTone } from "@/components/ui/status";
-import { LockBadge } from "@/components/shell/plan-switcher";
 import { useRole } from "@/components/shell/role-context";
-import { featureById, minPlanFor, type FeatureId } from "@/data/plans";
-import { REFERRAL_STAGES, REFERRAL_STAGE_LABEL } from "@/data/care";
-import { APPOINTMENT_STATUS_LABEL } from "@/data/appointments";
-import { patientById } from "@/data/patients";
-import type { Appointment, Discipline, ReferralStage } from "@/data/types";
+import { staffById } from "@/data/staff";
+import type { Discipline } from "@/data/types";
 import { NOW_LABEL, branchFor, firstName } from "./data";
 
 /**
- * Building blocks shared by the seven role homes. They only compose kit pieces
- * (Group / Inset / GroupHeader / PageHeader) so every home speaks the reference's language:
- * white cards, recessed grey groups holding white insets, circular ↗ links, and exactly one
- * cobalt focal card per view.
+ * Building blocks shared by the seven role homes. Each home answers one question with 3–5 short
+ * sections: one cobalt focal card (the answer), plus recessed grey groups holding white insets.
+ * Every row opens the patient profile section it belongs to, or its own screen.
  */
 
-/** Page header: date + branch eyebrow, light display greeting, 1–2 quick actions. */
+/** Page header: date + branch eyebrow, light display greeting, one-line answer, 1–2 quick actions. */
 export function DashboardHeader({ actions, summary }: { actions?: ReactNode; summary?: ReactNode }) {
-  const { role, user } = useRole();
+  const { role, user, has } = useRole();
   const branch = branchFor(role);
   return (
     <PageHeader
-      eyebrow={`${formatDayLabel(TODAY.toISOString())} · ${branch.name}`}
+      eyebrow={has("branches") ? `${formatDayLabel(TODAY.toISOString())} · ${branch.name}` : formatDayLabel(TODAY.toISOString())}
       title={`Good morning, ${firstName(user.name)}`}
       description={summary}
       actions={actions}
@@ -51,16 +44,15 @@ export function Reveal({ index = 0, className, children }: { index?: number; cla
 }
 
 /**
- * Side rail in a three-column dashboard: a shorter column (today's schedule, escalations…) stays in
- * view while the longer side scrolls, instead of ending early and leaving a blank column. Capped
- * at the window height; anything taller scrolls inside the rail.
- * The grid item itself stretches over its rows and an inner box is sticky — Chrome bounds a sticky
- * grid item by the whole grid, so a sticky item would slide over the next row's card.
+ * Side rail in a three-column dashboard: a shorter column stays in view while the longer side
+ * scrolls, instead of ending early and leaving a blank column. Capped at the window height;
+ * anything taller scrolls inside the rail. The grid item stretches over its rows and an inner box
+ * is sticky — Chrome bounds a sticky grid item by the whole grid.
  */
 export function Rail({ index = 0, className, innerClassName, children }: { index?: number; className?: string; innerClassName?: string; children: ReactNode }) {
   return (
     <Reveal index={index} className={className}>
-      <div className={cn("scrollbar-thin xl:sticky xl:top-20 xl:max-h-[calc(100dvh-96px)] xl:overflow-y-auto xl:rounded-card", innerClassName)}>{children}</div>
+      <div className={cn("scrollbar-thin flex flex-col gap-4 xl:sticky xl:top-20 xl:max-h-[calc(100dvh-96px)] xl:overflow-y-auto xl:rounded-card", innerClassName)}>{children}</div>
     </Reveal>
   );
 }
@@ -80,21 +72,7 @@ export function FocalCard({ className, labelledBy, ...props }: ComponentProps<"s
 }
 
 /** Header block inside the focal card (16px + the frame's 8px = 24px to the text). */
-export function FocalHead({
-  id,
-  label,
-  title,
-  meta,
-  aside,
-  className,
-}: {
-  id: string;
-  label: ReactNode;
-  title: ReactNode;
-  meta?: ReactNode;
-  aside?: ReactNode;
-  className?: string;
-}) {
+export function FocalHead({ id, label, title, meta, aside, className }: { id: string; label: ReactNode; title: ReactNode; meta?: ReactNode; aside?: ReactNode; className?: string }) {
   return (
     <div className={cn("flex flex-wrap items-start justify-between gap-4 p-4", className)}>
       <div className="min-w-0 flex-1">
@@ -109,18 +87,79 @@ export function FocalHead({
   );
 }
 
-/** White inset sitting on the cobalt frame (reads like the reference's white chips on blue). */
+/** Big number + caption in the focal head's corner. */
+export function FocalStat({ value, caption }: { value: ReactNode; caption: ReactNode }) {
+  return (
+    <div className="text-right">
+      <p className="text-title font-normal tabular">{value}</p>
+      <p className="text-xs text-white/90">{caption}</p>
+    </div>
+  );
+}
+
+/** White inset sitting on the cobalt frame. */
 export function FocalInset({ className, ...props }: ComponentProps<"div">) {
   return <div className={cn("rounded-inner bg-surface p-4 text-ink", className)} {...props} />;
 }
 
-/** Small label/value fact on the cobalt surface. Labels stay at ≥90% white for 4.5:1 contrast. */
-export function FocalFact({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+/** Small section label on the cobalt surface (labels stay ≥90% white for 4.5:1 contrast). */
+export function FocalLabel({ children, className }: { children: ReactNode; className?: string }) {
+  return <p className={cn("px-4 pt-2 text-xs text-white/90", className)}>{children}</p>;
+}
+
+/** White inset that holds a list of compact rows (rows recede to canvas on hover). */
+export function InsetList({ className, label, children }: { className?: string; label?: string; children: ReactNode }) {
   return (
-    <div className={cn("min-w-0", className)}>
-      <p className="text-xs text-white/90">{label}</p>
-      <div className="mt-1 text-sm text-white">{children}</div>
-    </div>
+    <ul aria-label={label} className={cn("flex flex-col rounded-inner bg-surface p-2 text-ink", className)}>
+      {children}
+    </ul>
+  );
+}
+
+/**
+ * One compact row inside an InsetList: lead (time / avatar) · title + meta · trailing badge.
+ * With `href` the whole row opens the item; trailing wraps under the text on narrow cards.
+ */
+export function ListRow({
+  href,
+  lead,
+  title,
+  meta,
+  trailing,
+  muted,
+  className,
+  ariaLabel,
+}: {
+  href?: string;
+  lead?: ReactNode;
+  title: ReactNode;
+  meta?: ReactNode;
+  trailing?: ReactNode;
+  muted?: boolean;
+  className?: string;
+  ariaLabel?: string;
+}) {
+  const body = (
+    <span className="flex items-start gap-3">
+      {lead}
+      <span className="min-w-0 flex-1">
+        <span className={cn("block truncate text-sm", muted ? "text-muted" : "text-ink")}>{title}</span>
+        {meta ? <span className="block text-xs text-muted">{meta}</span> : null}
+        {trailing ? <span className="mt-2 flex flex-wrap gap-1.5 @md:hidden">{trailing}</span> : null}
+      </span>
+      {trailing ? <span className="hidden shrink-0 flex-wrap justify-end gap-1.5 @md:flex">{trailing}</span> : null}
+    </span>
+  );
+  return (
+    <li className={cn("@container", className)}>
+      {href ? (
+        <Link href={href} aria-label={ariaLabel} className="block rounded-[12px] px-2 py-2 transition-colors duration-200 hover:bg-canvas">
+          {body}
+        </Link>
+      ) : (
+        <div className="rounded-[12px] px-2 py-2">{body}</div>
+      )}
+    </li>
   );
 }
 
@@ -168,23 +207,100 @@ export function RowLink({ href, className, children, ...props }: ComponentProps<
   );
 }
 
+/**
+ * A pending item inside a Panel: avatar · name (opens the profile) · what it is · badge, with
+ * optional actions underneath. Without actions the whole card is the link.
+ */
+export function ItemCard({
+  href,
+  avatar,
+  name,
+  lines,
+  badge,
+  actions,
+  footer,
+  ariaLabel,
+  className,
+}: {
+  href: string;
+  avatar?: { src?: string | null; name: string };
+  name: ReactNode;
+  lines?: ReactNode[];
+  badge?: ReactNode;
+  actions?: ReactNode;
+  footer?: ReactNode;
+  ariaLabel?: string;
+  className?: string;
+}) {
+  // The badge sits on the name row so the detail lines use the card's full width.
+  const head = (linked: boolean) => (
+    <span className="flex items-start gap-3">
+      {avatar ? <Avatar src={avatar.src} name={avatar.name} size="sm" /> : null}
+      <span className="min-w-0 flex-1">
+        <span className="flex min-h-6 items-start justify-between gap-2">
+          {linked ? (
+            <Link href={href} className="min-w-0 truncate pt-0.5 text-sm text-ink underline-offset-4 hover:underline">
+              {name}
+            </Link>
+          ) : (
+            <span className="min-w-0 truncate pt-0.5 text-sm text-ink">{name}</span>
+          )}
+          {badge ? <span className="shrink-0">{badge}</span> : null}
+        </span>
+        {lines?.filter(Boolean).map((l, i) => (
+          <span key={i} className="block text-xs text-muted">
+            {l}
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+  if (!actions && !footer) {
+    return (
+      <RowLink href={href} aria-label={ariaLabel} className={className}>
+        {head(false)}
+      </RowLink>
+    );
+  }
+  return (
+    <div className={cn("flex flex-col rounded-inner bg-surface p-4", className)}>
+      {head(true)}
+      {footer ? <div className="mt-3">{footer}</div> : null}
+      {actions ? <div className="mt-3 flex flex-wrap items-center justify-end gap-2">{actions}</div> : null}
+    </div>
+  );
+}
+
 /** Empty state sized for a panel. */
-export function PanelEmpty({ icon, title, description }: { icon: ReactNode; title: string; description?: string }) {
+export function PanelEmpty({ icon, title, description }: { icon: ReactNode; title: string; description?: ReactNode }) {
   return (
     <Inset className="flex flex-col items-center gap-2 py-8 text-center">
       <span className="flex size-10 items-center justify-center rounded-full bg-sunken text-muted [&_svg]:size-[18px]" aria-hidden="true">
         {icon}
       </span>
       <p className="text-sm text-ink">{title}</p>
-      {description ? <p className="max-w-[36ch] text-xs text-muted">{description}</p> : null}
+      {description ? <p className="max-w-[40ch] text-xs text-muted">{description}</p> : null}
     </Inset>
+  );
+}
+
+/** "Owner" line: avatar + name (or "You"), so every pending item shows who it belongs to. */
+export function OwnerTag({ staffId, me, prefix = "Owner", className }: { staffId: string; me?: string; prefix?: string; className?: string }) {
+  const s = staffById(staffId);
+  return (
+    <span className={cn("flex min-w-0 items-center gap-2 text-xs text-muted", className)}>
+      <Avatar src={s?.avatar} name={s?.name ?? ""} size="xs" />
+      <span className="min-w-0 truncate">
+        {prefix} · <span className="text-ink-2">{staffId === me ? "You" : s?.name}</span>
+      </span>
+    </span>
   );
 }
 
 /** Live "now" marker for time-ordered lists (demo clock 09:40). */
 export function NowMarker({ className }: { className?: string }) {
   return (
-    <div className={cn("flex items-center gap-2 px-2 py-1", className)} role="note" aria-label={`Now, ${NOW_LABEL}`}>
+    <li className={cn("flex items-center gap-2 px-2 py-1", className)} aria-label={`Now, ${NOW_LABEL}`}>
       <span className="relative flex size-2" aria-hidden="true">
         <span className="absolute inset-0 animate-pulse-ring rounded-full bg-charcoal" />
         <span className="relative size-2 rounded-full bg-charcoal" />
@@ -193,68 +309,7 @@ export function NowMarker({ className }: { className?: string }) {
         Now · {NOW_LABEL}
       </span>
       <span className="h-px flex-1 bg-charcoal/30" aria-hidden="true" />
-    </div>
-  );
-}
-
-/** Requested → Accepted → Booked → Completed → Acknowledged, with the stalled step ringed. */
-export function StageTrack({ stage, stalled = false, className }: { stage: ReferralStage; stalled?: boolean; className?: string }) {
-  const idx = REFERRAL_STAGES.indexOf(stage);
-  return (
-    <span role="img" aria-label={`Referral stage: ${REFERRAL_STAGE_LABEL[stage]}, step ${idx + 1} of ${REFERRAL_STAGES.length}`} className={cn("inline-flex items-center", className)}>
-      {REFERRAL_STAGES.map((s, i) => (
-        <span key={s} className="flex items-center" aria-hidden="true">
-          {i > 0 ? <span className={cn("h-px w-3", i <= idx ? "bg-charcoal" : "bg-line-strong")} /> : null}
-          <span
-            className={cn(
-              "size-2 rounded-full",
-              i <= idx ? "bg-charcoal" : i === idx + 1 && stalled ? "bg-surface shadow-[inset_0_0_0_1.5px_var(--color-warning)]" : "bg-line-strong",
-            )}
-          />
-        </span>
-      ))}
-    </span>
-  );
-}
-
-/** Generic progress track (e.g. Booked → Attended → Rebooked) with the stalled step ringed. */
-export function StepTrack({ steps, reached, className }: { steps: string[]; reached: number; className?: string }) {
-  return (
-    <span role="img" aria-label={`${steps[Math.min(reached, steps.length - 1)]} reached; stopped before ${steps[reached + 1] ?? "the end"}`} className={cn("inline-flex items-center", className)}>
-      {steps.map((s, i) => (
-        <span key={s} className="flex items-center" aria-hidden="true">
-          {i > 0 ? <span className={cn("h-px w-3", i <= reached ? "bg-charcoal" : "bg-line-strong")} /> : null}
-          <span className={cn("size-2 rounded-full", i <= reached ? "bg-charcoal" : i === reached + 1 ? "bg-surface shadow-[inset_0_0_0_1.5px_var(--color-warning)]" : "bg-line-strong")} />
-        </span>
-      ))}
-    </span>
-  );
-}
-
-/** Compact tile for a widget the current plan doesn't include. */
-export function LockedTile({ feature, title, icon, description, className }: { feature: FeatureId; title: string; icon: ReactNode; description?: string; className?: string }) {
-  const plan = minPlanFor(feature);
-  const id = useId();
-  return (
-    <Group role="region" aria-labelledby={id} className={cn("flex flex-col", className)}>
-      <GroupHeader
-        icon={icon}
-        title={
-          <h2 id={id} className="flex items-center gap-2">
-            {title}
-            <LockBadge />
-          </h2>
-        }
-        subtitle={`Not in your plan · available on ${plan.name}`}
-      />
-      <Inset className="flex flex-1 flex-col items-start justify-between gap-4">
-        <p className="text-sm text-muted">{description ?? featureById(feature).description}</p>
-        <Link href="/pricing" className="inline-flex h-8 items-center gap-1.5 rounded-full bg-sunken px-3 text-xs text-ink transition-colors duration-200 hover:bg-sunken-2">
-          Available on {plan.name}
-          <ArrowUpRight size={14} aria-hidden="true" />
-        </Link>
-      </Inset>
-    </Group>
+    </li>
   );
 }
 
@@ -270,45 +325,12 @@ export function DisciplineDot({ discipline, className }: { discipline: Disciplin
   return <span aria-hidden="true" className={cn("inline-block size-2 shrink-0 rounded-full", DISCIPLINE_COLOR[discipline], className)} />;
 }
 
-/** One appointment in a time-ordered list: time · patient · service · status. */
-export function AppointmentRow({ appt, detail }: { appt: Appointment; detail?: ReactNode }) {
-  const p = patientById(appt.patientId);
-  const past = appt.status === "completed" || appt.status === "cancelled" || appt.status === "no-show";
+/** Time column for time-ordered rows. */
+export function TimeLead({ time, sub, muted }: { time: string; sub?: string; muted?: boolean }) {
   return (
-    <RowLink href={`/patients/${appt.patientId}`} className="@container" aria-label={`${formatTime(appt.start)} ${p?.name ?? "Patient"}, ${appt.service}, ${APPOINTMENT_STATUS_LABEL[appt.status]}`}>
-      <span className="flex items-start gap-3">
-        <span className="w-12 shrink-0">
-          <span className={cn("block text-sm tabular", past ? "text-muted" : "text-ink")}>{formatTime(appt.start)}</span>
-          <span className="block text-xs text-muted">{appt.durationMin} min</span>
-        </span>
-        <Avatar src={p?.avatar} name={p?.name ?? "Patient"} size="sm" />
-        <span className="min-w-0 flex-1">
-          <span className={cn("block truncate text-sm", past ? "text-ink-2" : "text-ink")}>{p?.name ?? "Unknown patient"}</span>
-          <span className="block truncate text-xs text-muted">{detail ?? appt.service}</span>
-          <StatusBadge tone={appointmentTone(appt.status)} className="mt-2 @md:hidden">
-            {APPOINTMENT_STATUS_LABEL[appt.status]}
-          </StatusBadge>
-        </span>
-        <StatusBadge tone={appointmentTone(appt.status)} className="hidden @md:inline-flex">
-          {APPOINTMENT_STATUS_LABEL[appt.status]}
-        </StatusBadge>
-      </span>
-    </RowLink>
-  );
-}
-
-/** Small count chip used in panel headers. */
-export function CountChip({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "warning" | "danger" }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs tabular",
-        tone === "neutral" && "bg-surface text-ink-2",
-        tone === "warning" && "bg-warning-soft text-warning",
-        tone === "danger" && "bg-danger-soft text-danger",
-      )}
-    >
-      {children}
+    <span className="w-12 shrink-0">
+      <span className={cn("block text-sm tabular", muted ? "text-muted" : "text-ink")}>{time}</span>
+      {sub ? <span className="block text-xs text-muted">{sub}</span> : null}
     </span>
   );
 }

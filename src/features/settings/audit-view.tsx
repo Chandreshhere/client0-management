@@ -14,7 +14,6 @@ import { SearchInput } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { ChipGroup, MediaStatCard, PeopleList, SectionLabel } from "@/components/viz/cards";
-import { ORGAN_LABEL, OrganImage } from "@/components/viz/organ";
 import { useRole } from "@/components/shell/role-context";
 import { AUDIT_CATEGORY_LABEL, logAudit, useAuditEvents, type AuditCategory, type AuditEvent } from "./audit";
 import {
@@ -45,7 +44,7 @@ import { TODAY_KEY, istDayKey, shortDate } from "./time";
  * Settings → Audit log (doc §2A, §7): an attributed, append-only history. The cobalt focal card
  * splits the period's entries by category (bubbles) and scope (tiles); "Who acted" ranks people
  * and automated sources (ref 5 doctor list with counts); dark media cards show whose clinical
- * content was opened (organ = that patient's primary body system). Every figure is computed from
+ * content was opened (by patient — the admin never sees what the content is). Every figure is computed from
  * the seeded entries plus this browser session's actions.
  */
 
@@ -74,11 +73,11 @@ export function AuditView() {
   if (role !== "admin") {
     return (
       <div className="flex flex-col gap-6 lg:gap-8">
-        <PageHeader eyebrow="Settings" title="Audit log" />
+        <PageHeader eyebrow="Settings" title="Activity log" />
         <Card>
           <EmptyState
             icon={<Lock />}
-            title="The audit log is read by administrators"
+            title="The activity log is read by administrators"
             description="It records who opened, changed or exported what across the clinic. Ask an administrator if you need to know who accessed a record — every access is logged, including yours."
           />
         </Card>
@@ -178,7 +177,7 @@ function AuditWorkspace() {
     <div className="flex flex-col gap-6 lg:gap-8">
       <PageHeader
         eyebrow="Settings"
-        title="Audit log"
+        title="Activity log"
         description="Who opened, changed or exported what — and on which record. Entries are append-only: an undo is logged as its own entry. Synthetic history plus the actions taken in this browser session."
         actions={
           <Button variant="secondary" leading={<DownloadSimple />} onClick={exportCsv} disabled={!shown.length}>
@@ -342,7 +341,12 @@ function AuditWorkspace() {
               value={c.entries.length}
               label={`${c.patient.name.split(" ")[0]}’s record`}
               time={stamp(c.entries[0].at)}
-              media={c.organ ? <OrganImage kind={c.organ} className="h-full w-full p-3" alt={`${ORGAN_LABEL[c.organ]} — ${c.patient.name}'s primary body system`} /> : null}
+              // The admin reads who touched a record, not what's in it: the patient, never their body system.
+              media={
+                <div className="flex h-full w-full items-center justify-center">
+                  <Avatar src={c.patient.avatar} name={c.patient.name} size="xl" />
+                </div>
+              }
               onOpen={() => {
                 setPatient(c.patient.id);
                 setScope("all");
@@ -365,7 +369,7 @@ function AuditWorkspace() {
         </div>
         <p className="mt-3 text-xs text-muted">
           {clinical.length
-            ? "Big number = entries that opened or changed that patient's clinical content · time = the latest one · organ = the patient's primary body system from their recorded conditions. Select a card to list the entries."
+            ? "Big number = entries that opened or changed that patient's clinical content · time = the latest one. Select a card to list the entries."
             : `No clinical content was opened or changed ${periodText}.`}
         </p>
       </section>
@@ -413,7 +417,7 @@ function AuditWorkspace() {
           />
           {actor !== "all" ? <RemovableChip label={`Actor · ${actors.find((a) => a.actor.key === actor)?.actor.groupName ?? "Unknown"}`} onRemove={() => setActor("all")} /> : null}
           {patient ? <RemovableChip label={`Record · ${clinical.find((c) => c.patient.id === patient)?.patient.name ?? "Patient"}`} onRemove={() => setPatient(null)} /> : null}
-          <SearchInput className="w-full sm:ml-auto sm:w-[280px]" placeholder="Search action, person, record" aria-label="Search the audit log" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <SearchInput className="w-full sm:ml-auto sm:w-[280px]" placeholder="Search action, person, record" aria-label="Search the activity log" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
 
         {shown.length === 0 ? (

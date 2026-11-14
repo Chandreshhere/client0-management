@@ -22,19 +22,20 @@ import { useToast } from "@/components/ui/toast";
 import { useRole } from "@/components/shell/role-context";
 import { FLAG_REASONS, LOG_MATCH_LABEL, SLOT_LABEL, type FoodLog, type LogMatch } from "./data";
 import { followedVersion, newId, nowIso, stamp } from "./model";
-import { logActions, taskActions, useNutrition } from "./store";
+import { logActions, useNutrition } from "./store";
 import { Plate } from "./plate";
 import { SelfReported } from "./ui";
-import { AdherenceForm } from "./adherence-form";
+import { FollowUpCard } from "./adherence-form";
+import { addFollowUpTask } from "./follow-up-task";
 import { LogTrend } from "./log-trend";
 
-/** /nutrition/logs — self-reported food logs with reviewer actions and the adherence review (doc §2C). */
+/** /nutrition/logs (Pro) — self-reported food logs with reviewer actions, beside the follow-up entries (F6, F14). */
 
 type StatusFilter = "new" | "flagged" | "reviewed" | "all";
 const MATCH_TONE: Record<LogMatch, Tone> = { "as-planned": "success", partly: "warning", different: "neutral", skipped: "danger" };
 
 export function FoodLogs() {
-  const { role, user, has } = useRole();
+  const { role, user } = useRole();
   const { toast } = useToast();
   const state = useNutrition();
   const canReview = role === "nutritionist";
@@ -160,7 +161,7 @@ export function FoodLogs() {
                           canReview={canReview}
                           onReviewAdherence={() => {
                             setFormPatient(log.patientId);
-                            const el = document.getElementById("adherence-review");
+                            const el = document.getElementById("follow-up");
                             const r = el?.getBoundingClientRect();
                             if (el && r && (r.top > window.innerHeight || r.bottom < 0)) el.scrollIntoView({ behavior: "smooth", block: "start" });
                           }}
@@ -193,7 +194,7 @@ export function FoodLogs() {
         </section>
 
         <aside aria-label="Adherence" className="flex min-w-0 flex-col gap-4">
-          <AdherenceForm patientId={formPatient} patientOptions={formOptions} onPatientChange={setFormPatient} logs={allLogs} reviews={state.reviews} canReview={canReview} />
+          <FollowUpCard patientId={formPatient} patientOptions={formOptions} onPatientChange={setFormPatient} entries={state.followUps} canWrite={canReview} />
           <Group>
             <GroupHeader icon={<Moon />} title="Quiet patients" subtitle="Published plan, no entries in 14 days" />
             {quiet.length ? (
@@ -222,8 +223,8 @@ export function FoodLogs() {
                             className="self-start"
                             disabled={!canReview}
                             onClick={() => {
-                              taskActions.add({ id: newId("task"), title: `Check in about food logs — ${patient?.name}`, patientId: p.patientId, ownerId: p.authorId, createdBy: user.id, at: nowIso() });
-                              toast({ title: `Task created for ${owner?.name}`, description: has("messages") ? "Recorded in this browser session. No message was sent to the patient." : "Recorded in this browser session only.", tone: "success" });
+                              addFollowUpTask({ title: `Check in about food logs — ${patient?.name}`, patientId: p.patientId, ownerId: p.authorId, byId: user.id, source: "Food logs quiet for 14 days" });
+                              toast({ title: `Task created for ${owner?.name}`, description: "It's in their Tasks. Saved in this browser session — no message was sent to the patient.", tone: "success" });
                             }}
                           >
                             Create follow-up task
@@ -405,7 +406,7 @@ function LogCard({
           <span className="flex-1" />
           <button type="button" onClick={onReviewAdherence} className={cn("inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs text-ink-2 transition-colors hover:bg-canvas hover:text-ink")}>
             <ForkKnife size={14} aria-hidden="true" />
-            Review adherence
+            Add follow-up
           </button>
           {log.status === "reviewed" && canReview ? (
             <button type="button" onClick={() => logActions.reopen(log.id)} className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs text-muted transition-colors hover:bg-canvas hover:text-ink">

@@ -32,13 +32,13 @@ export const staffById = (id: string | undefined) => STAFF.find((s) => s.id === 
 
 /** The demo identity shown for each workspace when switching roles. */
 export const DEMO_USER: Record<Role, { personId: string; label: string; description: string }> = {
-  admin: { personId: "s-neha", label: "Admin", description: "Registration, staff, services, access and clinic operations" },
-  doctor: { personId: "s-ananya", label: "Doctor", description: "Consultations, notes, report review, guidance and referrals" },
-  nutritionist: { personId: "s-meera", label: "Nutritionist", description: "Assessments, meal plans, food logs and adherence reviews" },
-  yoga: { personId: "s-kavya", label: "Yoga instructor", description: "Classes, rosters, precautions, attendance and escalation" },
-  frontdesk: { personId: "s-sneha", label: "Front desk", description: "Diary, arrivals, token queue, forms and checkout" },
-  coordinator: { personId: "s-farhan", label: "Care coordinator", description: "Stalled care, referrals, follow-ups and programme progress" },
-  patient: { personId: "p-kabir", label: "Patient", description: "Your appointments, plan, daily actions, records and messages" },
+  admin: { personId: "s-neha", label: "Admin", description: "Duplicates, unmatched documents, staff, access and the activity log — no clinical content" },
+  doctor: { personId: "s-ananya", label: "Doctor", description: "Consultations, notes, report review, assignments and precautions" },
+  nutritionist: { personId: "s-meera", label: "Nutritionist", description: "Assignments, assessments, versioned meal plans and follow-ups" },
+  yoga: { personId: "s-kavya", label: "Yoga instructor", description: "Precautions to acknowledge, sessions, attendance and progress notes" },
+  frontdesk: { personId: "s-sneha", label: "Reception", description: "Appointments, check-in, walk-ins, checkout and billing — no clinical content" },
+  coordinator: { personId: "s-farhan", label: "Care coordinator", description: "Unseen assignments, overdue follow-ups, missed sessions, programmes" },
+  patient: { personId: "p-kabir", label: "Patient", description: "Appointments, my plan, released records, food log and messages" },
 };
 
 export const ROLE_ORDER: Role[] = ["doctor", "nutritionist", "yoga", "frontdesk", "coordinator", "admin", "patient"];

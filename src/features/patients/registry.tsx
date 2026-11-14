@@ -7,8 +7,8 @@ import { DotsThree, Export, LockSimple, MagnifyingGlass, UploadSimple, UserPlus 
 import type { BranchId, Patient, PatientStatus } from "@/data/types";
 import { PATIENTS, PATIENT_STATUS_LABEL } from "@/data/patients";
 import { STAFF } from "@/data/staff";
-import { minPlanFor } from "@/data/plans";
 import { pluralize } from "@/lib/format";
+import { logAudit } from "@/features/settings/audit";
 import { useRole } from "@/components/shell/role-context";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -16,7 +16,6 @@ import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownTrigger
 import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
 import {
-  BILLING_ROLES,
   CARE_ROLES,
   EMPTY_FILTERS,
   FLAG_LABEL,
@@ -27,8 +26,11 @@ import {
   branchLabel,
   buildRows,
   inScope,
+  clinicNoOf,
   matchesQuery,
+  mineFirst,
   passesFilters,
+  registryLens,
   sortRows,
   type Filters,
   type RegistryPatient,
@@ -36,7 +38,8 @@ import {
   type Scope,
   type SortKey,
 } from "./data";
-import { usePatientsSession, withSessionCareTeam } from "./session-store";
+import { usePatientsSession, withDuplicateDecision, withSessionCareTeam } from "./session-store";
+import { MergeModal, type DuplicateChoice } from "./merge-modal";
 import { ActiveFilters, RegistryToolbar, type Facet, type FacetKey, type RegistryView } from "./registry-toolbar";
 import { RegistryTable } from "./registry-table";
 import { RegistryCards } from "./registry-cards";
@@ -49,7 +52,11 @@ import { LocalPatientSheet } from "./local-patient-sheet";
 
 const EXPORT_TOAST = { title: "Export not available", description: "Exports are permission-checked server-side — not available in this prototype.", tone: "warning" as const };
 
-/** /patients — the shared patient registry (doc §2A, §5). */
+/**
+ * /patients — the shared patient registry (F1, F2). Clinical roles see concerns and care teams;
+ * Admin and Reception see demographics and routing only. Search by clinic ID, phone or name, with
+ * your own patients first.
+ */
 export function PatientRegistry({ initialView = "table" }: { initialView?: RegistryView }) {
   const { role } = useRole();
   if (role === "patient") return <StaffOnly />;
@@ -60,28 +67,43 @@ function Registry({ initialView }: { initialView: RegistryView }) {
   const router = useRouter();
   const { role, user, has } = useRole();
   const { toast } = useToast();
-  const { session, addPatient, removePatient, setCareTeams } = usePatientsSession();
+  const { session, addPatient, removePatient, setCareTeams, decideDuplicates, undoDuplicates } = usePatientsSession();
+  const lens = useMemo(() => registryLens(role, has), [role, has]);
 
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<Scope>("all");
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortKey>("name");
-  const [view, setView] = useState<RegistryView>(initialView);
+  const [view, setViewState] = useState<RegistryView>(initialView);
+  // Browse previews the organ-led clinical record — an optional doctor view; others get the table or cards.
+  const setView = useCallback((v: RegistryView) => setViewState(v), []);
+  const shownView: RegistryView = !lens.browse && view === "browse" ? "table" : view;
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [registerOpen, setRegisterOpen] = useState(false);
   const [assign, setAssign] = useState<AssignTarget | null>(null);
   const [localId, setLocalId] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [reviewId, setReviewId] = useState<string | null>(null);
 
-  const showBalance = BILLING_ROLES.includes(role);
-  const canAssign = has("multi-role");
+  const showBalance = lens.showBalance;
 
-  const patients = useMemo<RegistryPatient[]>(() => [...PATIENTS, ...session.added].map((p) => withSessionCareTeam(p, session)), [session]);
-  const rows = useMemo(() => buildRows(patients, session.visits), [patients, session.visits]);
+  // Records an admin merged away stop appearing; ones kept separate lose the duplicate flag.
+  const patients = useMemo<RegistryPatient[]>(
+    () =>
+      [...PATIENTS, ...session.added]
+        .filter((p) => session.duplicates?.[p.id]?.outcome !== "merged")
+        .map((p) => withDuplicateDecision(withSessionCareTeam(p, session), session)),
+    [session],
+  );
+  const rows = useMemo(() => buildRows(patients, session.visits, { diary: lens.diary, coordinators: lens.coordinators }), [patients, session.visits, lens.diary, lens.coordinators]);
   const ctx = useMemo(() => ({ role, userId: user.id }), [role, user.id]);
   const scoped = useMemo(() => rows.filter((r) => inScope(r, scope, ctx)), [rows, scope, ctx]);
-  const results = useMemo(() => sortRows(scoped.filter((r) => matchesQuery(r.patient, query) && passesFilters(r, filters)), sort), [scoped, query, filters, sort]);
+  const results = useMemo(() => {
+    const sorted = sortRows(scoped.filter((r) => matchesQuery(r.patient, query, { clinical: lens.concern === "diagnosis" }) && passesFilters(r, filters)), sort);
+    // F1: when searching, the patients you're assigned to come first.
+    return query.trim() && CARE_ROLES.includes(role) ? mineFirst(sorted, user.id) : sorted;
+  }, [scoped, query, filters, sort, lens.concern, role, user.id]);
 
   const pageCount = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
   const current = Math.min(page, pageCount);
@@ -105,49 +127,56 @@ function Registry({ initialView }: { initialView: RegistryView }) {
   const facets = useMemo<Facet[]>(() => {
     const count = (fn: (r: Row) => boolean) => scoped.filter(fn).length;
     const programmes = [...new Set(patients.map((p) => p.program).filter((p): p is string => !!p))].sort();
-    const careStaff = STAFF.filter((s) => CARE_ROLES.includes(s.role));
+    const careStaff = STAFF.filter((s) => (lens.clinical ? CARE_ROLES : ["doctor"]).includes(s.role) && (s.role !== "coordinator" || lens.coordinators));
     const roleGroup: Record<string, string> = { doctor: "Doctors", nutritionist: "Nutritionists", yoga: "Yoga instructors", coordinator: "Coordinators" };
-    return [
-      {
+    const flagOptions = FLAG_ORDER.filter((f) => {
+      if (f === "balance") return showBalance;
+      if (f === "allergies") return lens.concern === "diagnosis";
+      if (f === "duplicate") return !lens.clinical;
+      return true;
+    }).map((f) => ({ value: f, label: FLAG_LABEL[f], count: count((r) => r.flags.includes(f)) }));
+    const out: Facet[] = [];
+    if (lens.clinical) {
+      out.push({
         key: "status",
         label: "Status",
-        options: (["active", "onboarding", "needs-attention", "completed"] as PatientStatus[]).map((s) => ({ value: s, label: PATIENT_STATUS_LABEL[s], count: count((r) => r.patient.status === s) })),
-      },
-      {
+        options: (["active", "onboarding", "needs-attention", "completed"] as PatientStatus[]).map((s) => ({ value: s, label: s === "completed" && !lens.programmes ? "Care complete" : PATIENT_STATUS_LABEL[s], count: count((r) => r.patient.status === s) })),
+      });
+    }
+    if (lens.clinical && lens.programmes) {
+      out.push({
         key: "programme",
         label: "Programme",
         options: [
           ...programmes.map((p) => ({ value: p, label: p, count: count((r) => r.patient.program === p) })),
           { value: NONE, label: "No programme", count: count((r) => !r.patient.program), group: " " },
         ],
-      },
-      {
-        key: "team",
-        label: "Care team",
-        options: [
-          ...careStaff.map((s) => ({
-            value: s.id,
-            label: s.id === user.id ? `${s.name} (you)` : s.name,
-            description: s.status === "on-leave" ? s.workingHours : undefined,
-            count: count((r) => r.team.includes(s.id)),
-            group: roleGroup[s.role],
-          })),
-          { value: NONE, label: "No care team yet", count: count((r) => r.team.length === 0), group: "Unassigned" },
-        ],
-      },
-      {
+      });
+    }
+    out.push({
+      key: "team",
+      label: lens.clinical ? "Care team" : "Primary doctor",
+      options: [
+        ...careStaff.map((s) => ({
+          value: s.id,
+          label: s.id === user.id ? `${s.name} (you)` : s.name,
+          description: s.status === "on-leave" ? s.workingHours : undefined,
+          count: count((r) => (lens.clinical ? r.team.includes(s.id) : r.patient.careTeam.doctor === s.id)),
+          group: lens.clinical ? roleGroup[s.role] : undefined,
+        })),
+        { value: NONE, label: lens.clinical ? "No care team yet" : "No doctor yet", count: count((r) => (lens.clinical ? r.team.length === 0 : !r.patient.careTeam.doctor)), group: "Unassigned" },
+      ],
+    });
+    if (lens.branches) {
+      out.push({
         key: "branch",
         label: "Branch",
-        locked: has("branches") ? undefined : `Multi-branch is on the ${minPlanFor("branches").name} plan`,
         options: (["indiranagar", "hsr"] as BranchId[]).map((b) => ({ value: b, label: branchLabel(b), count: count((r) => r.patient.branch === b) })),
-      },
-      {
-        key: "flags",
-        label: "Flags",
-        options: FLAG_ORDER.filter((f) => f !== "balance" || showBalance).map((f) => ({ value: f, label: FLAG_LABEL[f], count: count((r) => r.flags.includes(f)) })),
-      },
-    ];
-  }, [scoped, patients, has, showBalance, user.id]);
+      });
+    }
+    out.push({ key: "flags", label: "Flags", options: flagOptions });
+    return out;
+  }, [scoped, patients, lens, showBalance, user.id]);
 
   const chips = useMemo(
     () =>
@@ -162,14 +191,14 @@ function Registry({ initialView }: { initialView: RegistryView }) {
   );
 
   const scopes = useMemo(() => {
-    const n = (s: Scope) => rows.filter((r) => inScope(r, s, ctx)).length;
-    return [
-      { value: "all" as const, label: "All patients", count: n("all") },
-      { value: "mine" as const, label: CARE_ROLES.includes(role) ? "My patients" : "Today's patients", count: n("mine") },
-      { value: "attention" as const, label: "Needs attention", count: n("attention") },
-      { value: "new" as const, label: "New this week", count: n("new") },
-    ];
-  }, [rows, ctx, role]);
+    const n = (sc: Scope) => rows.filter((r) => inScope(r, sc, ctx)).length;
+    const all = { value: "all" as const, label: "All patients", count: n("all") };
+    const fresh = { value: "new" as const, label: "New this week", count: n("new") };
+    if (CARE_ROLES.includes(role)) return [all, { value: "mine" as const, label: "My patients", count: n("mine") }, { value: "attention" as const, label: "Needs attention", count: n("attention") }, fresh];
+    if (role === "admin") return [all, { value: "duplicates" as const, label: "Possible duplicates", count: n("duplicates") }, fresh];
+    // Reception (Clinic+): who's in today.
+    return [all, ...(lens.diary ? [{ value: "mine" as const, label: "Today's patients", count: n("mine") }] : []), fresh];
+  }, [rows, ctx, role, lens.diary]);
 
   // ---------- handlers
   const setFacet = (key: FacetKey, values: string[]) => refine<Filters>(setFilters)({ ...filters, [key]: values } as Filters);
@@ -200,14 +229,53 @@ function Registry({ initialView }: { initialView: RegistryView }) {
 
   const open = (p: RegistryPatient) => (p.local ? setLocalId(p.id) : router.push(`/patients/${p.id}`));
   const openAssign = (id: string) => {
-    if (!canAssign) {
-      toast({ title: "Care teams need the Team plan", description: `Assigning nutrition and yoga staff is part of the ${minPlanFor("multi-role").name} plan.`, tone: "neutral" });
-      return;
-    }
-    setAssign({ mode: "team", id });
+    if (lens.canAssignTeam) setAssign({ mode: "team", id });
   };
 
-  const openRegister = useCallback(() => setRegisterOpen(true), []);
+  const canRegister = lens.canRegister;
+  const openRegister = useCallback(() => {
+    if (canRegister) setRegisterOpen(true);
+  }, [canRegister]);
+
+  // Admin decision on a possible duplicate — never automatic, always in the activity log.
+  const onDuplicateDecision = (c: DuplicateChoice) => {
+    setReviewId(null);
+    if (c.outcome === "merged") {
+      decideDuplicates({ [c.merge.id]: { outcome: "merged", into: c.keep.id, at: new Date().toISOString(), by: user.name }, [c.keep.id]: { outcome: "separate", at: new Date().toISOString(), by: user.name } });
+      const auditId = logAudit({
+        actorId: user.id,
+        category: "record",
+        action: `Merged duplicate record ${clinicNoOf(c.merge)} (${c.merge.name}) into ${clinicNoOf(c.keep)} (${c.keep.name})`,
+        target: { kind: "patient", id: c.keep.id, label: c.keep.name },
+        detail: "Reviewed by an admin — visits, documents and notes now sit on the kept record",
+        scope: "metadata",
+      });
+      toast({
+        title: `Merged into ${clinicNoOf(c.keep)}`,
+        description: `${clinicNoOf(c.merge)} now points to ${c.keep.name}'s record. Recorded in the activity log.`,
+        tone: "success",
+        action: {
+          label: "Undo",
+          onClick: () => {
+            undoDuplicates([c.merge.id, c.keep.id]);
+            logAudit({ actorId: user.id, category: "record", action: `Undid the merge of ${clinicNoOf(c.merge)} into ${clinicNoOf(c.keep)}`, target: { kind: "patient", id: c.keep.id, label: c.keep.name }, detail: `Reverses ${auditId}`, scope: "metadata" });
+          },
+        },
+      });
+    } else {
+      const people = patients.filter((p) => c.ids.includes(p.id));
+      decideDuplicates(Object.fromEntries(c.ids.map((id) => [id, { outcome: "separate" as const, at: new Date().toISOString(), by: user.name }])));
+      for (const p of people) {
+        logAudit({ actorId: user.id, category: "record", action: `Reviewed a possible duplicate — kept ${p.name} (${clinicNoOf(p)}) as a separate patient`, target: { kind: "patient", id: p.id, label: p.name }, scope: "metadata" });
+      }
+      toast({
+        title: "Kept as separate patients",
+        description: "The duplicate flag is cleared. Recorded in the activity log.",
+        tone: "success",
+        action: { label: "Undo", onClick: () => undoDuplicates(c.ids) },
+      });
+    }
+  };
 
   // Keep the layout in the URL (?view=browse) so a reload or a shared link reopens it.
   const changeView = (v: RegistryView) => {
@@ -230,6 +298,13 @@ function Registry({ initialView }: { initialView: RegistryView }) {
 
   const onRegistered = (r: Registration) => {
     addPatient(r.patient, r.visit);
+    logAudit({
+      actorId: user.id,
+      category: "record",
+      action: `Registered ${r.patient.name} (${clinicNoOf(r.patient)}) — DPDP consent recorded${r.flaggedDuplicate ? ", flagged as a possible duplicate for the admin" : ""}`,
+      target: { kind: "patient", id: r.patient.id, label: r.patient.name },
+      scope: "metadata",
+    });
     onRegisterOpenChange(false);
     setQuery("");
     setFilters(EMPTY_FILTERS);
@@ -251,7 +326,7 @@ function Registry({ initialView }: { initialView: RegistryView }) {
   return (
     <div className="@container flex flex-col gap-6 pb-24">
       <Suspense fallback={null}>
-        <NewPatientParam onOpen={openRegister} />
+        {canRegister ? <NewPatientParam onOpen={openRegister} /> : null}
         <ViewParam onView={setView} />
       </Suspense>
 
@@ -264,7 +339,7 @@ function Registry({ initialView }: { initialView: RegistryView }) {
             </span>
           </span>
         }
-        description="One shared record for medical, nutrition and movement care."
+        description={lens.clinical ? "One shared record for medical, nutrition and movement care." : "Contact details and care teams. Clinical records stay with each patient's care team."}
         actions={
           <>
             <Dropdown>
@@ -283,9 +358,11 @@ function Registry({ initialView }: { initialView: RegistryView }) {
                 </DropdownItem>
               </DropdownContent>
             </Dropdown>
-            <Button variant="primary" leading={<UserPlus />} onClick={openRegister}>
-              Register patient
-            </Button>
+            {canRegister ? (
+              <Button variant="primary" leading={<UserPlus />} onClick={openRegister}>
+                Register patient
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -294,8 +371,10 @@ function Registry({ initialView }: { initialView: RegistryView }) {
         scope={scope}
         onScope={refine(setScope)}
         scopes={scopes}
-        view={view}
+        view={shownView}
         onView={changeView}
+        browse={lens.browse}
+        placeholder={lens.concern === "diagnosis" ? "Name, clinic ID, phone or concern" : "Name, clinic ID or phone"}
         query={query}
         onQuery={refine(setQuery)}
         facets={facets}
@@ -329,12 +408,14 @@ function Registry({ initialView }: { initialView: RegistryView }) {
             title={filtered ? "No patients match these filters" : "No patients in this view yet"}
             description={
               filtered
-                ? "Try a different spelling, the clinic number (e.g. PR-01047), or fewer filters."
+                ? "Try a different spelling, the clinic ID (e.g. PR-01047), the last three digits of the mobile, or fewer filters."
                 : scope === "mine"
                   ? CARE_ROLES.includes(role)
                     ? "You're not on any care team yet. Care teams are assigned from a patient's record."
                     : "Nobody is booked today."
-                  : "Patients registered this week appear here."
+                  : scope === "duplicates"
+                    ? "No possible duplicates to review."
+                    : "Patients registered this week appear here."
             }
             action={
               <div className="flex flex-wrap justify-center gap-2">
@@ -343,14 +424,16 @@ function Registry({ initialView }: { initialView: RegistryView }) {
                     {filtered ? "Clear filters" : "Show all patients"}
                   </Button>
                 ) : null}
-                <Button variant="secondary" leading={<UserPlus />} onClick={openRegister}>
-                  Register patient
-                </Button>
+                {canRegister ? (
+                  <Button variant="secondary" leading={<UserPlus />} onClick={openRegister}>
+                    Register patient
+                  </Button>
+                ) : null}
               </div>
             }
           />
         </div>
-      ) : view === "browse" ? (
+      ) : shownView === "browse" ? (
         <RegistryBrowse
           rows={results}
           sort={sort}
@@ -362,7 +445,7 @@ function Registry({ initialView }: { initialView: RegistryView }) {
         />
       ) : (
         <>
-          {view === "table" ? (
+          {shownView === "table" ? (
             <div className="hidden overflow-hidden rounded-card bg-surface @[880px]:block">
               <RegistryTable
                 rows={pageRows}
@@ -372,27 +455,29 @@ function Registry({ initialView }: { initialView: RegistryView }) {
                 onOpen={open}
                 onAssign={openAssign}
                 onOpenLocal={setLocalId}
-                showBalance={showBalance}
+                onReview={setReviewId}
+                lens={lens}
                 highlight={highlight}
                 caption={caption}
               />
               <Pager page={current} pageCount={pageCount} total={results.length} pageSize={PAGE_SIZE} onPage={setPage} className="px-5 py-3 shadow-[inset_0_1px_0_var(--color-line)]" />
             </div>
           ) : null}
-          <div className={view === "table" ? "@[880px]:hidden" : undefined}>
-            <RegistryCards rows={pageRows} selected={selected} onToggle={toggle} onOpen={open} onAssign={openAssign} onOpenLocal={setLocalId} showBalance={showBalance} highlight={highlight} />
+          <div className={shownView === "table" ? "@[880px]:hidden" : undefined}>
+            <RegistryCards rows={pageRows} selected={selected} onToggle={toggle} onOpen={open} onAssign={openAssign} onOpenLocal={setLocalId} onReview={setReviewId} lens={lens} highlight={highlight} />
             <Pager page={current} pageCount={pageCount} total={results.length} pageSize={PAGE_SIZE} onPage={setPage} className="mt-4 px-1" />
           </div>
         </>
       )}
 
       <BulkBar
-        count={view === "browse" ? 0 : selected.size}
-        onAssign={() => setAssign({ mode: "coordinator", ids: [...selected] })}
-        assignLocked={has("coordinator") ? undefined : `Coordinators are on the ${minPlanFor("coordinator").name} plan`}
+        count={shownView === "browse" ? 0 : selected.size}
+        onAssign={lens.coordinators && lens.canAssignTeam ? () => setAssign({ mode: "coordinator", ids: [...selected] }) : undefined}
         onExport={() => toast(EXPORT_TOAST)}
         onClear={() => setSelected(new Set())}
       />
+
+      <MergeModal patient={reviewId ? (patients.find((p) => p.id === reviewId) ?? null) : null} pool={patients} onClose={() => setReviewId(null)} onDecide={onDuplicateDecision} />
 
       <RegisterPatientModal
         open={registerOpen}
@@ -412,6 +497,10 @@ function Registry({ initialView }: { initialView: RegistryView }) {
           setCareTeams(teams);
           setAssign(null);
           setSelected(new Set());
+          for (const id of Object.keys(teams)) {
+            const p = patients.find((x) => x.id === id);
+            if (p) logAudit({ actorId: user.id, category: "record", action: "Updated the care team", target: { kind: "patient", id, label: p.name }, detail: summary.title, scope: "metadata" });
+          }
           toast({ ...summary, tone: "success" });
         }}
       />
@@ -420,6 +509,8 @@ function Registry({ initialView }: { initialView: RegistryView }) {
         patient={localPatient}
         visit={localVisit}
         pool={patients}
+        lens={lens}
+        onReview={setReviewId}
         onOpenChange={(o) => !o && setLocalId(null)}
         onDiscard={(id) => {
           removePatient(id);

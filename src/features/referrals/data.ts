@@ -1,68 +1,28 @@
-import type { ReferralStage } from "@/data/types";
-
 /**
- * Synthetic detail behind the shared REFERRALS fixtures (src/data/care.ts): who moved each
- * referral to each stage, when booked visits happen, and notes along the way.
+ * Synthetic detail behind the shared REFERRALS fixtures (src/data/care.ts), read as assignments
+ * (spec F5): the doctor's goals and the guidance (nutrition) or precautions (yoga) that go with
+ * each one, and who opened it. Goals for instructors are written without diagnoses (rule 3).
  */
-export interface ReferralNote {
-  id: string;
-  at: string;
-  actorId: string;
-  text: string;
+export interface AssignmentExtra {
+  goals: string;
+  /** nutrition guidance or yoga precautions, as the doctor wrote them */
+  guidance: string;
+  /** who opened it (the recipient, unless it was reassigned) */
+  seenBy?: string;
 }
 
-export interface ReferralExtra {
-  bookedFor?: string;
-  room?: string;
-  actors: Partial<Record<ReferralStage, string>>;
-  notes?: ReferralNote[];
-  /** a task in TASKS that tracks this referral (closed when the referral moves on) */
-  linkedTaskId?: string;
-}
-
-const at = (month: number, day: number, hhmm: string) => `2026-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${hhmm}:00+05:30`;
-
-export const REFERRAL_EXTRAS: Record<string, ReferralExtra> = {
-  r1: {
-    bookedFor: at(9, 12, "11:00"),
-    room: "Nutrition Studio",
-    actors: { requested: "s-ananya", accepted: "s-meera", booked: "s-sneha", completed: "s-meera", acknowledged: "s-ananya" },
-    notes: [{ id: "r1-n1", at: at(9, 12, "12:05"), actorId: "s-meera", text: "Completion note: plan v1 published — vegetarian, 1,800 kcal, sodium under 2 g." }],
-  },
-  r2: {
-    bookedFor: at(9, 9, "07:30"),
-    room: "Yoga Hall",
-    actors: { requested: "s-ananya", accepted: "s-kavya", booked: "s-kavya", completed: "s-kavya" },
-    notes: [{ id: "r2-n1", at: at(9, 15, "08:40"), actorId: "s-kavya", text: "Completion note: 6-session block finished; HR stayed under 110 bpm throughout. Home practice released." }],
-  },
-  r3: { actors: { requested: "s-ananya" }, linkedTaskId: "t5" },
-  r4: {
-    actors: { requested: "s-vikram", accepted: "s-rohan" },
-    notes: [{ id: "r4-n1", at: at(11, 7, "11:00"), actorId: "s-farhan", text: "Two call attempts to book — no answer. Patient also missed today's 09:00 review." }],
-  },
-  r5: { bookedFor: at(11, 13, "12:00"), room: "Yoga Hall", actors: { requested: "s-vikram", accepted: "s-lakshmi", booked: "s-sneha" } },
-  r6: {
-    bookedFor: at(10, 21, "17:00"),
-    room: "Therapy Room",
-    actors: { requested: "s-sana", accepted: "s-lakshmi", booked: "s-lakshmi", completed: "s-lakshmi" },
-    notes: [
-      { id: "r6-n1", at: at(11, 10, "17:50"), actorId: "s-lakshmi", text: "Completion note: SpO₂ stayed at or above 92% in every session. Ready for the doctor's acknowledgement." },
-      { id: "r6-n2", at: at(11, 12, "09:00"), actorId: "s-farhan", text: "Dr. Qureshi is on leave until 18 Nov — acknowledgement needs a covering doctor." },
-    ],
-  },
-  r7: {
-    bookedFor: at(10, 9, "17:30"),
-    room: "Yoga Deck",
-    actors: { requested: "s-sana", accepted: "s-arjun", booked: "s-ishaan" },
-    notes: [{ id: "r7-n1", at: at(10, 9, "19:00"), actorId: "s-arjun", text: "First session held. Completion of the referral not recorded yet." }],
-  },
-  r8: {
-    actors: { requested: "s-ananya" },
-    notes: [{ id: "r8-n1", at: at(11, 6, "10:00"), actorId: "s-farhan", text: "Raised at the Thursday huddle — still not accepted." }],
-  },
-  r9: { actors: { requested: "s-vikram", accepted: "s-kavya" } },
-  r10: { bookedFor: at(11, 13, "16:30"), room: "Nutrition Studio", actors: { requested: "s-vikram", accepted: "s-meera", booked: "s-meera" } },
+export const ASSIGNMENT_EXTRAS: Record<string, AssignmentExtra> = {
+  r1: { goals: "Heart-healthy vegetarian plan; bring LDL from 96 to under 70 mg/dL", guidance: "Sodium under 2 g a day · no coconut oil for cooking · keep paneer to twice a week", seenBy: "s-meera" },
+  r2: { goals: "Gentle flow three times a week; build stamina for daily walks", guidance: "HR ceiling 110 bpm · no inversions · no breath retention", seenBy: "s-kavya" },
+  r3: { goals: "Post-MI diet: weight 84 kg → 78 kg over 12 weeks; triglycerides 260 mg/dL", guidance: "Low sodium, DASH-style · no alcohol · non-vegetarian, prefers fish" },
+  r4: { goals: "Diabetes nutrition reset; HbA1c 8.4% → under 7%", guidance: "Kerala meals, rice to one cup per meal · no fruit juice · keep dinner before 20:00", seenBy: "s-rohan" },
+  r5: { goals: "Strength & flow, twice a week", guidance: "Hydration break mid-class · no hot room", seenBy: "s-lakshmi" },
+  r6: { goals: "Breathwork and paced walking preparation", guidance: "SpO₂ floor 90% during practice · stop and rest below it", seenBy: "s-lakshmi" },
+  r7: { goals: "Back care programme, 8 sessions", guidance: "Avoid loaded flexion · chair support for standing work", seenBy: "s-arjun" },
+  r8: { goals: "Consistent vitamin K intake while on warfarin", guidance: "Keep leafy greens steady day to day, don't cut them out · INR checked weekly" },
+  r9: { goals: "Low-impact yoga, twice a week", guidance: "No supine breath-holds · seated options for every standing pose", seenBy: "s-kavya" },
+  r10: { goals: "Iron-rich vegetarian diet; ferritin 9 ng/mL", guidance: "Jain — no root vegetables · vitamin C with iron-rich meals · tea away from meals", seenBy: "s-meera" },
 };
 
-/** Who covers whom while someone is on leave (used by "Reassign"). */
+/** Who covers whom while someone is on leave (suggested first when reassigning). */
 export const COVER_FOR: Record<string, string> = { "s-sana": "s-vikram" };

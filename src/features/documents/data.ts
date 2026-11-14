@@ -114,7 +114,7 @@ export const SEEDED_REVIEWS: Record<string, DocReview> = {
 
 /** What the intake desk can see without opening the clinical content. */
 export const INTAKE_HINTS: Record<string, { note: string; suggest?: string }> = {
-  d2: { note: "Handed in at reception by a family member. The cover sheet reads “R. Pillai”; no date of birth.", suggest: "p-rajesh" },
+  d2: { note: "Handed in at the desk by a family member. The cover sheet reads “R. Pillai”; no date of birth.", suggest: "p-rajesh" },
   d9: { note: "Scanned at check-in. File against the programme enrolment — no clinical review needed.", suggest: "p-tanvi" },
 };
 

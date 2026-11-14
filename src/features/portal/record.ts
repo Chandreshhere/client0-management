@@ -58,15 +58,20 @@ export interface PortalSystem {
   records: CareEvent[];
 }
 
-export const SYSTEMS: PortalSystem[] = RECORD.systems.map((s) => ({
-  id: s.id,
-  name: s.name,
-  area: ORGAN_PLAIN[s.organ].area,
-  organ: s.organ,
-  organLabel: ORGAN_LABEL[s.organ],
-  conditions: RECORD.conditions.filter((c) => c.systemId === s.id),
-  records: RELEASED_PAST.filter((e) => e.systemId === s.id),
-}));
+/** A diagnosis reaches the patient only through a released record that names it — never straight from the chart. */
+const RELEASED_CONDITION_IDS = new Set(RELEASED_PAST.filter((e) => e.state !== "self-reported").map((e) => e.conditionId));
+
+export const SYSTEMS: PortalSystem[] = RECORD.systems
+  .map((s) => ({
+    id: s.id,
+    name: s.name,
+    area: ORGAN_PLAIN[s.organ].area,
+    organ: s.organ,
+    organLabel: ORGAN_LABEL[s.organ],
+    conditions: RECORD.conditions.filter((c) => c.systemId === s.id && RELEASED_CONDITION_IDS.has(c.id)),
+    records: RELEASED_PAST.filter((e) => e.systemId === s.id),
+  }))
+  .filter((s) => s.records.length > 0);
 
 export const systemById = (id: string) => SYSTEMS.find((s) => s.id === id) ?? SYSTEMS[0];
 export const PRIMARY_SYSTEM = SYSTEMS[0];
@@ -385,6 +390,27 @@ export function authorName(e: CareEvent) {
   if (e.authorId.startsWith("lab:")) return e.authorId.slice(4);
   return staffById(e.authorId)?.name ?? e.authorRole;
 }
+
+/**
+ * Role line under the author. Outside lab reports are added to the record by the clinic (labs
+ * sending reports straight in is the lab-integrations add-on), so they never read as a live feed.
+ */
+export function authorRole(e: CareEvent) {
+  if (e.authorId === PATIENT_ID) return "Self-reported";
+  if (e.authorId.startsWith("lab:")) return "Outside lab · added by the clinic";
+  return e.authorRole;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Messages (F15): a message goes to the owner set for the patient — by default the primary doctor
+// ---------------------------------------------------------------------------------------------
+
+/** The patient's primary doctor: reviews their uploads (F4) and, by default, owns their messages (F15). */
+export const PRIMARY_DOCTOR = staffById(ME.careTeam.doctor ?? "") ?? null;
+export const MESSAGE_OWNER = PRIMARY_DOCTOR;
+export const MESSAGE_REPLY = "within 1 working day";
+/** "Goes to Dr. Ananya Rao, your primary doctor · reply within 1 working day" */
+export const MESSAGE_ROUTE = `Goes to ${MESSAGE_OWNER ? `${MESSAGE_OWNER.name}, your primary doctor` : "your care team"} · reply ${MESSAGE_REPLY}`;
 
 // ---------------------------------------------------------------------------------------------
 // Medicines (from the released care plan + released prescriptions)

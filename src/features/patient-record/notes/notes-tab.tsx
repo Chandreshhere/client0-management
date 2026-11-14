@@ -39,7 +39,7 @@ export function NotesTab({ patientId }: { patientId: string }) {
   const seed = useMemo(() => draftSeedFor(patientId, BLANK_TITLE), [patientId]);
   const api = useDraftBook(patientId, user.id, seed);
   const [focusToken, setFocusToken] = useState(0);
-  const [pane, setPane] = useState<"note" | "context">("note");
+  const [pane, setPane] = useState<"note" | "context">(canWrite ? "note" : "context");
 
   const openBlank = () => {
     api.openBlank();

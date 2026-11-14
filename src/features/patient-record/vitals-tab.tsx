@@ -35,11 +35,13 @@ const SOURCE_SHORT: Record<VitalMeasure["source"], string> = { Lab: "Lab", Clini
 
 export function VitalsTab({ patientId }: { patientId: string }) {
   const patient = patientById(patientId)!;
-  const { role } = useRole();
+  const { role, has } = useRole();
   const access = clinicalAccess(role, patientId);
   const record = recordOf(patientId);
   const readings = useRecord((s) => s.readings);
-  const measures = useMemo(() => vitalMeasures(patientId, readings), [patientId, readings]);
+  // home readings come from the patient app (Pro); Core and Clinic show clinic and lab values only
+  const selfReport = has("self-report");
+  const measures = useMemo(() => vitalMeasures(patientId, readings, selfReport), [patientId, readings, selfReport]);
   const vitals = measures.filter((m) => !m.lab);
   const [systemId, setSystemId] = useState<string | undefined>(record?.systems[0]?.id);
   const [adding, setAdding] = useState(false);
@@ -50,7 +52,11 @@ export function VitalsTab({ patientId }: { patientId: string }) {
       patient={patient}
       focusSystemId={systemId}
       title="Vital signs"
-      description="Clinic measurements and home readings on one timeline, grouped by the condition they are monitored for. Patient-entered values stay marked self-reported until a clinician reviews them."
+      description={
+        selfReport
+          ? "Clinic measurements and home readings on one timeline, grouped by the condition they are monitored for. Patient-entered values stay marked self-reported until a clinician reviews them."
+          : "Clinic measurements over time, grouped by the condition they are monitored for."
+      }
       actions={
         canAdd ? (
           <Button variant="dark" leading={<Plus />} onClick={() => setAdding(true)}>
@@ -66,7 +72,7 @@ export function VitalsTab({ patientId }: { patientId: string }) {
       ) : (
         <VitalsBody patient={patient} record={record} measures={measures} systemId={systemId ?? record.systems[0].id} onSystem={setSystemId} />
       )}
-      {canAdd ? <AddReadingDialog open={adding} onOpenChange={setAdding} selfOnly={role === "patient"} patient={patient} measures={vitals} /> : null}
+      {canAdd ? <AddReadingDialog open={adding} onOpenChange={setAdding} selfOnly={role === "patient"} homeReadings={selfReport} patient={patient} measures={vitals} /> : null}
     </RecordFrame>
   );
 }

@@ -40,9 +40,9 @@ const DISCIPLINES: Discipline[] = [
     rows: [
       { icon: <TestTube />, title: "Lipid profile", meta: `${name("p-kabir")} · reported 11 Nov, uploaded 12 Nov`, badge: { tone: "warning", label: "Awaiting review" } },
       { icon: <FileText />, title: "Consultation note", meta: `${name("p-vivek")} · seen 4 Nov`, badge: { tone: "draft", label: "Draft" } },
-      { icon: <ArrowsLeftRight />, title: "Referral to nutrition", meta: `${name("p-arun")} · sent 11 Nov`, badge: { tone: "danger", label: "Not accepted" } },
+      { icon: <ArrowsLeftRight />, title: "Assigned to nutrition", meta: `${name("p-arun")} · assigned 11 Nov`, badge: { tone: "danger", label: "Not seen" } },
     ],
-    does: ["Pre-consultation summary", "Notes with drafts, signing and addenda", "Report-review inbox with due dates", "Referrals with tracked acceptance"],
+    does: ["Pre-consultation summary", "Notes with drafts, signing and addenda", "Report-review inbox with due dates", "Assignments to nutrition and yoga: assigned → seen"],
   },
   {
     role: "nutritionist",
@@ -53,7 +53,7 @@ const DISCIPLINES: Discipline[] = [
       { icon: <BowlFood />, title: `Post-MI, DASH-style · v${arunPlan.version}`, meta: `${name("p-arun")} · ${arunPlan.adherenceNote.toLowerCase()}`, badge: { tone: "draft", label: "Draft" } },
       { icon: <NotePencil />, title: "Breakfast skipped 3 of 7 days", meta: `${name(aditiPlan.patientId)} · food log`, badge: { tone: "neutral", label: "Self-reported" } },
     ],
-    does: ["Meal plans with alternatives", "Versions: what changed, why, by whom", "Food logs kept as self-reported", "Doctor guidance beside the plan"],
+    does: ["Meal plans with alternatives", "Versions: what changed, why, by whom", "Patient food logs on Pro, kept as self-reported", "Doctor guidance beside the plan"],
   },
   {
     role: "yoga",
@@ -64,16 +64,15 @@ const DISCIPLINES: Discipline[] = [
       { icon: <Heartbeat />, title: kabirInClass.precaution ?? "Approved precautions", meta: `${name("p-kabir")} · from Dr. Ananya Rao`, badge: { tone: "info", label: "Current" } },
       { icon: <WarningCircle />, title: "Dizziness during class", meta: `${name("p-arun")} · escalated to his doctor`, badge: { tone: "danger", label: "Urgent task" } },
     ],
-    does: ["Class and 1:1 calendar", "Clinician-approved precautions", "Attendance and private observations", "Escalate a concern as a task"],
+    does: ["Class and 1:1 calendar", "Clinician-approved precautions", "Attendance and private observations", "Flag a concern to the doctor"],
   },
 ];
 
-/** Every other workspace and the first plan that includes it (from plan data). */
+/** Every other role and the plans that include it (from plan data): "Every plan", "Clinic+", "Pro". */
 const OTHER_ROLES = ROLE_ORDER.filter((r) => !["doctor", "nutritionist", "yoga"].includes(r)).map((r) => {
   const first = PLANS.findIndex((p) => p.roles.includes(r));
   const plan = PLANS[first];
-  // "Team+" when later plans include it too; the top plan is just its name.
-  return { role: r, plan: plan ? (first < PLANS.length - 1 ? `${plan.name}+` : plan.name) : "—" };
+  return { role: r, plan: !plan ? "—" : first === 0 ? "Every plan" : first < PLANS.length - 1 ? `${plan.name}+` : plan.name };
 });
 
 export function Disciplines() {
@@ -110,7 +109,7 @@ export function Disciplines() {
       </div>
 
       <div className={cn("mt-8 flex flex-col gap-4 rounded-card bg-surface p-6 md:flex-row md:items-center md:justify-between", s.reveal)}>
-        <p className="max-w-[44ch] text-sm text-ink-2">Front desk, care coordination, administration and the patient each get their own workspace on the same record too.</p>
+        <p className="max-w-[44ch] text-sm text-ink-2">Administration on every plan, reception on Clinic, care coordination and the patient on Pro — each with its own workspace on the same record.</p>
         <ul className="flex flex-wrap gap-2">
           {OTHER_ROLES.map((o) => (
             <li key={o.role} className="inline-flex h-8 items-center gap-2 rounded-full bg-sunken pl-3 pr-1 text-xs text-ink-2">

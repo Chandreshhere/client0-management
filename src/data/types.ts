@@ -136,7 +136,10 @@ export interface AppNotification {
   actionLabel: string;
   href: string;
   patientId?: string;
+  /** the one role that owns it (spec rule 2: one owner per item) */
   roles: Role[];
+  /** plan feature it depends on — the bell hides it on plans without that feature */
+  feature?: import("./plans").FeatureId;
 }
 
 export type AttendanceState = "present" | "absent" | "late" | "cancelled" | "rescheduled" | "pending";

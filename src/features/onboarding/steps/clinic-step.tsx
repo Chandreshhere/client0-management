@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
-import { CITIES, MAX_BRANCHES, SPECIALITIES, withBranches, withSample, withSpecialities } from "../model";
+import { CITIES, MAX_BRANCHES, SPECIALITIES, branchPlan, withBranches, withSample, withSpecialities } from "../model";
 import { InlineError, Stepper, ToggleChip, type StepProps } from "../controls";
 
 const invalidRing = "shadow-[inset_0_0_0_1.5px_var(--color-danger)] hover:shadow-[inset_0_0_0_1.5px_var(--color-danger)]";
@@ -57,7 +57,7 @@ export function ClinicStep({ data, update, errors }: StepProps) {
             </div>
           )}
         </Field>
-        <Field label="Branches" hint={clinic.branches > 1 ? "Managing several branches is part of the Clinic plan." : "Add more if you run several locations."}>
+        <Field label="Branches" hint={clinic.branches > 1 ? `Managing several branches is part of the ${branchPlan().name} plan.` : "Add more if you run several locations."}>
           {(p) => (
             <Stepper
               id={p.id}

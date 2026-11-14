@@ -1,118 +1,122 @@
 "use client";
 
 import Link from "next/link";
-import { AnimatePresence, motion } from "motion/react";
-import { useId, useMemo, useState } from "react";
-import {
-  ArrowUpRight,
-  ChartBar,
-  CheckCircle,
-  ClipboardText,
-  Flag,
-  Package,
-  PersonSimpleTaiChi,
-  Siren,
-  UserMinus,
-  Warning,
-  WarningCircle,
-  CalendarCheck,
-} from "@phosphor-icons/react";
-import { cn } from "@/lib/cn";
-import { snappy } from "@/lib/motion";
-import { formatDate, formatTime, pluralize } from "@/lib/format";
-import { usePlan } from "@/components/shell/role-context";
+import { useId, useState } from "react";
+import { ArrowUpRight, CalendarCheck, CheckCircle, Flag, PersonSimpleTaiChi, ShieldWarning } from "@phosphor-icons/react";
+import { formatTime, pluralize } from "@/lib/format";
+import { useRole } from "@/components/shell/role-context";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Inset } from "@/components/ui/card";
-import { ProgressBar } from "@/components/ui/misc";
-import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented } from "@/components/ui/segmented";
-import { StatusBadge } from "@/components/ui/status";
-import { Tip } from "@/components/ui/tooltip";
+import { StatusBadge, type Tone } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
-import { BarChart } from "@/components/charts/bar-chart";
 import { DEMO_USER, staffById } from "@/data/staff";
 import { patientById } from "@/data/patients";
-import { TASKS } from "@/data/care";
-import { THREADS } from "@/data/records";
-import { ATTENDANCE_LABEL, CLASSES, PACKAGES } from "@/data/programs";
+import { ATTENDANCE_LABEL } from "@/data/programs";
+// the same session list the Sessions screen uses (fixtures + the rest of this week), so the home
+// and the roster always agree on what the instructor has to do
+import { WEEK_CLASSES as CLASSES } from "@/features/classes/model";
 import type { AttendanceState, YogaClass } from "@/data/types";
-import { NOW_LABEL, NOW_MIN, TODAY_KEY, daysSince, istDayKey, istMinutes, shortDate, untilLabel } from "./data";
-import { DashGrid, DashboardHeader, FocalCard, FocalHead, LockedTile, NowMarker, Panel, PanelEmpty, Reveal, RowLink, Rail} from "./ui";
-import { WEEK_CLASSES, attendanceBySession, organFor, type AttendanceBucket } from "./derive";
-import { OrganBadge } from "./viz";
+import { NOW_ISO, NOW_LABEL, NOW_MIN, TODAY_KEY, endIso, istDayKey, istMinutes, profileHref, untilLabel, whenLabel } from "./data";
+import { flagsRaisedBy } from "./owners";
+import { dashboardActions, useDashboardState, type Mark } from "./session";
+import { DashGrid, DashboardHeader, FocalCard, FocalHead, FocalStat, InsetList, ItemCard, ListRow, Panel, PanelEmpty, Rail, Reveal } from "./ui";
 
 /**
- * Yoga instructor home (doc §2D): which sessions are running, who is attending, and what guidance
- * is needed before starting. Classes share one studio, so the day view covers every session in the
- * branch's studio rooms with the instructor's own sessions marked "You".
+ * Yoga instructor home — "Who's in my sessions, and what must I know?"
+ * My sessions today with their patients and precautions (never diagnoses — spec rule 3), the
+ * precautions that changed since I last acknowledged them, and attendance to mark. Weekly
+ * attendance charts and package balances live in reports and on the patient profile.
  */
 const ME = DEMO_USER.yoga.personId;
-const BRANCH = staffById(ME)?.branch;
 
-const todayClasses = CLASSES.filter((c) => istDayKey(c.start) === TODAY_KEY && staffById(c.instructorId)?.branch === BRANCH).sort((a, b) => a.start.localeCompare(b.start));
-const nextClass = todayClasses.find((c) => istMinutes(c.start) > NOW_MIN) ?? null;
-const myClassToday = todayClasses.find((c) => c.instructorId === ME && istMinutes(c.start) + c.durationMin <= NOW_MIN) ?? null;
-const myClasses = CLASSES.filter((c) => c.instructorId === ME);
+const mine = CLASSES.filter((c) => c.instructorId === ME).sort((a, b) => a.start.localeCompare(b.start));
+const today = mine.filter((c) => istDayKey(c.start) === TODAY_KEY);
+const upcoming = mine.filter((c) => c.start > NOW_ISO);
+/** Today's sessions, or the next one I teach when today is empty. */
+const shown = today.length ? today : upcoming.slice(0, 1);
+const roster = (c: YogaClass) => c.enrolled.filter((e) => e.attendance !== "cancelled");
 
-const escalations = TASKS.filter((t) => t.createdBy === ME && /escalated/i.test(t.source) && t.status !== "done");
-const packages = [...PACKAGES].sort((a, b) => a.total - a.used - (b.total - b.used));
+type Phase = "ended" | "running" | "upcoming";
+const phaseOf = (c: YogaClass): Phase => {
+  if (istDayKey(c.start) !== TODAY_KEY) return c.start > NOW_ISO ? "upcoming" : "ended";
+  const start = istMinutes(c.start);
+  if (NOW_MIN >= start + c.durationMin) return "ended";
+  return NOW_MIN >= start ? "running" : "upcoming";
+};
 
-type Mark = "present" | "late" | "absent";
+/**
+ * Precautions only: a leading condition label ("Post-MI: …", "Knee OA — …") is dropped so a class
+ * list never shows a diagnosis. Measured limits ("SpO₂ floor 92% — …") are kept whole.
+ */
+function precautionOnly(text: string | undefined) {
+  if (!text) return null;
+  const m = text.match(/^([^:—\d]{2,24})\s*(?::|—)\s*(.+)$/);
+  const rest = m ? m[2] : text;
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
+
+/** The attributed version of a changed precaution, e.g. "SpO₂ floor 92%" · "Changed 13 Nov by Dr. Vikram Iyer, covering". */
+function changedGuidance(patientId: string): { text: string; by: string | null } {
+  let fallback: string | null = null;
+  for (const e of CLASSES.flatMap((c) => c.enrolled)) {
+    if (e.patientId !== patientId || e.clearance !== "changed" || !e.precaution) continue;
+    const m = e.precaution.match(/^(.*?)\s*\((changed .+ by .+)\)$/i);
+    if (m) return { text: m[1], by: m[2].charAt(0).toUpperCase() + m[2].slice(1) };
+    fallback ??= e.precaution.replace(/\s*—\s*needs instructor review$/i, "");
+  }
+  return { text: fallback ?? "Precaution changed", by: null };
+}
+
+/** Patients in my sessions from today on whose precautions changed — each once. */
+const changedPatients = [...new Set(mine.filter((c) => istDayKey(c.start) >= TODAY_KEY).flatMap((c) => roster(c).filter((e) => e.clearance === "changed").map((e) => e.patientId)))];
+
 const MARKS: { value: Mark; label: string }[] = [
   { value: "present", label: "Present" },
   { value: "late", label: "Late" },
   { value: "absent", label: "Absent" },
 ];
 const isMark = (a: AttendanceState): a is Mark => a === "present" || a === "late" || a === "absent";
-
-const activeEnrolled = (c: YogaClass) => c.enrolled.filter((e) => e.attendance !== "cancelled");
+const markTone: Record<Mark, Tone> = { present: "success", late: "warning", absent: "danger" };
 
 export function YogaHome() {
+  const { has } = useRole();
   const { toast } = useToast();
-  const initial = useMemo(() => Object.fromEntries((myClassToday?.enrolled ?? []).map((e) => [e.patientId, isMark(e.attendance) ? e.attendance : "present"])) as Record<string, Mark>, []);
-  const [saved, setSaved] = useState<Record<string, Mark>>(initial);
-  const [marks, setMarks] = useState<Record<string, Mark>>(initial);
-  const [acknowledged, setAcknowledged] = useState<Record<string, string>>({});
-  const [seatedOut, setSeatedOut] = useState<Record<string, string>>({});
-  const dirty = Object.keys(marks).some((k) => marks[k] !== saved[k]);
+  const { acks, attendance } = useDashboardState();
+  const toAck = changedPatients.filter((pid) => !acks[pid]);
+  const acked = changedPatients.filter((pid) => acks[pid]);
+  const waiting = flagsRaisedBy(ME);
+  const started = today.filter((c) => phaseOf(c) !== "upcoming");
+  const marksFor = (c: YogaClass): Record<string, AttendanceState> => ({ ...Object.fromEntries(roster(c).map((e) => [e.patientId, e.attendance])), ...(attendance[c.id]?.marks ?? {}) });
+  const unmarked = started.filter((c) => Object.values(marksFor(c)).some((m) => m === "pending"));
+  const patientsToday = new Set(today.flatMap((c) => roster(c).map((e) => e.patientId))).size;
 
-  // Repeated missed sessions: absences in my classes, with today's roster read from the local marks.
-  const missed = useMemo(() => {
-    const byPatient = new Map<string, string[]>();
-    for (const c of myClasses) {
-      for (const e of c.enrolled) {
-        const state = c.id === myClassToday?.id ? marks[e.patientId] : e.attendance;
-        if (state === "absent") byPatient.set(e.patientId, [...(byPatient.get(e.patientId) ?? []), c.start]);
-      }
-    }
-    return [...byPatient.entries()].filter(([, dates]) => dates.length >= 2).map(([patientId, dates]) => ({ patientId, dates: dates.sort() }));
-  }, [marks]);
-
-  const issuesFor = (c: YogaClass) =>
-    activeEnrolled(c).filter((e) => e.clearance !== "current" && !(e.clearance === "changed" && acknowledged[e.patientId]) && !seatedOut[`${c.id}:${e.patientId}`]);
-
-  const saveAttendance = () => {
-    setSaved(marks);
-    toast({ tone: "success", title: "Attendance saved", description: `${myClassToday?.title} · saved in this browser session only.` });
+  const acknowledge = (pid: string) => {
+    dashboardActions.acknowledge(pid, NOW_LABEL);
+    toast({
+      tone: "success",
+      title: `Precaution acknowledged · ${patientById(pid)?.name}`,
+      description: "Recorded in this browser session. The change stays attributed to the doctor who made it.",
+      action: { label: "Undo", onClick: () => dashboardActions.undoAcknowledge(pid) },
+    });
   };
 
   return (
     <div className="flex flex-col gap-6">
       <DashboardHeader
-        summary={`Studio today: ${pluralize(todayClasses.length, "session")} · ${pluralize(todayClasses.reduce((n, c) => n + issuesFor(c).length, 0), "clearance alert")} · ${pluralize(escalations.length, "escalation")} open`}
+        summary={`${pluralize(today.length, "session")} today · ${pluralize(patientsToday, "patient")} · ${toAck.length ? `${pluralize(toAck.length, "precaution change")} to acknowledge` : "no precaution changes"} · ${unmarked.length ? `${pluralize(unmarked.length, "session")} to mark` : "attendance up to date"}`}
         actions={
           <>
             <Button asChild variant="dark">
-              <Link href={myClassToday ? `/classes/${myClassToday.id}` : "/classes"}>
-                <ClipboardText />
-                Today&apos;s roster
+              <Link href="/classes">
+                <PersonSimpleTaiChi />
+                My sessions
               </Link>
             </Button>
             <Button asChild variant="secondary">
               <Link href="/tasks?new=1">
                 <Flag />
-                Escalate a concern
+                Flag to doctor
               </Link>
             </Button>
           </>
@@ -121,563 +125,231 @@ export function YogaHome() {
 
       <DashGrid>
         <Reveal index={0} className="lg:col-span-2">
-          {nextClass ? (
-            <NextSessionCard
-              cls={nextClass}
-              issues={issuesFor(nextClass)}
-              acknowledged={acknowledged}
-              seatedOut={seatedOut}
-              onAcknowledge={(pid) => {
-                setAcknowledged((s) => ({ ...s, [pid]: NOW_LABEL }));
-                toast({ tone: "success", title: `Precautions reviewed · ${patientById(pid)?.name}`, description: "Acknowledged in this browser session. The clinician's change stays attributed to them." });
-              }}
-              onSeatOut={(pid) => {
-                setSeatedOut((s) => ({ ...s, [`${nextClass.id}:${pid}`]: NOW_LABEL }));
-                toast({ title: `${patientById(pid)?.name} sits out ${nextClass.title}`, description: "Clearance renewal request recorded locally — nothing was sent." });
-              }}
-            />
-          ) : (
-            <Inset className="flex h-full items-center justify-center text-sm text-muted">No more sessions in the studio today.</Inset>
-          )}
+          <SessionsCard acks={acks} marksFor={marksFor} capacity={has("group-classes")} />
         </Reveal>
 
-        <Reveal index={1}>
-          <Panel icon={<PersonSimpleTaiChi />} title="Classes & 1:1s today" subtitle={`${pluralize(todayClasses.length, "session")} · ${staffById(ME)?.room} & Therapy Room`} href="/classes" actionLabel="Open classes">
-            {todayClasses.map((c) => {
-              const enrolled = activeEnrolled(c).length;
-              const issues = issuesFor(c).length;
-              const mine = c.instructorId === ME;
-              const done = istMinutes(c.start) + c.durationMin <= NOW_MIN;
-              const showMarker = c.id === nextClass?.id;
+        <Rail index={1} className="xl:row-span-2">
+          <Panel icon={<ShieldWarning />} title="Precautions changed" subtitle={toAck.length ? `${pluralize(toAck.length, "change")} to acknowledge` : "Up to date"} href="/classes" actionLabel="Open sessions">
+            {toAck.length === 0 && waiting.length === 0 ? (
+              <PanelEmpty icon={<ShieldWarning />} title="You're up to date" description="When a doctor changes a precaution for someone in your sessions, it appears here until you acknowledge it." />
+            ) : null}
+            {toAck.map((pid) => {
+              const p = patientById(pid);
+              const g = changedGuidance(pid);
               return (
-                <div key={c.id} className="contents">
-                  {showMarker ? <NowMarker /> : null}
-                  <RowLink href={`/classes/${c.id}`} className="flex flex-col gap-3">
-                    <span className="flex items-start gap-3">
-                      <span className="w-12 shrink-0">
-                        <span className={cn("block text-sm tabular", done ? "text-muted" : "text-ink")}>{formatTime(c.start)}</span>
-                        <span className="block text-xs text-muted">{c.durationMin} min</span>
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className={cn("block truncate text-sm", done ? "text-ink-2" : "text-ink")}>{c.title}</span>
-                        <span className="flex items-center gap-1.5 text-xs text-muted">
-                          <Avatar src={staffById(c.instructorId)?.avatar} name={staffById(c.instructorId)?.name ?? ""} size="xs" />
-                          <span className="min-w-0 truncate">{mine ? "You" : staffById(c.instructorId)?.name} · {c.kind === "group" ? "Group" : "1:1"}</span>
-                        </span>
-                      </span>
-                      {issues ? (
-                        <StatusBadge tone="warning">{pluralize(issues, "alert")}</StatusBadge>
-                      ) : done ? (
-                        <StatusBadge tone="success">Done</StatusBadge>
-                      ) : (
-                        <StatusBadge tone="neutral">Ready</StatusBadge>
-                      )}
-                    </span>
-                    <span className="flex items-center gap-3">
-                      <ProgressBar value={enrolled} max={c.capacity} tone="dark" label={`${c.title}: ${enrolled} of ${c.capacity} places`} className="flex-1" />
-                      <span className="shrink-0 text-xs text-muted tabular">
-                        {enrolled}/{c.capacity}
-                        {c.waitlist.length ? ` · ${c.waitlist.length} waiting` : ""}
-                      </span>
-                    </span>
-                  </RowLink>
-                </div>
+                <ItemCard
+                  key={pid}
+                  href={profileHref(pid, "yoga")}
+                  avatar={{ src: p?.avatar, name: p?.name ?? "Patient" }}
+                  name={p?.name}
+                  lines={[g.text, g.by ?? "Changed by the doctor"]}
+                  badge={<StatusBadge tone="warning">Changed</StatusBadge>}
+                  actions={
+                    <Button size="sm" variant="dark" onClick={() => acknowledge(pid)} aria-label={`Acknowledge the new precaution for ${p?.name}`}>
+                      <CheckCircle />
+                      Acknowledge
+                    </Button>
+                  }
+                />
               );
             })}
+            {acked.length ? (
+              <InsetList label="Acknowledged">
+                {acked.map((pid) => {
+                  const p = patientById(pid);
+                  return <ListRow key={pid} href={profileHref(pid, "yoga")} lead={<Avatar src={p?.avatar} name={p?.name ?? ""} size="sm" />} title={p?.name} meta={changedGuidance(pid).text} trailing={<StatusBadge tone="success">Acknowledged {acks[pid]}</StatusBadge>} />;
+                })}
+              </InsetList>
+            ) : null}
+            {waiting.length ? (
+              <>
+                <p className="px-2 pt-2 text-xs text-muted">Waiting on the doctor — flags you raised</p>
+                {waiting.map((f) => {
+                  const p = patientById(f.patientId);
+                  const current = precautionOnly(mine.flatMap((c) => c.enrolled).find((e) => e.patientId === f.patientId && e.precaution)?.precaution);
+                  return (
+                    <ItemCard
+                      key={f.id}
+                      href={profileHref(f.patientId, "yoga")}
+                      avatar={{ src: p?.avatar, name: p?.name ?? "Patient" }}
+                      name={p?.name}
+                      lines={[`${f.what} · flagged to ${staffById(f.doctorId)?.name}`, current ? `Until they respond: ${current.charAt(0).toLowerCase()}${current.slice(1)}` : "No response yet"]}
+                      badge={<StatusBadge tone="neutral">Waiting</StatusBadge>}
+                    />
+                  );
+                })}
+              </>
+            ) : null}
           </Panel>
-        </Reveal>
-
-        <Reveal index={2} className="flex flex-col gap-4 lg:col-span-2">
-          <WeekAttendancePanel saved={saved} />
-          {myClassToday ? (
-            <Panel
-              icon={<CalendarCheck />}
-              title={`Attendance · ${myClassToday.title}`}
-              subtitle={`${formatTime(myClassToday.start)} · ${myClassToday.room} · ${summarise(marks)}`}
-              href={`/classes/${myClassToday.id}`}
-              actionLabel="Open class roster"
-            >
-              {myClassToday.enrolled.map((e) => {
-                const p = patientById(e.patientId);
-                return (
-                  <div key={e.patientId} className="@container rounded-inner bg-surface p-4">
-                    <div className="flex flex-col gap-3 @md:flex-row @md:items-center">
-                      <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <Avatar src={p?.avatar} name={p?.name ?? "Patient"} size="sm" />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm text-ink">{p?.name}</p>
-                          <p className="truncate text-xs text-muted">{e.precaution ?? "No session precautions"}</p>
-                        </div>
-                      </div>
-                      <Segmented
-                        items={MARKS}
-                        value={marks[e.patientId]}
-                        onChange={(v) => setMarks((s) => ({ ...s, [e.patientId]: v }))}
-                        ariaLabel={`Attendance for ${p?.name}`}
-                        size="sm"
-                        variant="tray"
-                        className="self-start @md:self-auto"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-              <div className="flex flex-wrap items-center justify-between gap-3 px-2 pb-1 pt-2">
-                <p className="text-xs text-muted" aria-live="polite">
-                  {dirty ? "Unsaved changes" : `Saved · ${ATTENDANCE_LABEL.present} ${count(saved, "present")}, ${ATTENDANCE_LABEL.late.toLowerCase()} ${count(saved, "late")}, ${ATTENDANCE_LABEL.absent.toLowerCase()} ${count(saved, "absent")}`}
-                </p>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" disabled={!dirty} onClick={() => setMarks(saved)}>
-                    Reset
-                  </Button>
-                  <Button size="sm" variant="dark" disabled={!dirty} onClick={saveAttendance}>
-                    Save attendance
-                  </Button>
-                </div>
-              </div>
-            </Panel>
-          ) : (
-            <Panel icon={<CalendarCheck />} title="Attendance" subtitle="Nothing to mark yet">
-              <PanelEmpty icon={<CalendarCheck />} title="No finished class to mark" description="Attendance opens when your first session of the day starts." />
-            </Panel>
-          )}
-        </Reveal>
-
-        <Rail index={3} innerClassName="flex flex-col gap-4">
-          <Panel icon={<Siren />} title="Escalations" subtitle={`${pluralize(escalations.length, "concern")} with the care team`} href="/tasks" actionLabel="Open tasks">
-            {escalations.length === 0 ? (
-              <PanelEmpty icon={<Siren />} title="Nothing escalated" description="Raise a concern and the care team gets a task — you never need to interpret it as a diagnosis." />
-            ) : (
-              escalations.map((t) => {
-                const p = patientById(t.patientId);
-                const owner = staffById(t.ownerId);
-                const thread = THREADS.find((m) => m.patientId === t.patientId && m.channel === "care-team");
-                return (
-                  <div key={t.id} className="rounded-inner bg-surface p-4">
-                    <div className="flex items-start gap-3">
-                      <Avatar src={p?.avatar} name={p?.name ?? "Patient"} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-ink">{p?.name}</p>
-                        <p className="text-xs text-muted">{sentence(t.title.replace(/^Clinical review:\s*/i, ""))}</p>
-                      </div>
-                      <StatusBadge tone="danger">Urgent</StatusBadge>
-                    </div>
-                    <div className="mt-3 flex items-center gap-2 text-xs text-muted">
-                      <Avatar src={owner?.avatar} name={owner?.name ?? ""} size="xs" />
-                      With {owner?.name} · not started · due {formatTime(t.due)}
-                    </div>
-                    {thread ? (
-                      <Link href="/messages" className="mt-3 flex items-start gap-2 rounded-[12px] bg-sunken p-3 text-xs text-ink-2 transition-colors hover:bg-sunken-2">
-                        <span className="min-w-0 flex-1">
-                          “{thread.lastMessage}”<span className="mt-1 block text-muted">{thread.unread} unread · {thread.expectedResponse}</span>
-                        </span>
-                        <ArrowUpRight size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-                      </Link>
-                    ) : null}
-                  </div>
-                );
-              })
-            )}
-          </Panel>
-          <MissedSessionsPanel missed={missed} />
         </Rail>
 
-        <Reveal index={4} className="lg:col-span-2 xl:col-span-3">
-          <PackagesPanel />
+        <Reveal index={2} className="lg:col-span-2 xl:col-span-2">
+          <AttendancePanel sessions={started} marksFor={marksFor} savedAt={(id) => attendance[id]?.at} />
         </Reveal>
       </DashGrid>
     </div>
   );
 }
 
-const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-const count = (m: Record<string, Mark>, v: Mark) => Object.values(m).filter((x) => x === v).length;
-const summarise = (m: Record<string, Mark>) => `${count(m, "present")} present · ${count(m, "late")} late · ${count(m, "absent")} absent`;
-
-const BUCKETS: { id: AttendanceBucket; name: string; color: string }[] = [
-  { id: "present", name: "Present", color: "var(--color-charcoal)" },
-  { id: "late", name: "Late", color: "var(--color-warning)" },
-  { id: "absent", name: "Absent", color: "var(--color-danger)" },
-  { id: "pending", name: "Booked, not held yet", color: "var(--color-line-strong)" },
-];
-
-/** This week's studio sessions (Mon 9 – Sat 14), attendance stacked per session; today's class uses the saved marks. */
-function WeekAttendancePanel({ saved }: { saved: Record<string, Mark> }) {
-  const rows = attendanceBySession(WEEK_CLASSES(BRANCH), myClassToday ? { classId: myClassToday.id, marks: saved } : undefined);
-  const categories = rows.map((r) => `${formatDate(r.cls.start, { weekday: "short" })} ${formatTime(r.cls.start)}`);
-  const values = BUCKETS.map((b) => rows.map((r) => r.counts[b.id]));
-  const held = rows.filter((r) => istMinutes(r.cls.start) + r.cls.durationMin <= NOW_MIN || istDayKey(r.cls.start) < TODAY_KEY);
-  const sum = (b: AttendanceBucket, list = rows) => list.reduce((n, r) => n + r.counts[b], 0);
-  const nextIdx = rows.findIndex((r) => !held.includes(r));
-  return (
-    <Panel icon={<ChartBar />} title="Attendance this week" subtitle={`Studio · ${pluralize(rows.length, "session")} Mon–Sat`} href="/classes" actionLabel="Open classes">
-      <div className="flex flex-col gap-3 rounded-inner bg-surface p-4">
-        <BarChart
-          categories={categories}
-          series={BUCKETS}
-          values={values}
-          height={200}
-          highlight={nextIdx >= 0 ? nextIdx : undefined}
-          formatY={(v) => String(v)}
-          ariaLabel={`Attendance per studio session this week: ${rows.map((r, i) => `${categories[i]} ${r.cls.title}: ${BUCKETS.map((b) => `${r.counts[b.id]} ${b.name.toLowerCase()}`).join(", ")}`).join("; ")}`}
-        />
-        <p className="text-xs text-muted">
-          {pluralize(held.length, "session")} held: {sum("present", held)} present, {sum("late", held)} late, {sum("absent", held)} absent · {rows.length - held.length} still to come with {sum("pending")} places booked{nextIdx >= 0 ? ` · next ${categories[nextIdx]}` : ""}
-        </p>
-        <details className="group">
-          <summary className="flex h-8 w-fit cursor-pointer list-none items-center rounded-full bg-sunken px-3 text-xs text-ink transition-colors hover:bg-sunken-2 [&::-webkit-details-marker]:hidden">
-            <span className="group-open:hidden">Show as table</span>
-            <span className="hidden group-open:inline">Hide table</span>
-          </summary>
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[320px] text-left text-xs">
-              <caption className="sr-only">Attendance per studio session this week</caption>
-              <thead className="text-muted">
-                <tr>
-                  <th scope="col" className="py-1 pr-2 font-normal">Session</th>
-                  {BUCKETS.map((b) => (
-                    <th key={b.id} scope="col" className="px-1 py-1 text-right font-normal">
-                      {b.id === "pending" ? "Booked" : b.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="tabular text-ink">
-                {rows.map((r, i) => (
-                  <tr key={r.cls.id} className="border-t border-line">
-                    <th scope="row" className="py-1 pr-2 font-normal">
-                      {categories[i]} · {r.cls.title}
-                    </th>
-                    {BUCKETS.map((b) => (
-                      <td key={b.id} className="px-1 py-1 text-right">
-                        {r.counts[b.id]}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      </div>
-    </Panel>
-  );
-}
-
-function MissedSessionsPanel({ missed }: { missed: { patientId: string; dates: string[] }[] }) {
-  const { has } = usePlan();
-  const { toast } = useToast();
-  const [routed, setRouted] = useState<Record<string, string>>({});
-  const coordinator = staffById(DEMO_USER.coordinator.personId);
-  return (
-    <Panel icon={<UserMinus />} title="Repeated missed sessions" subtitle={missed.length ? `${pluralize(missed.length, "patient")} absent twice or more` : "No repeated absences"} href="/classes" actionLabel="Open classes">
-      <AnimatePresence initial={false} mode="popLayout">
-        {missed.length === 0 ? (
-          <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <PanelEmpty icon={<UserMinus />} title="Everyone is turning up" description="Two or more absences in your classes are flagged here." />
-          </motion.div>
-        ) : (
-          missed.map(({ patientId, dates }) => {
-            const p = patientById(patientId);
-            const pkg = PACKAGES.find((x) => x.patientId === patientId);
-            return (
-              <motion.div key={patientId} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={snappy} className="rounded-inner bg-surface p-4">
-                <div className="flex items-start gap-3">
-                  <Avatar src={p?.avatar} name={p?.name ?? "Patient"} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-ink">{p?.name}</p>
-                    <p className="text-xs text-muted">
-                      Absent {dates.map((d) => shortDate(d)).join(" and ")}
-                      {pkg ? ` · ${pkg.total - pkg.used} sessions left` : ""}
-                    </p>
-                  </div>
-                  <StatusBadge tone="warning">{pluralize(dates.length, "miss", "misses")}</StatusBadge>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  {routed[patientId] ? (
-                    <span className="flex items-center gap-1.5 text-xs text-success">
-                      <CheckCircle size={16} weight="fill" aria-hidden="true" />
-                      Routed to {coordinator?.name} at {routed[patientId]}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted">Last session {shortDate(dates[dates.length - 1])} · {daysSince(dates[dates.length - 1]) === 0 ? "today" : `${daysSince(dates[dates.length - 1])} days ago`}</span>
-                  )}
-                  {has("coordinator") ? (
-                    !routed[patientId] ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          setRouted((s) => ({ ...s, [patientId]: NOW_LABEL }));
-                          toast({ title: `Flagged to ${coordinator?.name}`, description: "Recorded in this browser session — nothing was sent." });
-                        }}
-                      >
-                        Route to coordinator
-                      </Button>
-                    ) : null
-                  ) : (
-                    <Button asChild size="sm" variant="secondary">
-                      <Link href="/tasks?new=1">Create follow-up task</Link>
-                    </Button>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })
-        )}
-      </AnimatePresence>
-    </Panel>
-  );
-}
-
-function PackagesPanel() {
-  const { has } = usePlan();
-  if (!has("packages")) {
-    return <LockedTile feature="packages" icon={<Package />} title="Package balances" description="See each patient's remaining sessions and expiry before you add them to a class." />;
-  }
-  return (
-    <Panel icon={<Package />} title="Package balances" subtitle={`${PACKAGES.length} active packages · lowest first`} href="/billing/packages" actionLabel="Open packages">
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-        {packages.map((pkg) => {
-          const p = patientById(pkg.patientId);
-          const left = pkg.total - pkg.used;
-          const expiresIn = -daysSince(pkg.expires);
-          const low = left <= 2 || expiresIn <= 21;
-          return (
-            <div key={pkg.patientId} className="rounded-inner bg-surface p-4">
-              <div className="flex items-start gap-3">
-                <Avatar src={p?.avatar} name={p?.name ?? "Patient"} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-ink">{p?.name}</p>
-                  <p className="truncate text-xs text-muted">{pkg.name}</p>
-                </div>
-                <span className="shrink-0 text-right">
-                  <span className="block text-sm text-ink tabular">{left} left</span>
-                  <span className="block text-xs text-muted tabular">
-                    {pkg.used}/{pkg.total} used
-                  </span>
-                </span>
-              </div>
-              <ProgressBar value={pkg.used} max={pkg.total} tone={left <= 2 ? "warning" : "dark"} className="mt-3" label={`${p?.name}: ${pkg.used} of ${pkg.total} sessions used`} />
-              <p className={cn("mt-2 flex items-center gap-1.5 text-xs", low ? "text-warning" : "text-muted")}>
-                {low ? <Warning size={14} aria-hidden="true" /> : null}
-                Expires {formatDate(pkg.expires, { day: "numeric", month: "short" })} · in {pluralize(expiresIn, "day")}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-    </Panel>
-  );
-}
-
 // ---------------------------------------------------------------------------------------------
-// Focal: next session, roster preview and clearance alerts that block the start
+// Focal: my sessions today with their patients and precautions
 // ---------------------------------------------------------------------------------------------
 
-function NextSessionCard({
-  cls,
-  issues,
-  acknowledged,
-  seatedOut,
-  onAcknowledge,
-  onSeatOut,
-}: {
-  cls: YogaClass;
-  issues: YogaClass["enrolled"];
-  acknowledged: Record<string, string>;
-  seatedOut: Record<string, string>;
-  onAcknowledge: (patientId: string) => void;
-  onSeatOut: (patientId: string) => void;
-}) {
+function SessionsCard({ acks, marksFor, capacity }: { acks: Record<string, string>; marksFor: (c: YogaClass) => Record<string, AttendanceState>; capacity: boolean }) {
   const id = useId();
-  const instructor = staffById(cls.instructorId);
-  const enrolled = activeEnrolled(cls);
-  const flagged = enrolled.filter((e) => e.clearance !== "current");
-  const blocked = issues.length > 0;
-  const attending = enrolled.filter((e) => !seatedOut[`${cls.id}:${e.patientId}`]);
+  const next = shown.find((c) => phaseOf(c) !== "ended") ?? null;
+  const isToday = today.length > 0;
+  const people = new Set(shown.flatMap((c) => roster(c).map((e) => e.patientId))).size;
 
   return (
     <FocalCard labelledBy={id} className="h-full">
       <FocalHead
         id={id}
-        label={`Next session · ${cls.room}`}
-        title={cls.title}
-        meta={
-          <>
-            {formatTime(cls.start)}–{formatTime(new Date(new Date(cls.start).getTime() + cls.durationMin * 60_000).toISOString())} · {cls.instructorId === ME ? "You" : instructor?.name} · {cls.kind === "group" ? "Group class" : "1:1"} ·{" "}
-            {attending.length} of {cls.capacity} places{cls.waitlist.length ? ` · ${cls.waitlist.length} on waitlist` : ""}
-          </>
-        }
-        aside={
-          <div className="text-right">
-            <p className="text-title font-normal tabular">{formatTime(cls.start)}</p>
-            <p className="text-xs text-white/90">{untilLabel(cls.start)}</p>
-          </div>
-        }
+        label={isToday ? "My sessions today" : "My next session"}
+        title={isToday ? `${pluralize(today.length, "session")} · ${pluralize(people, "patient")}` : next ? next.title : "No sessions booked"}
+        meta={next ? `Next: ${next.title} ${istDayKey(next.start) === TODAY_KEY ? `at ${formatTime(next.start)}` : whenLabel(next.start)}` : isToday ? "No more sessions today" : "Nothing on your list yet"}
+        aside={next ? <FocalStat value={formatTime(next.start)} caption={untilLabel(next.start)} /> : <FocalStat value={<CheckCircle size={28} weight="fill" aria-label="Done" />} caption="all done today" />}
       />
-
-      {/* Roster: each participant's primary condition (organ) beside the precaution it drives */}
-      <div className="px-4 pb-2">
-        <p className="text-xs text-white/90">Roster · {cls.focus} · organ = each person&apos;s primary recorded condition</p>
-      </div>
-      <ul className="grid grid-cols-1 gap-x-2 gap-y-1 rounded-inner bg-surface p-2 text-ink md:grid-cols-2" aria-label={`Roster for ${cls.title}`}>
-        {enrolled.map((e) => {
-          const p = patientById(e.patientId);
-          const organ = organFor(e.patientId);
-          const out = !!seatedOut[`${cls.id}:${e.patientId}`];
-          const alert = e.clearance !== "current" && !(e.clearance === "changed" && acknowledged[e.patientId]) && !out;
-          return (
-            <li key={e.patientId} className={cn("flex items-center gap-3 rounded-[12px] p-2", alert && "bg-warning-soft/60")}>
-              {organ ? (
-                <Tip label={`${organ.label} · ${organ.condition}`}>
-                  <span tabIndex={0} className="rounded-full outline-none focus-visible:outline-2 focus-visible:outline-primary">
-                    <OrganBadge kind={organ.kind} size={40} tone="sunken" label={`${organ.label}, from ${organ.condition}`} />
-                  </span>
-                </Tip>
-              ) : (
-                <Avatar src={p?.avatar} name={p?.name ?? ""} size="md" />
-              )}
-              <span className="min-w-0 flex-1">
-                <span className={cn("flex items-center gap-1.5 text-sm text-ink", out && "text-muted line-through")}>
-                  <span className="truncate">{p?.name}</span>
-                  {alert ? <WarningCircle size={14} weight="fill" className="shrink-0 text-warning" aria-label="Clearance alert" /> : null}
+      {shown.map((c) => {
+        const phase = phaseOf(c);
+        const list = roster(c);
+        const marks = marksFor(c);
+        const blocking = list.filter((e) => e.clearance === "changed" && !acks[e.patientId]);
+        return (
+          <div key={c.id} className="flex flex-col gap-2">
+            <Link href={`/classes/${c.id}`} className="group flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-inner px-4 py-2 transition-colors hover:bg-white/10">
+              <span className="min-w-0">
+                <span className="block text-sm text-white">
+                  {formatTime(c.start)}–{formatTime(endIso(c))} · {c.title}
                 </span>
-                <span className="block truncate text-xs text-muted">
-                  {out ? "Sitting out today" : e.precaution ? e.precaution : `No session precautions${organ ? ` · ${organ.condition}` : ""}`}
+                <span className="block text-xs text-white/90">
+                  {c.kind === "group" ? `${capacity ? `Group · ${list.length} of ${c.capacity} places` : `Group · ${pluralize(list.length, "patient")}`} · ` : c.title.includes("1:1") ? "" : "1:1 · "}
+                  {c.room}
                 </span>
               </span>
-            </li>
-          );
-        })}
-      </ul>
-
-      {/* Clearance alerts — each blocks the start until handled */}
-      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
-        {flagged.map((e) => {
-          const p = patientById(e.patientId)!;
-          const out = seatedOut[`${cls.id}:${e.patientId}`];
-          const ack = e.clearance === "changed" ? acknowledged[e.patientId] : undefined;
-          const resolved = !!out || !!ack;
-          return (
-            <li key={e.patientId} className="flex flex-col rounded-inner bg-surface p-4 text-ink">
-              <div className="flex items-start gap-3">
-                <Avatar src={p.avatar} name={p.name} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-ink">{p.name}</p>
-                  <p className="text-xs text-muted">{e.precaution}</p>
-                </div>
-                {resolved ? (
-                  <StatusBadge tone="success">{ack ? "Reviewed" : "Sitting out"}</StatusBadge>
-                ) : (
-                  <StatusBadge tone={e.clearance === "expired" ? "danger" : "warning"}>{e.clearance === "expired" ? "Clearance expired" : "Clearance changed"}</StatusBadge>
-                )}
-              </div>
-              <div className="mt-4 flex flex-1 items-end justify-between gap-2">
-                <span className="text-xs text-muted">{resolved ? `Handled at ${ack ?? out}` : "Blocks the session start"}</span>
-                {!resolved ? (
-                  e.clearance === "changed" ? (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button size="sm" variant="dark" aria-label={`Review new precautions for ${p.name}`}>
-                          Review change
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[min(340px,calc(100vw-32px))] p-4">
-                        <p className="text-sm text-ink">New guidance for {p.name}</p>
-                        <p className="mt-2 text-sm text-ink-2">{changedGuidance(p.id)?.text ?? e.precaution}</p>
-                        <p className="mt-2 text-xs text-muted">{changedGuidance(p.id)?.by ?? "Clinician-approved precaution"} · applies to every session today</p>
-                        <div className="mt-4 flex justify-end gap-2">
-                          <PopoverClose asChild>
-                            <Button size="sm" variant="ghost">
-                              Not now
-                            </Button>
-                          </PopoverClose>
-                          <PopoverClose asChild>
-                            <Button size="sm" variant="dark" onClick={() => onAcknowledge(p.id)}>
-                              I&apos;ve reviewed this
-                            </Button>
-                          </PopoverClose>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  ) : (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button size="sm" variant="dark" aria-label={`Handle expired clearance for ${p.name}`}>
-                          Handle
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[min(340px,calc(100vw-32px))] p-4">
-                        <p className="text-sm text-ink">{p.name}&apos;s clearance has expired</p>
-                        <p className="mt-2 text-sm text-ink-2">Only a clinician can renew it. Until then {p.name.split(" ")[0]} can&apos;t join this session.</p>
-                        <div className="mt-4 flex justify-end gap-2">
-                          <PopoverClose asChild>
-                            <Button size="sm" variant="ghost">
-                              Cancel
-                            </Button>
-                          </PopoverClose>
-                          <PopoverClose asChild>
-                            <Button size="sm" variant="dark" onClick={() => onSeatOut(p.id)}>
-                              Sit out &amp; request renewal
-                            </Button>
-                          </PopoverClose>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  )
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-
-      <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 p-4 pt-2">
-        {blocked ? (
-          <Tip label={`Resolve ${pluralize(issues.length, "clearance alert")} first`}>
-            <span tabIndex={0} className="inline-flex rounded-full">
-              <Button variant="secondary" className="shadow-none" disabled aria-describedby={`${id}-blocked`}>
-                Start session
-              </Button>
-            </span>
-          </Tip>
-        ) : (
-          <Button asChild variant="secondary" className="shadow-none">
-            <Link href={`/classes/${cls.id}`}>Start session</Link>
-          </Button>
-        )}
-        <Button asChild variant="glass">
-          <Link href={`/classes/${cls.id}`}>
-            Open roster
-            <ArrowUpRight />
-          </Link>
-        </Button>
-        <p id={`${id}-blocked`} className="flex items-center gap-1.5 text-xs text-white" aria-live="polite">
-          {blocked ? (
-            <>
-              <WarningCircle size={16} weight="fill" aria-hidden="true" />
-              Start blocked — {issues.map((e) => patientById(e.patientId)?.name.split(" ")[0]).join(" and ")} {issues.length === 1 ? "needs" : "need"} attention
-            </>
-          ) : (
-            <>
-              <CheckCircle size={16} weight="fill" aria-hidden="true" />
-              Clearances handled — ready to start
-            </>
-          )}
-        </p>
-      </div>
+              <span className="flex items-center gap-2">
+                {blocking.length && phase === "upcoming" ? <StatusBadge tone="warning">Acknowledge {blocking.length === 1 ? "1 change" : `${blocking.length} changes`} first</StatusBadge> : null}
+                <StatusBadge tone={phase === "ended" ? "success" : phase === "running" ? "dark" : "neutral"}>{phase === "ended" ? "Done" : phase === "running" ? "In progress" : `Starts ${formatTime(c.start)}`}</StatusBadge>
+                <ArrowUpRight size={16} className="text-white transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+              </span>
+            </Link>
+            <InsetList label={`Patients in ${c.title}`} className="md:grid md:grid-cols-2 md:gap-x-2">
+              {list.map((e) => {
+                const p = patientById(e.patientId);
+                const mark = marks[e.patientId];
+                const changed = e.clearance === "changed" && !acks[e.patientId];
+                const precaution = e.clearance === "changed" ? changedGuidance(e.patientId).text : precautionOnly(e.precaution);
+                return (
+                  <ListRow
+                    key={e.patientId}
+                    href={profileHref(e.patientId, "yoga")}
+                    lead={<Avatar src={p?.avatar} name={p?.name ?? "Patient"} size="sm" />}
+                    title={p?.name}
+                    meta={precaution ?? "No precautions"}
+                    trailing={
+                      changed ? (
+                        <StatusBadge tone="warning">Changed</StatusBadge>
+                      ) : mark && isMark(mark as AttendanceState) ? (
+                        <StatusBadge tone={markTone[mark as Mark]}>{ATTENDANCE_LABEL[mark as Mark]}</StatusBadge>
+                      ) : undefined
+                    }
+                  />
+                );
+              })}
+            </InsetList>
+          </div>
+        );
+      })}
+      {shown.length === 0 ? <p className="px-4 pb-4 text-sm text-white">Sessions you run will appear here with each patient&apos;s precautions.</p> : null}
     </FocalCard>
   );
 }
 
-/** The attributed version of a changed precaution, e.g. "SpO₂ floor 92% (changed 13 Nov by Dr. Sana Qureshi)". */
-function changedGuidance(patientId: string): { text: string; by: string } | null {
-  for (const e of CLASSES.flatMap((c) => c.enrolled)) {
-    if (e.patientId !== patientId || e.clearance !== "changed" || !e.precaution) continue;
-    const m = e.precaution.match(/^(.*?)\s*\((changed .+ by .+)\)$/i);
-    if (m) return { text: m[1], by: m[2].charAt(0).toUpperCase() + m[2].slice(1) };
-  }
-  return null;
+// ---------------------------------------------------------------------------------------------
+// Attendance to mark — sessions that have started today
+// ---------------------------------------------------------------------------------------------
+
+function AttendancePanel({ sessions, marksFor, savedAt }: { sessions: YogaClass[]; marksFor: (c: YogaClass) => Record<string, AttendanceState>; savedAt: (classId: string) => string | undefined }) {
+  const laterToday = today.filter((c) => phaseOf(c) === "upcoming");
+  return (
+    <Panel
+      icon={<CalendarCheck />}
+      title="Attendance to mark"
+      subtitle={sessions.length ? `${pluralize(sessions.length, "session")} held today${laterToday.length ? ` · next opens at ${formatTime(laterToday[0].start)}` : ""}` : laterToday.length ? `Opens when ${laterToday[0].title} starts at ${formatTime(laterToday[0].start)}` : "No sessions today"}
+      href="/classes"
+      actionLabel="Open sessions"
+      className="h-full"
+    >
+      {sessions.length === 0 ? <PanelEmpty icon={<CalendarCheck />} title="Nothing to mark yet" description="Attendance opens when a session starts." /> : null}
+      {sessions.map((c) => (
+        <SessionAttendance key={c.id} cls={c} marks={marksFor(c)} savedAt={savedAt(c.id)} />
+      ))}
+    </Panel>
+  );
+}
+
+function SessionAttendance({ cls, marks, savedAt }: { cls: YogaClass; marks: Record<string, AttendanceState>; savedAt?: string }) {
+  const { toast } = useToast();
+  const pending = Object.values(marks).some((m) => m === "pending");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<string, Mark>>(() => Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, isMark(v) ? v : "present"])));
+  const open = pending || editing;
+  const count = (m: Mark) => Object.values(marks).filter((x) => x === m).length;
+
+  const save = () => {
+    dashboardActions.saveAttendance(cls.id, draft, NOW_LABEL);
+    setEditing(false);
+    toast({ tone: "success", title: `Attendance saved · ${cls.title}`, description: "Saved in this browser session only." });
+  };
+
+  return (
+    <div className="rounded-inner bg-surface p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link href={`/classes/${cls.id}`} className="block truncate text-sm text-ink underline-offset-4 hover:underline">
+            {formatTime(cls.start)} · {cls.title}
+          </Link>
+          <p className="text-xs text-muted">{pending ? `${pluralize(Object.values(marks).filter((m) => m === "pending").length, "patient")} not marked` : `${count("present")} present · ${count("late")} late · ${count("absent")} absent${savedAt ? ` · saved ${savedAt}` : ""}`}</p>
+        </div>
+        {open ? null : (
+          <span className="flex items-center gap-2">
+            <StatusBadge tone="success">Marked</StatusBadge>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(true)} aria-label={`Change attendance for ${cls.title}`}>
+              Change
+            </Button>
+          </span>
+        )}
+      </div>
+      {open ? (
+        <>
+          <ul className="mt-3 flex flex-col gap-1">
+            {roster(cls).map((e) => {
+              const p = patientById(e.patientId);
+              return (
+                <li key={e.patientId} className="@container rounded-[12px] bg-canvas px-3 py-2">
+                  <div className="flex flex-col gap-2 @md:flex-row @md:items-center">
+                    <span className="flex min-w-0 flex-1 items-center gap-3">
+                      <Avatar src={p?.avatar} name={p?.name ?? "Patient"} size="xs" />
+                      <span className="truncate text-sm text-ink">{p?.name}</span>
+                    </span>
+                    <Segmented items={MARKS} value={draft[e.patientId]} onChange={(v) => setDraft((s) => ({ ...s, [e.patientId]: v }))} ariaLabel={`Attendance for ${p?.name}`} size="sm" variant="tray" className="self-start @md:self-auto" />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-3 flex justify-end gap-2">
+            {editing ? (
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+                Cancel
+              </Button>
+            ) : null}
+            <Button size="sm" variant="dark" onClick={save}>
+              Save attendance
+            </Button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
 }

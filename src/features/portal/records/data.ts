@@ -2,7 +2,7 @@ import { RECORD_STATE_LABEL, type CareEvent } from "@/data/featured";
 import { DOCUMENTS, DOC_STATUS_LABEL } from "@/data/records";
 import { staffById } from "@/data/staff";
 import type { ClinicalDocument } from "@/data/types";
-import { FILED_DOCUMENTS, ME, PATIENT_ID, PRIMARY_SYSTEM, SUMMARIES, WITHHELD, authorName, type LabResult } from "../record";
+import { FILED_DOCUMENTS, ME, PATIENT_ID, PRIMARY_SYSTEM, SUMMARIES, WITHHELD, authorName, authorRole, type LabResult } from "../record";
 
 /** One row in "Visit notes, letters & prescriptions": a released event or a filed document. */
 export type RowKind = "visit" | "letter" | "prescription" | "plan";
@@ -45,12 +45,20 @@ export const rowFromEvent = (e: CareEvent): RecordRow => ({
   summary: e.summary,
   author: authorName(e),
   authorId: staffById(e.authorId) ? e.authorId : undefined,
-  role: e.authorRole,
+  role: authorRole(e),
   state: RECORD_STATE_LABEL[e.state],
   source: e.source,
   systemId: e.systemId,
   event: e,
 });
+
+/** How a filed document reached the record, in the patient's words (lab feeds are an add-on, so never "sent by the lab"). */
+const HOW_ADDED: Record<ClinicalDocument["source"], string> = {
+  "Patient upload": "uploaded by you",
+  "Front desk scan": "scanned at reception",
+  "Lab partner": "outside lab report, added by the clinic",
+  "Email import": "received by email",
+};
 
 export const ROWS: RecordRow[] = [
   ...SUMMARIES.map(rowFromEvent),
@@ -61,7 +69,7 @@ export const ROWS: RecordRow[] = [
       date: d.reportDate,
       enteredAt: d.uploadedAt,
       title: d.title,
-      summary: `${d.type} · ${d.pages} ${d.pages === 1 ? "page" : "pages"} · added by ${d.uploadedBy} (${d.source.toLowerCase()})`,
+      summary: `${d.type} · ${d.pages} ${d.pages === 1 ? "page" : "pages"} · ${HOW_ADDED[d.source]}`,
       author: staffById(d.reviewerId ?? undefined)?.name ?? d.uploadedBy,
       authorId: d.reviewerId ?? undefined,
       role: "Reviewed and filed",

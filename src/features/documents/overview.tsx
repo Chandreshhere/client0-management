@@ -1,11 +1,10 @@
 "use client";
 
 import { ArrowUpRight, LockSimple, Scan } from "@phosphor-icons/react";
-import type { DocStatus, Role } from "@/data/types";
+import type { Role } from "@/data/types";
 import type { ScanKind } from "@/data/featured";
-import { DOC_STATUS_LABEL } from "@/data/records";
 import { patientById } from "@/data/patients";
-import { TODAY, formatDate } from "@/lib/format";
+import { TODAY, formatDate, pluralize } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { SegmentedBar } from "@/components/charts/bar-chart";
 import { MediaStatCard, SectionLabel } from "@/components/viz/cards";
@@ -13,9 +12,9 @@ import { ScanThumb } from "@/features/patient/scan-thumb";
 import { OrganGlyph } from "@/features/tasks/organ-glyph";
 import { TODAY_KEY, byTime, dayKey, hoursSince } from "@/features/tasks/time";
 import { docHeadline, OUTCOME_LABEL } from "./data";
-import { DOC_STATUSES, docDue } from "./doc-meta";
+import { docDue } from "./doc-meta";
 import { SpineMriThumb } from "./spine-mri-thumb";
-import { contentAccess, displayTitle, type CareDocument } from "./store";
+import { DOC_QUEUES, QUEUE_LABEL, contentAccess, displayTitle, queueOf, statusText, type CareDocument, type DocQueue } from "./store";
 
 /** Which illustrative render matches a study, from its title. Null = no matching render. */
 function studyRender(title: string): ScanKind | "spine" | null {
@@ -34,9 +33,8 @@ const shortDate = (iso: string) => formatDate(iso, { day: "numeric", month: "sho
 const wholeDays = (h: number) => Math.max(0, Math.floor(h / 24));
 
 /**
- * Imaging documents as dark stat cards (ref 5). With read access the card leads with the report's
- * own finding; without it (routing roles) the scan stays locked and the card shows how long the
- * study has waited — never a clinical value.
+ * Imaging documents as dark stat cards (ref 5), leading with the report's own finding. The view
+ * passes only studies the viewer may read — admin and Reception never see this strip.
  */
 export function ImagingStrip({ docs, role, userId, onOpen, className }: { docs: CareDocument[]; role: Role; userId: string; onOpen: (d: CareDocument) => void; className?: string }) {
   if (!docs.length) return null;
@@ -69,7 +67,7 @@ function ImagingCard({ doc, role, userId, onOpen }: { doc: CareDocument; role: R
   const waited = doc.status === "awaiting-review" || doc.status === "unclassified";
   const turnaround = doc.review ? wholeDays((Date.parse(doc.review.at) - Date.parse(doc.uploadedAt)) / 3_600_000) : null;
   const value = headline ? headline.value : waited ? String(wholeDays(hoursSince(doc.uploadedAt))) : turnaround !== null ? String(turnaround) : "—";
-  const label = headline ? headline.label : waited ? (doc.status === "unclassified" ? "days unidentified" : "days awaiting review") : turnaround !== null ? "days upload → review" : "no finding recorded";
+  const label = headline ? headline.label : waited ? (doc.status === "unclassified" ? "days not matched" : "days awaiting review") : turnaround !== null ? "days upload → review" : "no finding recorded";
 
   const thumb =
     render === "spine" ? (
@@ -95,10 +93,10 @@ function ImagingCard({ doc, role, userId, onOpen }: { doc: CareDocument; role: R
   const due = docDue(doc);
   const status =
     doc.status === "awaiting-review"
-      ? `${DOC_STATUS_LABEL[doc.status]}${due.tone === "danger" ? ` · ${due.text.toLowerCase()}` : due.text !== "—" ? ` · due ${due.text.toLowerCase()}` : ""}`
+      ? `${statusText(doc)}${due.tone === "danger" ? ` · ${due.text.toLowerCase()}` : due.text !== "—" ? ` · due ${due.text.toLowerCase()}` : ""}`
       : doc.review
         ? `${OUTCOME_LABEL[doc.review.outcome]} · reviewed ${shortDate(doc.review.at)}`
-        : DOC_STATUS_LABEL[doc.status];
+        : statusText(doc);
 
   return (
     <li className="w-[272px] shrink-0 snap-start sm:w-auto">
@@ -108,7 +106,7 @@ function ImagingCard({ doc, role, userId, onOpen }: { doc: CareDocument; role: R
         aria-label={`Open ${title}${patient ? ` for ${patient.name}` : ""} — ${value} ${label}`}
         className="group relative block w-full rounded-card text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
-        <MediaStatCard value={value} label={label} time={`Reported ${shortDate(`${doc.reportDate}T12:00:00+05:30`)}`} media={media} className="transition-transform duration-300 [transition-timing-function:var(--ease-spring)] group-hover:-translate-y-0.5" />
+        <MediaStatCard value={value} label={label} time={`Issued ${shortDate(`${doc.reportDate}T12:00:00+05:30`)}`} media={media} className="transition-transform duration-300 [transition-timing-function:var(--ease-spring)] group-hover:-translate-y-0.5" />
         <span aria-hidden="true" className="absolute right-3 top-3 z-[2] flex size-9 items-center justify-center rounded-full bg-white text-ink transition-transform duration-300 [transition-timing-function:var(--ease-spring)] group-hover:-translate-y-0.5 group-hover:scale-105">
           <ArrowUpRight size={16} />
         </span>
@@ -127,16 +125,16 @@ function ImagingCard({ doc, role, userId, onOpen }: { doc: CareDocument; role: R
   );
 }
 
-const STATUS_COLOR: Record<DocStatus, string> = {
-  unclassified: "var(--color-warning)",
-  "awaiting-review": "var(--color-primary)",
-  reviewed: "var(--color-success)",
-  filed: "var(--color-faint)",
+const QUEUE_COLOR: Record<DocQueue, string> = {
+  unmatched: "var(--color-warning)",
+  review: "var(--color-primary)",
+  done: "var(--color-success)",
+  archived: "var(--color-faint)",
 };
 
-/** Where every document sits in the intake → review → filing pipeline, and what is late. */
+/** Where every document sits in the match → review pipeline, and what is late. */
 export function QueueCard({ docs, userId, mineLabel, className }: { docs: CareDocument[]; userId: string; mineLabel?: boolean; className?: string }) {
-  const awaiting = docs.filter((d) => d.status === "awaiting-review");
+  const awaiting = docs.filter((d) => queueOf(d) === "review");
   const overdue = awaiting.filter((d) => d.dueBy && Date.parse(d.dueBy) < TODAY.getTime());
   const dueToday = awaiting.filter((d) => d.dueBy && Date.parse(d.dueBy) >= TODAY.getTime() && dayKey(d.dueBy) === TODAY_KEY);
   const oldest = [...awaiting].sort((a, b) => byTime(a.uploadedAt, b.uploadedAt))[0];
@@ -153,11 +151,11 @@ export function QueueCard({ docs, userId, mineLabel, className }: { docs: CareDo
         </p>
         <p className="mt-2 text-xs text-muted">
           <span className={overdue.length ? "text-danger" : undefined}>{overdue.length} overdue</span> · {dueToday.length} due today
-          {oldest ? ` · oldest uploaded ${wholeDays(hoursSince(oldest.uploadedAt))} days ago` : ""}
+          {oldest ? ` · oldest uploaded ${pluralize(wholeDays(hoursSince(oldest.uploadedAt)), "day")} ago` : ""}
           {mineLabel ? ` · ${mine.length} assigned to you` : ""}
         </p>
       </div>
-      <SegmentedBar label="Documents by status" parts={DOC_STATUSES.map((s) => ({ label: DOC_STATUS_LABEL[s], value: docs.filter((d) => d.status === s).length, color: STATUS_COLOR[s] }))} />
+      <SegmentedBar label="Documents by status" parts={DOC_QUEUES.map((q) => ({ label: QUEUE_LABEL[q], value: docs.filter((d) => queueOf(d) === q).length, color: QUEUE_COLOR[q] }))} />
     </section>
   );
 }

@@ -17,6 +17,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { StatusBadge } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { usePlan, useRole } from "@/components/shell/role-context";
+import { AddOnBadge, AddOnNotice } from "@/components/shell/plan-switcher";
 import { InfoNote, ReadOnlyBanner } from "./ui";
 import { NOW_ISO, whenInline } from "./time";
 import { TEMPLATE_STATUS_LABEL, settingsAccess, smsSegments, type Template, type TemplateChannel } from "./data";
@@ -76,7 +77,7 @@ function sampleValues(p: Patient, clinic: ReturnType<typeof useClinic>): Partial
     v["payment.amount"] = formatINR(paid.amount);
     v["payment.method"] = paid.method;
     v["payment.date"] = formatDate(paid.at);
-    v["payment.confirmation"] = paid.method === "Cash" ? "counted at the desk" : paid.method === "Bank transfer" ? "confirmed by the bank" : "confirmed by the payment gateway";
+    v["payment.confirmation"] = paid.method === "Cash" ? "counted at the desk" : paid.method === "Bank transfer" ? "confirmed by the bank" : `${paid.method} reference recorded at the desk`;
   }
   return v;
 }
@@ -106,11 +107,15 @@ const toPlain = (parts: Part[]) => parts.map((p) => (p.kind === "var" || p.kind 
 
 const unknownVars = (body: string) => [...body.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]).filter((k) => !(VARIABLES as readonly string[]).includes(k));
 
+/** WhatsApp and SMS sending is the messaging add-on: those templates are shown as such, never as sending. */
+const isMessage = (t: Template) => t.channel === "SMS" || t.channel === "WhatsApp";
+
 export function TemplatesView() {
   const { role, user } = useRole();
-  const { plan } = usePlan();
+  const { plan, has } = usePlan();
   const { toast } = useToast();
-  const templates = useTemplates();
+  const all = useTemplates();
+  const templates = useMemo(() => all.filter((t) => !t.needs || has(t.needs)), [all, has]);
   const clinic = useClinic();
   const access = settingsAccess(role, plan);
   const owner = access.canEditClinic;
@@ -130,7 +135,7 @@ export function TemplatesView() {
   const body = mode === "edit" ? draft : t?.body ?? "";
   const parts = useMemo(() => renderParts(body, values), [body, values]);
   const rendered = toPlain(parts);
-  const sms = t && (t.channel === "SMS" || t.channel === "WhatsApp") ? smsSegments(rendered) : null;
+  const sms = t && isMessage(t) ? smsSegments(rendered) : null;
 
   useEffect(() => {
     if (t) setDraft(t.body);
@@ -174,7 +179,7 @@ export function TemplatesView() {
 
   return (
     <div className="flex flex-col gap-6 lg:gap-8">
-      <PageHeader eyebrow="Settings" title="Templates" description="Messages, forms and note structures the team reuses. Previews fill in from a real patient's record; nothing is sent from this prototype." />
+      <PageHeader eyebrow="Settings" title="Templates" description="Forms, letters and note structures the team reuses. Previews fill in from a real patient's record; nothing is sent or printed from this prototype." />
       {!owner && !clinicalEditor ? <ReadOnlyBanner>Templates are edited by administrators; clinical templates are approved by the clinical lead.</ReadOnlyBanner> : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
@@ -197,7 +202,10 @@ export function TemplatesView() {
                       {CHANNEL_ICON[x.channel]}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-ink">{x.name}</span>
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-sm text-ink">{x.name}</span>
+                        {isMessage(x) ? <AddOnBadge addOn="messaging" /> : null}
+                      </span>
                       <span className="block truncate text-xs text-muted">
                         {x.channel} · {x.purpose}
                       </span>
@@ -244,6 +252,12 @@ export function TemplatesView() {
               </p>
             )}
           </div>
+
+          {isMessage(t) ? (
+            <AddOnNotice addOn="messaging">
+              Sending this by {t.channel} needs the WhatsApp / SMS add-on. Without it, nothing is sent — the wording is kept ready for when it&apos;s switched on.
+            </AddOnNotice>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
             <div className="flex min-w-0 flex-col gap-4">
@@ -330,7 +344,7 @@ export function TemplatesView() {
                     ))}
                 </ul>
               </div>
-              <InfoNote>Nothing is sent or printed from this prototype. Edits are saved in this browser session and written to the audit log.</InfoNote>
+              <InfoNote>Nothing is sent or printed from this prototype. Edits are saved in this browser session and written to the activity log.</InfoNote>
             </aside>
           </div>
         </section>

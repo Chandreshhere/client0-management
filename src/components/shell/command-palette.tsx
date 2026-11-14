@@ -6,16 +6,17 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowRight, CalendarPlus, MagnifyingGlass, UserPlus, ListPlus, UploadSimple, Swap } from "@phosphor-icons/react";
 import { PATIENTS, clinicNumber } from "@/data/patients";
-import { DEMO_USER, ROLE_ORDER } from "@/data/staff";
+import { DEMO_USER } from "@/data/staff";
 import { planById } from "@/data/plans";
+import type { Patient } from "@/data/types";
 import { Avatar } from "@/components/ui/avatar";
 import { useRole } from "./role-context";
-import { NAV } from "./nav-config";
+import { navFor } from "./nav-config";
 
 /** ⌘K palette: jump to patients and pages, run quick actions, switch demo workspace. */
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const router = useRouter();
-  const { role, setRole, plan } = useRole();
+  const { role, plan, has, user } = useRole();
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -27,8 +28,14 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     router.push(href);
   };
 
-  const pages = NAV[role].flatMap((s) => s.items.flatMap((i) => (i.children ? i.children.map((c) => ({ label: `${i.label} · ${c.label}`, href: c.href, icon: i.icon })) : [{ label: i.label, href: i.href, icon: i.icon }])));
+  const pages = navFor(role, has).flatMap((s) => s.items.flatMap((i) => (i.children ? i.children.map((c) => ({ label: `${i.label} · ${c.label}`, href: c.href, icon: i.icon })) : [{ label: i.label, href: i.href, icon: i.icon }])));
   const staffRole = role !== "patient";
+  // F1: find by ID, phone or name, your own patients first. Admin and reception see demographics
+  // only (spec rule 3), so their results show the phone number instead of the diagnosis.
+  const clinicalView = role === "doctor" || role === "nutritionist" || role === "yoga" || role === "coordinator";
+  const mine = (p: Patient) => Object.values(p.careTeam).includes(user.id);
+  const ordered = [...PATIENTS].sort((a, b) => Number(mine(b)) - Number(mine(a)));
+  const canRegister = role === "doctor" || role === "admin" || role === "frontdesk";
 
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
@@ -53,13 +60,16 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
 
               {staffRole ? (
                 <Command.Group heading="Patients">
-                  {PATIENTS.slice(0, query ? PATIENTS.length : 5).map((p) => (
-                    <Item key={p.id} value={`${p.name} ${clinicNumber(p.id)} ${p.primaryConcern}`} onSelect={() => go(`/patients/${p.id}`)}>
+                  {ordered.slice(0, query ? ordered.length : 5).map((p) => (
+                    <Item key={p.id} value={`${p.name} ${clinicNumber(p.id)} ${p.phone} ${p.phone.replace(/\D/g, "")}${clinicalView ? ` ${p.primaryConcern}` : ""}`} onSelect={() => go(`/patients/${p.id}`)}>
                       <Avatar src={p.avatar} name={p.name} size="sm" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate">{p.name}</span>
+                        <span className="block truncate">
+                          {p.name}
+                          {mine(p) ? <span className="ml-2 text-xs text-primary">Your patient</span> : null}
+                        </span>
                         <span className="block truncate text-xs text-muted">
-                          <span className="font-mono">{clinicNumber(p.id)}</span> · {p.age} y · {p.primaryConcern}
+                          <span className="font-mono">{clinicNumber(p.id)}</span> · {p.age} y · {clinicalView ? p.primaryConcern : p.phone}
                         </span>
                       </span>
                     </Item>
@@ -78,21 +88,19 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
 
               {staffRole ? (
                 <Command.Group heading="Actions">
-                  <Item value="new appointment book" onSelect={() => go("/schedule?new=1")}><Act icon={<CalendarPlus size={16} />} />New appointment</Item>
-                  <Item value="register patient new" onSelect={() => go("/patients?new=1")}><Act icon={<UserPlus size={16} />} />Register patient</Item>
+                  {has("calendar") && role !== "yoga" ? <Item value="new appointment book" onSelect={() => go("/schedule?new=1")}><Act icon={<CalendarPlus size={16} />} />New appointment</Item> : null}
+                  {canRegister ? <Item value="register patient new" onSelect={() => go("/patients?new=1")}><Act icon={<UserPlus size={16} />} />Register patient</Item> : null}
                   <Item value="new task" onSelect={() => go("/tasks?new=1")}><Act icon={<ListPlus size={16} />} />New task</Item>
-                  <Item value="upload document report" onSelect={() => go("/documents?upload=1")}><Act icon={<UploadSimple size={16} />} />Upload document</Item>
+                  {role !== "yoga" ? <Item value="upload document report" onSelect={() => go("/documents?upload=1")}><Act icon={<UploadSimple size={16} />} />Upload a report</Item> : null}
                 </Command.Group>
               ) : null}
 
-              <Command.Group heading="Switch workspace (demo)">
-                {ROLE_ORDER.filter((r) => r !== role && planById(plan).roles.includes(r)).map((r) => (
-                  <Item key={r} value={`switch workspace role ${DEMO_USER[r].label}`} onSelect={() => { onOpenChange(false); setRole(r); }}>
-                    <Act icon={<Swap size={16} />} />
-                    <span className="flex-1">{DEMO_USER[r].label}</span>
-                    <span className="truncate text-xs text-muted">{DEMO_USER[r].description}</span>
-                  </Item>
-                ))}
+              <Command.Group heading="Demo">
+                <Item value="switch demo login plan role" onSelect={() => go("/demo")}>
+                  <Act icon={<Swap size={16} />} />
+                  <span className="flex-1">Switch demo login</span>
+                  <span className="truncate text-xs text-muted">{planById(plan).name} plan · {DEMO_USER[role].label}</span>
+                </Item>
               </Command.Group>
             </Command.List>
             <div className="flex items-center gap-4 border-t border-line px-5 py-3 text-xs text-muted">

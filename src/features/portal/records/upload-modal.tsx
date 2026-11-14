@@ -8,7 +8,7 @@ import { Dialog, ModalContent } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { DemoNote } from "../ui";
-import { SYSTEMS } from "../record";
+import { PRIMARY_DOCTOR, SYSTEMS } from "../record";
 import { TODAY_KEY } from "../time";
 import { addUpload, removeUpload, type UploadType } from "./store";
 
@@ -21,15 +21,18 @@ const TYPES: { value: UploadType; label: string }[] = [
 ];
 
 const ACCEPT = ["application/pdf", "image/jpeg", "image/png"];
-const MAX_MB = 10;
+/** Accepted files: PDF, JPG, PNG up to 20 MB each (spec document rules). */
+export const MAX_UPLOAD_MB = 20;
+const MAX_MB = MAX_UPLOAD_MB;
 
 type Errors = Partial<Record<"file" | "title" | "reportDate", string>>;
 
 export const formatSize = (bytes: number) => (bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
 /**
- * Upload a report. The file never leaves the browser in this demo — only its name and size are
- * kept. The report date (when the test was done) is required and kept apart from the upload date.
+ * Upload a report (F4). The file never leaves the browser in this demo — only its name and size
+ * are kept. The date issued is required; the upload date is recorded automatically. Uploads go to
+ * the clinic's intake queue, where the primary doctor matches and reviews them before use.
  */
 export function UploadModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { toast } = useToast();
@@ -59,16 +62,16 @@ export function UploadModal({ open, onOpenChange }: { open: boolean; onOpenChang
     const next: Errors = {};
     if (!file) next.file = "Choose the file to upload";
     if (!title.trim()) next.title = "Give the report a name you'll recognise";
-    if (!reportDate) next.reportDate = "Add the date of the test — it's printed on the report";
-    else if (reportDate > TODAY_KEY) next.reportDate = "The report date can't be in the future";
+    if (!reportDate) next.reportDate = "Add the date the report was issued — it's printed on it";
+    else if (reportDate > TODAY_KEY) next.reportDate = "The date issued can't be in the future";
     else if (reportDate < "1990-01-01") next.reportDate = "Check the year";
     setErrors(next);
     if (Object.keys(next).length || !file) return;
     const u = addUpload({ title: title.trim(), type, reportDate, fileName: file.name, fileSize: file.size, where: where.trim() || undefined, systemId, note: note.trim() || undefined });
     onOpenChange(false);
     toast({
-      title: "Uploaded · awaiting review",
-      description: "Kept in this browser session for the demo — the clinic hasn't received it and nothing was sent.",
+      title: "Added to the intake queue",
+      description: `${PRIMARY_DOCTOR?.name ?? "Your doctor"} reviews it before it joins your record. Demo — kept in this browser session; the clinic hasn't received it.`,
       action: { label: "Undo", onClick: () => removeUpload(u.id) },
     });
   };
@@ -78,7 +81,7 @@ export function UploadModal({ open, onOpenChange }: { open: boolean; onOpenChang
       <ModalContent
         size="md"
         title="Upload a report"
-        description="Your care team reviews every upload before it joins your record."
+        description={`It goes to the clinic's intake queue. ${PRIMARY_DOCTOR?.name ?? "Your doctor"} matches and reviews it before it joins your record.`}
         footer={
           <>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
@@ -148,7 +151,7 @@ export function UploadModal({ open, onOpenChange }: { open: boolean; onOpenChang
             <Field label="Type">
               {(f) => <Select id={f.id} value={type} onValueChange={(v) => setType(v as UploadType)} options={TYPES} />}
             </Field>
-            <Field label="Date of the test" error={errors.reportDate} hint="Not today's date — the date on the report">
+            <Field label="Date issued" error={errors.reportDate} hint="The date on the report. Today's upload date is recorded for you.">
               {(f) => <Input {...f} type="date" max={TODAY_KEY} value={reportDate} onChange={(e) => setReportDate(e.target.value)} />}
             </Field>
           </div>

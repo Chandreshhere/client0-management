@@ -4,7 +4,8 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { ArrowSquareOut, ArrowUUpLeft, CalendarBlank, CheckCircle, PaperPlaneRight } from "@phosphor-icons/react";
-import type { Priority, TaskStatus } from "@/data/types";
+import type { TaskStatus } from "@/data/types";
+import { planById } from "@/data/plans";
 import { staffById } from "@/data/staff";
 import { DISCIPLINE_LABEL } from "@/data/appointments";
 import { formatTime } from "@/lib/format";
@@ -14,16 +15,15 @@ import { Dialog, SheetContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import { Segmented } from "@/components/ui/segmented";
-import { StatusBadge, priorityTone } from "@/components/ui/status";
+import { StatusBadge } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { useRole } from "@/components/shell/role-context";
 import { addTaskComment, updateTask, useTaskActivity, useTasks, type CareTask } from "./store";
 import type { ActivityKind } from "./data";
-import { DUE_TIMES, PRIORITY_LABEL, PRIORITY_ORDER, SOURCE_META, STATUS_LABEL, STATUS_ORDER, dueLabel, sourceKind, statusTone } from "./task-meta";
+import { DUE_TIMES, SOURCE_META, STATUS_LABEL, displaySource, dueLabel, routingTitle, sourceKind, statusTone } from "./task-meta";
+import { FLAG_URGENCY_LABEL, isFlagTask, respondToFlag } from "./flags";
 import { personById, staffOptions } from "./people";
 import { PersonInline } from "./ui";
-import { OrganTag } from "./organ-glyph";
 import { dayKey, isoAt, shortDay, stamp } from "./time";
 
 const KIND_LABEL: Record<ActivityKind, string> = {
@@ -36,8 +36,8 @@ const KIND_LABEL: Record<ActivityKind, string> = {
   note: "noted",
 };
 
-/** Task detail drawer: status, reassign, change due, priority, comments and the activity trail. */
-export function TaskSheet({ taskId, onClose }: { taskId: string | null; onClose: () => void }) {
+/** Task detail drawer: owner, due, the flag and its reply, comments and the activity trail. */
+export function TaskSheet({ taskId, onClose, redact }: { taskId: string | null; onClose: () => void; redact?: (t: CareTask) => boolean }) {
   // Keep the last task rendered while the drawer animates out.
   const [shownId, setShownId] = useState<string | null>(taskId);
   if (taskId && taskId !== shownId) setShownId(taskId);
@@ -46,29 +46,46 @@ export function TaskSheet({ taskId, onClose }: { taskId: string | null; onClose:
 
   return (
     <Dialog open={!!taskId} onOpenChange={(o) => !o && onClose()}>
-      {task ? <TaskSheetBody task={task} /> : null}
+      {task ? <TaskSheetBody task={task} redacted={redact?.(task) ?? false} /> : null}
     </Dialog>
   );
 }
 
-function TaskSheetBody({ task }: { task: CareTask }) {
+function TaskSheetBody({ task, redacted }: { task: CareTask; redacted: boolean }) {
   const activity = useTaskActivity(task.id);
-  const { user } = useRole();
+  const { user, role, plan } = useRole();
   const { toast } = useToast();
   const [editingDue, setEditingDue] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("18:00");
   const [comment, setComment] = useState("");
+  const [reply, setReply] = useState("");
 
   useEffect(() => {
     setEditingDue(false);
     setComment("");
+    setReply("");
   }, [task.id]);
 
   const owner = staffById(task.ownerId);
   const due = dueLabel(task);
   const SourceIcon = SOURCE_META[sourceKind(task.source)].icon;
   const done = task.status === "done";
+  const mine = task.ownerId === user.id;
+  /** one owner per item: the owner, whoever raised it, or the people who route work can move it */
+  const canRoute = mine || task.createdBy === user.id || role === "coordinator" || role === "admin";
+  const flag = isFlagTask(task);
+  const flagInfo = task.flag ?? (flag ? { urgency: task.priority === "urgent" || task.priority === "high" ? ("same-day" as const) : ("routine" as const), raisedBy: task.createdBy } : null);
+  const flagText = task.notes ?? activity.find((a) => a.kind === "note")?.text;
+  const awaitingReply = flag && !task.flag?.response && !done;
+
+  const sendReply = () => {
+    const text = reply.trim();
+    if (!text) return;
+    respondToFlag(task, text, user.id);
+    setReply("");
+    toast({ title: "Reply saved — flag closed", description: `${staffById(flagInfo?.raisedBy)?.name ?? "The person who raised it"} sees your reply under “Raised by me”. Saved in this browser session.`, tone: "success" });
+  };
 
   const setStatus = (s: TaskStatus) => {
     if (s === task.status) return;
@@ -91,12 +108,6 @@ function TaskSheetBody({ task }: { task: CareTask }) {
     toast({ title: "Due date changed", description: `Now due ${shortDay(next)}, ${dueTime}. Saved in this browser session.` });
   };
 
-  const setPriority = (p: string) => {
-    const next = p as Priority;
-    if (next === task.priority) return;
-    updateTask(task.id, { priority: next }, { actorId: user.id, kind: "priority", text: `${PRIORITY_LABEL[task.priority]} → ${PRIORITY_LABEL[next]}` });
-  };
-
   const sendComment = () => {
     const text = comment.trim();
     if (!text) return;
@@ -109,18 +120,22 @@ function TaskSheetBody({ task }: { task: CareTask }) {
 
   return (
     <SheetContent
-        title={task.title}
+        title={redacted ? routingTitle(task) : task.title}
         description={`${task.patientId ? `${personById(task.patientId)?.name} · ` : ""}${DISCIPLINE_LABEL[task.discipline]}`}
         footer={
           <>
-            {task.patientId ? (
+            {task.patientId && !redacted ? (
               <Button asChild variant="secondary">
                 <Link href={`/patients/${task.patientId}`}>
                   Patient record <ArrowSquareOut />
                 </Link>
               </Button>
             ) : null}
-            {done ? (
+            {!mine ? null : awaitingReply ? (
+              <Button variant="primary" leading={<PaperPlaneRight />} disabled={!reply.trim()} onClick={sendReply}>
+                Send reply
+              </Button>
+            ) : done ? (
               <Button variant="secondary" leading={<ArrowUUpLeft />} onClick={() => setStatus("todo")}>
                 Reopen
               </Button>
@@ -134,25 +149,38 @@ function TaskSheetBody({ task }: { task: CareTask }) {
       >
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge tone={statusTone(task.status)}>{STATUS_LABEL[task.status]}</StatusBadge>
-          <StatusBadge tone={priorityTone(task.priority)}>{PRIORITY_LABEL[task.priority]} priority</StatusBadge>
+          {flagInfo ? <StatusBadge tone={flagInfo.urgency === "same-day" ? "warning" : "neutral"}>Flag · {FLAG_URGENCY_LABEL[flagInfo.urgency]}</StatusBadge> : null}
           <span className={cn("text-xs tabular", due.tone === "danger" ? "text-danger" : "text-muted")}>{due.text}</span>
           {task.local ? <StatusBadge tone="draft">Created in this session</StatusBadge> : null}
         </div>
 
-        <section className="mt-6">
-          <h3 className="text-xs text-muted">Status</h3>
-          <div className="scrollbar-none mt-2 overflow-x-auto">
-            <Segmented
-              ariaLabel="Task status"
-              size="sm"
-              variant="tray"
-              value={task.status}
-              onChange={setStatus}
-              items={STATUS_ORDER.map((s) => ({ value: s, label: STATUS_LABEL[s] }))}
-              className="w-max"
-            />
-          </div>
-        </section>
+        {flagInfo && !redacted ? (
+          <section className="mt-6 rounded-inner bg-canvas p-4" aria-label="Flag">
+            <p className="text-xs text-muted">
+              Raised by <span className="text-ink">{staffById(flagInfo.raisedBy)?.name ?? "the care team"}</span>
+              {task.flag?.context ? ` · ${task.flag.context}` : ""}
+              {task.flag?.via ? ` · ${task.flag.via}` : ""}
+            </p>
+            {flagText ? <p className="mt-2 text-sm leading-relaxed text-ink">{flagText}</p> : null}
+            {task.flag?.response ? (
+              <div className="mt-4 rounded-inner bg-surface p-3">
+                <p className="text-xs text-muted">
+                  <span className="text-ink">{staffById(task.flag.response.by)?.name}</span> replied · {stamp(task.flag.response.at)}
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-ink">{task.flag.response.text}</p>
+              </div>
+            ) : mine && awaitingReply ? (
+              <div className="mt-4">
+                <label htmlFor="flag-reply" className="text-xs text-muted">
+                  Your reply — what to do next, or what you changed (e.g. updated precautions)
+                </label>
+                <Textarea id="flag-reply" value={reply} onChange={(e) => setReply(e.target.value)} placeholder="e.g. Seen at 15:00 — keep to seated variations until the stress test; precautions updated." className="mt-2 min-h-20 resize-none bg-surface" />
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-muted">Waiting for {owner?.name ?? "the doctor"} to reply.</p>
+            )}
+          </section>
+        ) : null}
 
         <dl className="mt-6 grid grid-cols-1 gap-x-4 gap-y-4 rounded-inner bg-canvas p-4 text-sm sm:grid-cols-2">
           <div className="sm:col-span-2">
@@ -165,7 +193,7 @@ function TaskSheetBody({ task }: { task: CareTask }) {
                   <span className="block truncate text-xs text-muted">{owner?.title}</span>
                 </span>
               </span>
-              <Select size="sm" ariaLabel="Reassign task" value={task.ownerId} onValueChange={reassign} options={staffOptions()} className="ml-auto w-auto min-w-[168px]" />
+              {canRoute ? <Select size="sm" ariaLabel="Reassign task" value={task.ownerId} onValueChange={reassign} options={staffOptions((s) => planById(plan).roles.includes(s.role))} className="ml-auto w-auto min-w-[168px]" /> : null}
             </dd>
           </div>
           <div className="sm:col-span-2">
@@ -191,7 +219,7 @@ function TaskSheetBody({ task }: { task: CareTask }) {
                     size="sm"
                     variant="ghost"
                     leading={<CalendarBlank />}
-                    className="ml-auto"
+                    className={cn("ml-auto", !canRoute && "hidden")}
                     onClick={() => {
                       setDueDate(dayKey(task.due));
                       setDueTime(formatTime(task.due));
@@ -204,20 +232,11 @@ function TaskSheetBody({ task }: { task: CareTask }) {
               )}
             </dd>
           </div>
-          <div>
-            <dt className="text-xs text-muted">Priority</dt>
-            <dd className="mt-2">
-              <Select size="sm" ariaLabel="Priority" value={task.priority} onValueChange={setPriority} options={PRIORITY_ORDER.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))} className="w-[140px]" />
-            </dd>
-          </div>
-          <div>
+          <div className="sm:col-span-2">
             <dt className="text-xs text-muted">Patient</dt>
             <dd className="mt-2 flex flex-col items-start gap-1.5 text-sm">
               {task.patientId ? (
-                <>
-                  <PersonInline id={task.patientId} size="sm" link />
-                  <OrganTag patientId={task.patientId} />
-                </>
+                <PersonInline id={task.patientId} size="sm" link={!redacted} />
               ) : (
                 <span className="text-muted">Clinic task — no patient</span>
               )}
@@ -228,13 +247,17 @@ function TaskSheetBody({ task }: { task: CareTask }) {
             <dd className="mt-2 flex flex-wrap items-center gap-2 text-ink-2">
               <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-surface px-2.5 text-xs shadow-[inset_0_0_0_1px_var(--color-line)]">
                 <SourceIcon size={14} className="text-muted" aria-hidden="true" />
-                {task.source}
+                {redacted ? "Clinical" : displaySource(task)}
               </span>
               {task.source.startsWith("Created by") ? null : <span className="text-xs text-muted">Created by {personById(task.createdBy)?.name ?? "Unknown"}</span>}
             </dd>
           </div>
         </dl>
 
+        {redacted ? (
+          <p className="mt-8 rounded-inner bg-canvas p-4 text-sm text-muted">Clinical details and the activity trail are visible to the care team. You can see who owns it and when it's due.</p>
+        ) : (
+        <>
         <section className="mt-8">
           <h3 className="text-xs text-muted">Activity</h3>
           <ol className="mt-3 flex flex-col">
@@ -283,6 +306,8 @@ function TaskSheetBody({ task }: { task: CareTask }) {
             </Button>
           </div>
         </section>
+        </>
+        )}
       </SheetContent>
   );
 }

@@ -1,18 +1,22 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { classById } from "@/features/classes/model";
-import { ClassRoster } from "@/features/classes/roster";
+import { classById, isLoggedId } from "@/features/classes/model";
+import { ClassRoster, LoggedClassRoster } from "@/features/classes/roster";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const cls = classById(id);
-  return { title: cls ? `${cls.title} · roster` : "Class not found" };
+  return { title: cls ? cls.title : isLoggedId(id) ? "Logged session" : "Session not found" };
 }
 
-/** Class or 1:1 session roster (doc §2D). Unknown ids 404. */
+/**
+ * One session: precautions to acknowledge, attendance, progress notes, flags (spec F7/F8).
+ * Sessions logged in the browser (c-local-…) are looked up client-side; other unknown ids 404.
+ */
 export default async function ClassRosterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const cls = classById(id);
-  if (!cls) notFound();
-  return <ClassRoster cls={cls} />;
+  if (cls) return <ClassRoster cls={cls} />;
+  if (isLoggedId(id)) return <LoggedClassRoster id={id} />;
+  notFound();
 }

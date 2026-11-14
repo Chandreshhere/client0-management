@@ -24,13 +24,17 @@ interface MessageState {
 const SEED: MessageState = { threads: [], messages: [], read: {} };
 export const messageStore = createSessionStore<MessageState>("carelane.care.messages.v1", SEED);
 
-/** Threads visible to this person (patients only see their own patient-channel threads). */
+/**
+ * Threads visible to this person (rule 2/3: each role sees what it acts on). Patients see their own
+ * patient-channel threads; staff see threads they're part of; the care coordinator (Pro) follows
+ * every thread so nothing stalls.
+ */
 export function useThreads(role: Role, userId: string): ThreadView[] {
   const s = useSessionStore(messageStore);
   return useMemo(() => {
     const localIds = new Set(s.threads.map((t) => t.id));
     const all = [...s.threads, ...THREADS];
-    const visible = role === "patient" ? all.filter((t) => t.channel === "patient" && t.participants.includes(userId)) : all;
+    const visible = role === "coordinator" ? all : all.filter((t) => t.participants.includes(userId) && (role !== "patient" || t.channel === "patient"));
     return visible
       .map((t) => {
         const messages = [...MESSAGES.filter((m) => m.threadId === t.id), ...s.messages.filter((m) => m.threadId === t.id)].sort((a, b) => byTime(a.at, b.at));

@@ -9,13 +9,13 @@ import { Tip } from "@/components/ui/tooltip";
 import { FitBubbles } from "@/features/settings/viz";
 import { addDays, TODAY_KEY } from "@/features/settings/time";
 import type { PackageRow } from "./data";
-import { healthOf, isLive, isLow, pace, runways, type Runway } from "./package-insights";
+import { EXPIRY_ALERT_DAYS, LOW_CREDITS, healthOf, isLive, isLow, pace, runways, type Runway } from "./package-insights";
 import { BUBBLE_AIR } from "./overview";
 
 /**
- * Packages overview (refs 5 & 6): a cobalt focal card with credits still to use per active package
- * (bubble area), and an "expiry runway" — days until each package expires against the weekly pace
- * needed to use what's left, compared with the pace the programme schedules.
+ * Packages overview: a cobalt focal card with credits still to use per active package (bubble
+ * area), and an "expiry runway" — days until each package expires against the weekly pace needed
+ * to use what's left, compared with the pace the package schedules.
  */
 
 const firstName = (name?: string) => name?.split(" ")[0] ?? "Patient";
@@ -33,8 +33,8 @@ export function CreditsFocal({ packages, onFocusPackage, onShowAttention }: { pa
 
   const tiles = [
     { key: "active", label: "Active packages", value: live.length, sub: pluralize(patients, "patient") },
-    { key: "expiring", label: "Expiring ≤ 30 days", value: expiring.length, sub: expiring[0] ? `Next: ${firstName(expiring[0].patient?.name)} · ${shortDay(expiring[0].row.expires)}` : "None" },
-    { key: "low", label: "Running low", value: low.length, sub: low[0] ? `${firstName(low[0].patient?.name)} · ${pluralize(low[0].left, "credit")} left` : "None" },
+    { key: "expiring", label: `Expiring ≤ ${EXPIRY_ALERT_DAYS} days`, value: expiring.length, sub: expiring[0] ? `Next: ${firstName(expiring[0].patient?.name)} · ${shortDay(expiring[0].row.expires)}` : "None" },
+    { key: "low", label: `Low credits (≤ ${LOW_CREDITS})`, value: low.length, sub: low[0] ? `${firstName(low[0].patient?.name)} · ${pluralize(low[0].left, "credit")} left` : "None" },
     { key: "pace", label: "Pace above plan", value: risky.length, sub: risky[0] ? `${firstName(risky[0].patient?.name)} needs ${pace(risky[0].needed ?? 0)}` : "Every package on pace" },
   ];
 
@@ -219,19 +219,19 @@ export function ExpiryRunway({ packages, onFocusPackage }: { packages: PackageRo
                     </span>
                   </span>
                   <span className="relative block h-8">
-                    {/* 30-day window */}
-                    <span className="absolute inset-y-0 left-0 rounded-[8px] bg-warning-soft/70" style={{ width: at(30) }} aria-hidden="true" />
+                    {/* alert window: 14 days before expiry */}
+                    <span className="absolute inset-y-0 left-0 rounded-[8px] bg-warning-soft/70" style={{ width: at(EXPIRY_ALERT_DAYS) }} aria-hidden="true" />
                     {ticks.slice(1).map((t) => (
                       <span key={t} className="absolute inset-y-0 w-px bg-line" style={{ left: at(t) }} aria-hidden="true" />
                     ))}
                     <span className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-sunken" aria-hidden="true" />
                     <span
-                      className={cn("absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full transition-[width] duration-700 [transition-timing-function:var(--ease-spring)]", r.days <= 30 ? "bg-warning" : "bg-charcoal")}
+                      className={cn("absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full transition-[width] duration-700 [transition-timing-function:var(--ease-spring)]", r.days <= EXPIRY_ALERT_DAYS ? "bg-warning" : "bg-charcoal")}
                       style={{ width: at(r.days) }}
                       aria-hidden="true"
                     />
                     <Tip label={`Expires ${formatDate(r.row.expires, { day: "numeric", month: "short", year: "numeric" })} · ${pluralize(r.days, "day")}`}>
-                      <span className={cn("absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-surface", r.days <= 30 ? "bg-warning" : "bg-charcoal")} style={{ left: at(r.days) }} />
+                      <span className={cn("absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-surface", r.days <= EXPIRY_ALERT_DAYS ? "bg-warning" : "bg-charcoal")} style={{ left: at(r.days) }} />
                     </Tip>
                   </span>
                   <span className="flex items-center gap-2 md:justify-end">
@@ -269,9 +269,9 @@ export function ExpiryRunway({ packages, onFocusPackage }: { packages: PackageRo
         </li>
         <li className="flex items-center gap-2">
           <span className="h-3 w-4 rounded-[4px] bg-warning-soft" aria-hidden="true" />
-          <span className="text-ink-2">Next 30 days (amber = expires in it)</span>
+          <span className="text-ink-2">Next {EXPIRY_ALERT_DAYS} days (amber = expiry alert)</span>
         </li>
-        <li>Pace needed = credits left ÷ weeks left · plan = sessions per week the programme schedules</li>
+        <li>Pace needed = credits left ÷ weeks left · plan = sessions per week the package schedules</li>
       </ul>
     </section>
   );

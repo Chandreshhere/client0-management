@@ -35,7 +35,7 @@ function WalkInForm({ onCancel, onIssued }: { onCancel: () => void; onIssued: (b
     () => (available.find((s) => s.discipline === "medical" && status[s.id]?.free) ?? available.find((s) => status[s.id]?.free) ?? available[0])?.id ?? "s-ananya",
   );
   const [intake, setIntake] = useState(false);
-  const [errors, setErrors] = useState<{ patient?: string; reason?: string }>({});
+  const [errors, setErrors] = useState<{ patient?: string }>({});
   const pickerRef = useRef<HTMLDivElement>(null);
   const token = issueToken();
   const staff = staffById(staffId);
@@ -43,18 +43,18 @@ function WalkInForm({ onCancel, onIssued }: { onCancel: () => void; onIssued: (b
   const submit = () => {
     const next: typeof errors = {};
     if (!patientId) next.patient = "Find the patient or register them first.";
-    if (!reason.trim()) next.reason = "Add a short reason so the practitioner can triage.";
     setErrors(next);
     if (next.patient) {
       pickerRef.current?.querySelector<HTMLElement>("input,button")?.focus();
       return;
     }
-    if (next.reason || !patientId || !staff) return;
+    if (!patientId || !staff) return;
     const [created] = addBookings([
       {
         patientId,
         staffId,
-        service: `Walk-in · ${reason.trim()}`,
+        service: staff.discipline === "medical" ? "Walk-in consultation" : `Walk-in · ${staff.discipline === "nutrition" ? "nutrition" : "yoga"}`,
+        reason: reason.trim() || undefined,
         discipline: staff.discipline,
         start: NOW_ISO,
         durationMin: 20,
@@ -68,7 +68,7 @@ function WalkInForm({ onCancel, onIssued }: { onCancel: () => void; onIssued: (b
     ]);
     toast({
       title: `Token ${token} issued · ${person(patientId)?.name ?? "walk-in"}`,
-      description: "Added to Arrived. Recorded in this browser session — no SMS or display update was sent.",
+      description: "Added to Arrived on the check-in board.",
       tone: "success",
     });
     onIssued(created);
@@ -108,8 +108,8 @@ function WalkInForm({ onCancel, onIssued }: { onCancel: () => void; onIssued: (b
             {({ id, ...aria }) => <PatientPicker value={patientId} onChange={setPatientId} id={id} invalid={aria["aria-invalid"]} describedBy={aria["aria-describedby"]} />}
           </Field>
         </div>
-        <Field label="Reason for visit" error={errors.reason}>
-          {(p) => <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Palpitations since morning" {...p} />}
+        <Field label="Note for the practitioner" optional hint="Shown to the practitioner only — not on the desk's board.">
+          {(p) => <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What the patient says they came in for" {...p} />}
         </Field>
         <Field label="Who will see them" hint={staff ? `${staff.title} · ${staff.room} · ${status[staff.id]?.label ?? ""}${status[staff.id] && !status[staff.id].free ? ` — they may not be free for the next ${WALK_IN_MIN} min` : ""}` : undefined}>
           {(p) => (

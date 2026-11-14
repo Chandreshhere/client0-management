@@ -8,6 +8,9 @@ import { DISCIPLINE_LABEL } from "@/data/appointments";
 import { staffById } from "@/data/staff";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
+import { AddOnNotice } from "@/components/shell/plan-switcher";
+import { useRole } from "@/components/shell/role-context";
+import { scheduleAccess } from "./access";
 import { Button } from "@/components/ui/button";
 import { Dialog, ModalContent } from "@/components/ui/dialog";
 import { Field, Input, Select, Switch, Textarea } from "@/components/ui/input";
@@ -17,7 +20,7 @@ import { dateOf, freeSlots, hhmm, matchesPreference, minOf, onLeave, shortDay } 
 import { PatientPicker } from "./patient-picker";
 import { useSchedule, type WaitEntry, type WaitOffer } from "./store";
 import { DisciplineDot } from "./ui";
-import { offerDays, prefersOf } from "./waitlist-insights";
+import { offerDays, prefersOf, wantText } from "./waitlist-insights";
 
 
 /** Offer a slot: free gaps in the diary (practitioner and room both free) or a place in a class. */
@@ -31,6 +34,7 @@ export function OfferSlotModal({ entry, onClose, onOffer }: { entry: WaitEntry |
 
 function OfferForm({ entry, onClose, onOffer }: { entry: WaitEntry; onClose: () => void; onOffer: (entry: WaitEntry, offer: WaitOffer) => void }) {
   const { occupants, person, classSeats } = useSchedule();
+  const { role } = useRole();
   const svc = serviceById(entry.serviceId);
   const duration = svc?.durationMin ?? 30;
   const prefers = prefersOf(entry);
@@ -79,7 +83,7 @@ function OfferForm({ entry, onClose, onOffer }: { entry: WaitEntry; onClose: () 
     <ModalContent
       size="lg"
       title={`Offer a slot to ${who?.name ?? "this patient"}`}
-      description={`${entry.want} · prefers ${entry.preferred}`}
+      description={`${wantText(entry, scheduleAccess(role).clinical)} · prefers ${entry.preferred}`}
       footer={
         <>
           <p className="mr-auto hidden min-w-0 truncate text-xs text-muted sm:block">{summary ? `Offer: ${summary}` : "Pick a slot to offer"}</p>
@@ -216,9 +220,7 @@ function OfferForm({ entry, onClose, onOffer }: { entry: WaitEntry; onClose: () 
             ) : null}
           </>
         )}
-        <p className="text-xs text-muted">
-          Free slots come from the synthetic diary ({shortDay(TODAY_KEY)} – {shortDay(DIARY_TO)}). Recording an offer doesn&apos;t contact the patient — messaging isn&apos;t connected. Mark their reply on the waitlist.
-        </p>
+        <AddOnNotice addOn="messaging">Send the offer by WhatsApp or SMS. Without it, call the patient with the offer and record their reply on the waitlist.</AddOnNotice>
       </div>
     </ModalContent>
   );

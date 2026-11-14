@@ -220,7 +220,7 @@ export function ServicesView() {
             </table>
           </TableCard>
         )}
-        <p className="text-xs text-muted">{pluralize(shown.length, "service")} shown · prices in INR · edits are saved in this browser session and written to the audit log.</p>
+        <p className="text-xs text-muted">{pluralize(shown.length, "service")} shown · prices in INR · edits are saved in this browser session and written to the activity log.</p>
       </section>
 
       {access.canEditServices ? <ServiceModal editing={editing} services={services} onClose={() => setEditing(null)} /> : null}
@@ -231,6 +231,7 @@ export function ServicesView() {
 type Errors = Partial<Record<"name" | "category" | "duration" | "price" | "rooms", string>>;
 
 function ServiceModal({ editing, services, onClose }: { editing: Service | "new" | null; services: Service[]; onClose: () => void }) {
+  const { has } = usePlan();
   const { toast } = useToast();
   const { user } = useRole();
   const isNew = editing === "new";
@@ -289,7 +290,9 @@ function ServiceModal({ editing, services, onClose }: { editing: Service | "new"
     });
   }
 
-  const roomsByBranch = ALL_ROOMS.reduce<Record<string, string[]>>((acc, r) => ({ ...acc, [r.branchName]: [...(acc[r.branchName] ?? []), r.room] }), {});
+  // One clinic location below Pro: its rooms only, without a branch heading.
+  const rooms0 = has("branches") ? ALL_ROOMS : ALL_ROOMS.filter((r) => r.branch === ALL_ROOMS[0]?.branch);
+  const roomsByBranch = rooms0.reduce<Record<string, string[]>>((acc, r) => ({ ...acc, [has("branches") ? r.branchName : ""]: [...(acc[has("branches") ? r.branchName : ""] ?? []), r.room] }), {});
 
   return (
     <Dialog open={!!editing} onOpenChange={(o) => (!o ? onClose() : undefined)}>
@@ -344,7 +347,7 @@ function ServiceModal({ editing, services, onClose }: { editing: Service | "new"
               <legend className="mb-1 text-sm text-ink">Rooms</legend>
               {Object.entries(roomsByBranch).map(([branch, list]) => (
                 <div key={branch} className="flex flex-col gap-1.5">
-                  <span className="text-xs text-muted">{branch}</span>
+                  {branch ? <span className="text-xs text-muted">{branch}</span> : null}
                   <div className="flex flex-wrap gap-2">
                     {list.map((r) => {
                       const on = rooms.includes(r);

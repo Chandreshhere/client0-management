@@ -1,32 +1,31 @@
 "use client";
 
 import { IdentificationCard, LockSimple } from "@phosphor-icons/react";
-import type { DocStatus, Role } from "@/data/types";
-import { patientById } from "@/data/patients";
+import type { Role } from "@/data/types";
+import type { Tone } from "@/components/ui/status";
 import { staffById } from "@/data/staff";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status";
-import { DOC_STATUS_LABEL } from "@/data/records";
 import { PersonInline } from "@/features/tasks/ui";
 import { OrganTag } from "@/features/tasks/organ-glyph";
 import { OUTCOME_LABEL, type ReviewOutcome } from "./data";
-import { SOURCE_ICON, TYPE_ICON, docDue, docStatusTone, reportDateText, reportLag, uploadedText } from "./doc-meta";
-import { canReview, contentAccess, displayTitle, type CareDocument } from "./store";
-
-const SOURCE_SHORT: Record<CareDocument["source"], string> = {
-  "Patient upload": "Patient",
-  "Front desk scan": "Front desk",
-  "Lab partner": "Lab partner",
-  "Email import": "Email",
-  "Staff upload": "Staff",
-};
+import { SOURCE_ICON, SOURCE_SHORT, TYPE_ICON, docDue, reportDateText, reportLag, uploadedText } from "./doc-meta";
+import { MATCH_ROLES, QUEUE_LABEL, canReview, contentAccess, displayTitle, statusText, type Access, type CareDocument, type DocQueue } from "./store";
 
 export const outcomeTone = (o: ReviewOutcome) => ({ normal: "success", "follow-up": "warning", discuss: "info" } as const)[o];
 
+const statusTone = (d: CareDocument): Tone => (d.archived ? "neutral" : d.status === "unclassified" ? "warning" : d.status === "awaiting-review" ? "info" : d.review ? "success" : "neutral");
+
+/** Status for a finished document: the doctor's outcome for people who may read it, else just "Reviewed". */
+function DoneBadge({ doc, access }: { doc: CareDocument; access: Access }) {
+  if (doc.review && access === "full") return <StatusBadge tone={outcomeTone(doc.review.outcome)}>{OUTCOME_LABEL[doc.review.outcome]}</StatusBadge>;
+  return <StatusBadge tone={statusTone(doc)}>{statusText(doc)}</StatusBadge>;
+}
+
 /**
- * The intake & review table. Report date and upload date are separate columns — an old report
+ * The intake & review table. Date issued and upload date are separate columns — an old report
  * uploaded today must never read as a new result. Below a 960px container the rows become stacked cards.
  */
 export function DocTable({
@@ -39,7 +38,7 @@ export function DocTable({
   onIdentify,
 }: {
   docs: CareDocument[];
-  tab: DocStatus | "mine";
+  tab: DocQueue | "mine";
   role: Role;
   userId: string;
   flashId: string | null;
@@ -47,29 +46,29 @@ export function DocTable({
   onIdentify: (d: CareDocument) => void;
 }) {
   const isPatient = role === "patient";
-  const showOutcome = tab === "reviewed" || tab === "filed";
+  const showOutcome = tab === "done" || tab === "archived";
   // Fixed layout sized from the content (lag pill 125px, longest patient link ~133px, buttons ≤ 112px).
   // The table appears once its container is 960px wide; Reviewer gets its own column from 1100px
   // (below that it sits under the due date) and Source from 1240px (below that it leads the upload line).
   const statusW = isPatient || showOutcome ? "w-[168px]" : "w-[136px]";
-  const actionW = tab === "unclassified" && !isPatient ? "w-[152px]" : "w-[112px]";
+  const actionW = tab === "unmatched" && MATCH_ROLES.includes(role) ? "w-[152px]" : "w-[112px]";
 
   return (
     <div className="@container">
       {/* ≥960px container: table */}
       <div className="scrollbar-thin relative hidden overflow-x-auto rounded-card bg-surface @[960px]:block">
         <table className="w-full table-fixed text-sm">
-          <caption className="sr-only">Documents — {tab === "mine" ? "your documents" : DOC_STATUS_LABEL[tab]}</caption>
+          <caption className="sr-only">Documents — {tab === "mine" ? "your documents" : QUEUE_LABEL[tab]}</caption>
           <thead>
             <tr className="text-left text-xs text-muted">
               <th scope="col" className="py-4 pl-6 pr-2 font-normal">Document</th>
               {!isPatient ? <th scope="col" className="w-[168px] px-2 py-4 font-normal">Patient</th> : null}
-              <th scope="col" className="w-[144px] px-2 py-4 font-normal">Report date</th>
+              <th scope="col" className="w-[144px] px-2 py-4 font-normal">Date issued</th>
               <th scope="col" className="w-[152px] px-2 py-4 font-normal">Uploaded</th>
               <th scope="col" className="hidden w-[120px] px-2 py-4 font-normal @[1240px]:table-cell">Source</th>
               <th scope="col" className="hidden w-[160px] px-2 py-4 font-normal @[1100px]:table-cell">Reviewer</th>
               <th scope="col" className={cn(statusW, "px-2 py-4 font-normal")}>
-                {isPatient ? "Status" : showOutcome ? "Outcome" : "Due"}
+                {isPatient || showOutcome || tab === "unmatched" ? "Status" : "Review due"}
                 <span className="@[1100px]:hidden"> · reviewer</span>
               </th>
               <th scope="col" className={cn(actionW, "py-4 pl-2 pr-6 text-right font-normal")}>
@@ -85,10 +84,9 @@ export function DocTable({
               const lag = reportLag(d);
               const due = docDue(d);
               const reviewer = staffById(d.reviewerId ?? undefined);
-              // Upload line without the Source column: "Lab partner · Anand Diagnostics", "Front desk · Sneha
-              // Kulkarni"; just "Patient upload" when the patient uploaded it (their name is in the next column).
-              const uploader = d.uploadedBy.replace(/^Lab partner · /, "");
-              const uploadLine = uploader === d.source || uploader === patientById(d.patientId)?.name ? d.source : `${SOURCE_SHORT[d.source]} · ${uploader}`;
+              // Upload line without the Source column: "Scanned · Sneha Kulkarni"; just "Patient app" when
+              // the patient uploaded it (their name is in the next column).
+              const uploadLine = d.source === "Patient upload" ? SOURCE_SHORT[d.source] : `${SOURCE_SHORT[d.source]} · ${d.uploadedBy}`;
               return (
                 <tr key={d.id} data-doc-id={d.id} className={cn("border-t border-line align-top transition-colors duration-700", flashId === d.id ? "bg-primary-soft" : "hover:bg-canvas/70")}>
                   <td className="py-4 pl-6 pr-2">
@@ -102,6 +100,7 @@ export function DocTable({
                         </button>
                         <p className="mt-0.5 text-xs text-muted">
                           <span className="whitespace-nowrap">{d.type}</span> · <span className="whitespace-nowrap">{d.pages} {d.pages === 1 ? "page" : "pages"}</span>
+                          {d.fileName ? <span className="font-mono"> · {d.fileName}</span> : null}
                           {d.local ? <span className="whitespace-nowrap"> · added this session</span> : null}
                         </p>
                       </div>
@@ -112,12 +111,12 @@ export function DocTable({
                       {d.patientId ? (
                         <span className="flex max-w-full flex-col items-start gap-1.5">
                           <PersonInline id={d.patientId} link className="max-w-full text-sm" />
-                          {access === "restricted" ? null : <OrganTag patientId={d.patientId} className="max-w-full" />}
+                          {access === "full" ? <OrganTag patientId={d.patientId} className="max-w-full" /> : null}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-sm text-warning">
                           <IdentificationCard size={16} aria-hidden="true" />
-                          Not identified
+                          Not matched
                         </span>
                       )}
                     </td>
@@ -157,9 +156,9 @@ export function DocTable({
                   </td>
                   <td className="px-2 py-4">
                     {isPatient ? (
-                      <StatusBadge tone={docStatusTone(d.status)}>{DOC_STATUS_LABEL[d.status]}</StatusBadge>
-                    ) : showOutcome && d.review ? (
-                      <StatusBadge tone={outcomeTone(d.review.outcome)}>{OUTCOME_LABEL[d.review.outcome]}</StatusBadge>
+                      <StatusBadge tone={statusTone(d)}>{statusText(d)}</StatusBadge>
+                    ) : showOutcome || tab === "unmatched" ? (
+                      <DoneBadge doc={d} access={access} />
                     ) : (
                       <span className={cn("whitespace-nowrap tabular", due.tone === "danger" ? "text-danger" : due.tone === "ink" ? "text-ink" : "text-muted")}>{due.text}</span>
                     )}
@@ -194,29 +193,29 @@ export function DocTable({
                     {displayTitle(d, access)}
                   </button>
                   <p className="text-xs text-muted">
-                    {d.type} · {d.source}
+                    {d.type} · {SOURCE_SHORT[d.source]}
                   </p>
                 </div>
-                {isPatient ? <StatusBadge tone={docStatusTone(d.status)}>{DOC_STATUS_LABEL[d.status]}</StatusBadge> : null}
+                {isPatient ? <StatusBadge tone={statusTone(d)}>{statusText(d)}</StatusBadge> : null}
               </div>
               {!isPatient ? (
                 <div className="mt-3 text-sm">
                   {d.patientId ? (
                     <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                       <PersonInline id={d.patientId} link className="min-w-0" />
-                      {access === "restricted" ? null : <OrganTag patientId={d.patientId} />}
+                      {access === "full" ? <OrganTag patientId={d.patientId} /> : null}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 text-warning">
                       <IdentificationCard size={16} aria-hidden="true" />
-                      Not identified
+                      Not matched
                     </span>
                   )}
                 </div>
               ) : null}
               <dl className="mt-3 grid grid-cols-2 gap-2 rounded-inner bg-canvas p-3 text-xs">
                 <div>
-                  <dt className="text-muted">Report date</dt>
+                  <dt className="text-muted">Date issued</dt>
                   <dd className="mt-0.5 text-ink tabular">{reportDateText(d.reportDate)}</dd>
                   {lag ? <dd className="mt-1 text-[11px] text-warning">{lag.label}</dd> : null}
                 </div>
@@ -229,9 +228,9 @@ export function DocTable({
                   <dd className="mt-0.5 truncate text-ink">{reviewer?.name ?? "Unassigned"}</dd>
                 </div>
                 <div>
-                  <dt className="text-muted">{isPatient ? "Review" : d.review ? "Outcome" : "Due"}</dt>
-                  <dd className={cn("mt-0.5", d.review ? "text-ink" : due.tone === "danger" && !isPatient ? "text-danger" : "text-ink")}>
-                    {isPatient ? (d.review ? "Reviewed" : "Not yet reviewed") : d.review ? OUTCOME_LABEL[d.review.outcome] : due.text}
+                  <dt className="text-muted">{isPatient || d.status !== "awaiting-review" ? "Status" : "Review due"}</dt>
+                  <dd className={cn("mt-0.5", d.status === "awaiting-review" && due.tone === "danger" && !isPatient ? "text-danger" : "text-ink")}>
+                    {d.status === "awaiting-review" && !isPatient ? due.text : d.review && access === "full" && !isPatient ? OUTCOME_LABEL[d.review.outcome] : statusText(d)}
                   </dd>
                 </div>
               </dl>
@@ -247,14 +246,14 @@ export function DocTable({
 }
 
 function RowAction({ doc, role, userId, onOpen, onIdentify }: { doc: CareDocument; role: Role; userId: string; onOpen: (d: CareDocument) => void; onIdentify: (d: CareDocument) => void }) {
-  if (doc.status === "unclassified" && role !== "patient") {
+  if (doc.status === "unclassified" && !doc.archived && MATCH_ROLES.includes(role)) {
     return (
       <Button size="sm" variant="dark" onClick={() => onIdentify(doc)}>
-        Identify patient
+        {doc.patientId ? "Confirm" : "Match patient"}
       </Button>
     );
   }
-  if (doc.status === "awaiting-review" && canReview(doc, role, userId)) {
+  if (doc.status === "awaiting-review" && !doc.archived && canReview(doc, role, userId)) {
     return (
       <Button size="sm" variant="dark" onClick={() => onOpen(doc)}>
         Review

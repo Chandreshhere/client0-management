@@ -11,7 +11,7 @@ const SITE_ID = `${SITE_URL}/#website`;
 const APP_ID = `${SITE_URL}/#software`;
 
 export const SITE_DESCRIPTION =
-  "Carelane is clinic management software for multidisciplinary outpatient clinics in India: one shared patient record for doctors, nutritionists and yoga instructors, with referrals, shared care plans, report review, a front-desk queue and a patient portal.";
+  "Carelane is clinic management software for multidisciplinary outpatient clinics in India: one shared patient record for doctors, nutritionists and yoga instructors, with consultation notes, report review, nutrition plans and yoga sessions on one timeline, a front office on the Clinic plan and a patient app on Pro.";
 
 type Json = { [key: string]: unknown };
 
@@ -41,28 +41,31 @@ export const websiteLd = (): Json => ({
   publisher: { "@id": ORG_ID },
 });
 
+/** Each plan as an Offer: the per-practitioner monthly price (annual and monthly billing), the
+ * one-time onboarding fee and extra admin/reception seats. All prices exclude GST. */
 function planOffer(plan: Plan): Json {
-  const p = plan.pricing;
-  const perUser = p.kind === "per-user";
+  const perMonth = (name: string, price: number, unitText: string): Json => ({
+    "@type": "UnitPriceSpecification",
+    name,
+    price,
+    priceCurrency: "INR",
+    valueAddedTaxIncluded: false,
+    unitText,
+    referenceQuantity: { "@type": "QuantitativeValue", value: 1, unitCode: "MON" },
+  });
   return {
     "@type": "Offer",
     name: `${plan.name} plan`,
-    description: plan.audience,
+    description: `${plan.positioning}. ${plan.audience}`,
     url: `${SITE_URL}/pricing#plan-${plan.id}`,
-    price: p.monthly,
+    price: plan.price.annual,
     priceCurrency: "INR",
     priceSpecification: [
-      {
-        "@type": "UnitPriceSpecification",
-        name: perUser ? "Monthly fee per user" : "Flat monthly fee",
-        price: p.monthly,
-        priceCurrency: "INR",
-        unitText: perUser ? "per user per month" : "per month",
-        referenceQuantity: { "@type": "QuantitativeValue", value: 1, unitCode: "MON" },
-      },
-      { "@type": "PriceSpecification", name: "One-time setup fee", price: plan.setupFee, priceCurrency: "INR" },
+      perMonth("Per practitioner per month, billed annually", plan.price.annual, "per practitioner per month"),
+      perMonth("Per practitioner per month, billed monthly", plan.price.monthly, "per practitioner per month"),
+      perMonth(`Admin or reception seat beyond the ${plan.freeSeats} included free`, plan.extraSeat, "per seat per month"),
+      { "@type": "PriceSpecification", name: "One-time onboarding fee", price: plan.onboardingFee, priceCurrency: "INR", valueAddedTaxIncluded: false },
     ],
-    ...(p.kind === "per-user" ? { eligibleQuantity: { "@type": "QuantitativeValue", minValue: p.minUsers, maxValue: p.maxUsers, unitText: "users" } } : {}),
   };
 }
 

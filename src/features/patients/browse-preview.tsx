@@ -25,7 +25,7 @@ import { BodyConditionCard, VitalTile, WaveSpark } from "@/components/viz/condit
 import { PeopleList, SectionLabel } from "@/components/viz/cards";
 import { EVENT_ICON } from "@/features/patient/event-meta";
 import { clinicalAccess } from "@/features/patient-record/access";
-import { branchLabel, clinicNoOf, dayWord, isLive, upcomingVisits, type RegistryPatient, type Row } from "./data";
+import { branchLabel, clinicNoOf, dayWord, isLive, registryLens, upcomingVisits, type RegistryLens, type RegistryPatient, type Row } from "./data";
 import { AllergyLine, FlagPills, PatientStatusBadge } from "./registry-bits";
 import { HOTSPOT_ANCHORS, activityByMonth, organFit, systemHistory, teamFor } from "./anatomy";
 import { ActivityBars } from "./activity-bars";
@@ -52,12 +52,14 @@ export function BrowsePreview({
   onOpenLocal: (id: string) => void;
 }) {
   const p = row.patient;
+  const { role, has } = useRole();
+  const lens = useMemo(() => registryLens(role, has), [role, has]);
   const record = useMemo(() => (p.local ? null : getRecord(p.id)), [p.local, p.id]);
   const recorded = !!record && record.systems.length > 0;
 
   return (
     <div className="@container flex flex-col gap-6">
-      <IdentityCard row={row} recorded={recorded} showBalance={showBalance} onAssign={onAssign} onOpenLocal={onOpenLocal} />
+      <IdentityCard row={row} lens={lens} recorded={recorded} showBalance={showBalance} onAssign={onAssign} onOpenLocal={onOpenLocal} />
       {recorded && record ? (
         <RecordedBody patient={p} record={record} />
       ) : (
@@ -65,7 +67,7 @@ export function BrowsePreview({
       )}
       <div className="grid grid-cols-1 items-start gap-6 @[720px]:grid-cols-2">
         <TeamSection patient={p} record={recorded ? record : null} />
-        <NextVisitSection row={row} sessionVisits={sessionVisits} />
+        <NextVisitSection row={row} sessionVisits={sessionVisits} lens={lens} />
       </div>
     </div>
   );
@@ -73,7 +75,7 @@ export function BrowsePreview({
 
 // ---------------------------------------------------------------- identity
 
-function IdentityCard({ row, recorded, showBalance, onAssign, onOpenLocal }: { row: Row; recorded: boolean; showBalance: boolean; onAssign: (id: string) => void; onOpenLocal: (id: string) => void }) {
+function IdentityCard({ row, lens, recorded, showBalance, onAssign, onOpenLocal }: { row: Row; lens: RegistryLens; recorded: boolean; showBalance: boolean; onAssign: (id: string) => void; onOpenLocal: (id: string) => void }) {
   const p = row.patient;
   const titleId = useId();
   return (
@@ -81,19 +83,20 @@ function IdentityCard({ row, recorded, showBalance, onAssign, onOpenLocal }: { r
       <Avatar src={p.avatar} name={p.name} size="xl" loading="eager" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs text-muted">
-          <span className="font-mono text-ink-2">{clinicNoOf(p)}</span> · {p.age} years · {p.sex} · {p.local ? "registered in this session" : `${branchLabel(p.branch)} branch`}
+          <span className="font-mono text-ink-2">{clinicNoOf(p)}</span> · {p.age} years · {p.sex}
+          {p.local ? " · registered in this session" : lens.branches ? ` · ${branchLabel(p.branch)} branch` : ""}
         </p>
         <h2 id={titleId} className="mt-1 truncate text-title font-normal text-ink">
           {p.name}
         </h2>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <PatientStatusBadge status={p.status} />
-          {p.program ? (
+          {p.program && lens.programmes ? (
             <Pill tone="outline" size="sm">
               {p.program}
             </Pill>
           ) : null}
-          <FlagPills flags={row.flags.filter((f) => f !== "allergies")} patient={p} showBalance={showBalance} max={3} quietWhenEmpty />
+          <FlagPills flags={row.flags.filter((f) => f !== "allergies" && f !== "duplicate")} patient={p} showBalance={showBalance} max={3} quietWhenEmpty />
         </div>
         <AllergyLine allergies={p.allergies} className="mt-3" />
       </div>
@@ -111,12 +114,12 @@ function IdentityCard({ row, recorded, showBalance, onAssign, onOpenLocal }: { r
             <Button asChild variant="secondary">
               <Link href={`/patients/${p.id}/journey`}>
                 <Path aria-hidden="true" />
-                Open journey
+                Open timeline
               </Link>
             </Button>
             <Button asChild variant="dark">
               <Link href={`/patients/${p.id}`}>
-                Open overview
+                Open record
                 <ArrowUpRight aria-hidden="true" />
               </Link>
             </Button>
@@ -134,7 +137,7 @@ function IdentityCard({ row, recorded, showBalance, onAssign, onOpenLocal }: { r
         )}
       </div>
       <div className="absolute right-4 top-4 @[720px]:static @[720px]:-ml-2 @[720px]:mt-1">
-        <RowActions patient={p} onAssign={onAssign} onOpenLocal={onOpenLocal} />
+        <RowActions patient={p} flags={row.flags} lens={lens} onAssign={onAssign} onOpenLocal={onOpenLocal} onReview={() => undefined} />
       </div>
     </section>
   );
@@ -150,7 +153,7 @@ function JourneyUnavailable({ reason }: { reason: string }) {
         className="inline-flex h-10 cursor-not-allowed items-center gap-2 rounded-full px-4 text-sm text-faint shadow-[inset_0_0_0_1px_var(--color-line)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <Path size={18} aria-hidden="true" />
-        Open journey
+        Open timeline
         <span className="sr-only"> — unavailable. {reason}</span>
       </span>
     </Tip>
@@ -434,9 +437,10 @@ function TeamSection({ patient, record }: { patient: RegistryPatient; record: Pa
 
 // ---------------------------------------------------------------- next appointment
 
-function NextVisitSection({ row, sessionVisits }: { row: Row; sessionVisits: Appointment[] }) {
+function NextVisitSection({ row, sessionVisits, lens }: { row: Row; sessionVisits: Appointment[]; lens: RegistryLens }) {
   const p = row.patient;
-  const upcoming = useMemo(() => upcomingVisits(p, sessionVisits), [p, sessionVisits]);
+  // Without appointments (Core) there's only the follow-up date on the record.
+  const upcoming = useMemo(() => (lens.diary ? upcomingVisits(p, sessionVisits) : row.next ? [row.next] : []), [p, sessionVisits, lens.diary, row.next]);
   const [index, setIndex] = useState(0);
   const at = Math.min(index, Math.max(0, upcoming.length - 1));
   const v = upcoming[at] ?? null;
@@ -444,8 +448,8 @@ function NextVisitSection({ row, sessionVisits }: { row: Row; sessionVisits: App
   const live = v ? isLive(v) : false;
   const step = "flex size-8 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-surface hover:text-ink disabled:pointer-events-none disabled:text-faint";
   return (
-    <section aria-label="Next appointment">
-      <SectionLabel actions={upcoming.length > 1 ? <span className="text-xs text-muted tabular">{upcoming.length} booked</span> : undefined}>{at === 0 ? "Next appointment" : "Upcoming appointment"}</SectionLabel>
+    <section aria-label={lens.diary ? "Next appointment" : "Next follow-up"}>
+      <SectionLabel actions={upcoming.length > 1 ? <span className="text-xs text-muted tabular">{upcoming.length} booked</span> : undefined}>{!lens.diary ? "Next follow-up" : at === 0 ? "Next appointment" : "Upcoming appointment"}</SectionLabel>
       <div className="flex flex-col gap-4 rounded-card bg-surface p-6">
         {upcoming.length > 1 ? (
           // Ref 3 schedule-card stepper: walk through this patient's own bookings, soonest first.
@@ -466,9 +470,11 @@ function NextVisitSection({ row, sessionVisits }: { row: Row; sessionVisits: App
             <CalendarBlank size={18} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-muted">{v ? (live ? "In the clinic now" : at === 0 ? "Booked · next" : "Booked") : "Not booked"}</p>
+            <p className="text-xs text-muted">{!lens.diary ? (v ? "Follow-up due" : "No follow-up set") : v ? (live ? "In the clinic now" : at === 0 ? "Booked · next" : "Booked") : "Not booked"}</p>
             <p className="truncate text-sm text-ink">
-              {v ? (
+              {v && !lens.diary ? (
+                dayWord(v.start)
+              ) : v ? (
                 <>
                   {dayWord(v.start)} · <span className="tabular">{formatTime(v.start)}</span>
                 </>
@@ -481,7 +487,7 @@ function NextVisitSection({ row, sessionVisits }: { row: Row; sessionVisits: App
           </div>
           {v && live ? <StatusBadge tone={appointmentTone(v.status)}>{APPOINTMENT_STATUS_LABEL[v.status]}</StatusBadge> : null}
         </div>
-        {v ? (
+        {v && lens.diary ? (
           <div className="rounded-inner bg-canvas p-4">
             <p className="text-sm text-ink">{v.service ?? "Booked visit"}</p>
             <p className="mt-0.5 text-xs text-muted">
@@ -495,6 +501,7 @@ function NextVisitSection({ row, sessionVisits }: { row: Row; sessionVisits: App
             ) : null}
           </div>
         ) : null}
+        {lens.canBook ? (
         <div className="flex flex-wrap gap-2">
           {v ? (
             <Button asChild variant="secondary" size="sm">
@@ -511,6 +518,7 @@ function NextVisitSection({ row, sessionVisits }: { row: Row; sessionVisits: App
             </Link>
           </Button>
         </div>
+        ) : null}
       </div>
     </section>
   );

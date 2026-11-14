@@ -5,7 +5,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   ArrowUpRight,
   Buildings,
-  CaretDown,
   Check,
   Clock,
   Database,
@@ -22,22 +21,24 @@ import { PATIENTS, patientById } from "@/data/patients";
 import { WEEK_APPOINTMENTS } from "@/data/appointments";
 import { TASKS } from "@/data/care";
 import { DOCUMENTS } from "@/data/records";
-import { FEATURES, FEATURE_GROUPS, PLANS, addedFeatures, featureById, monthlyCost, planById, type PlanId } from "@/data/plans";
+import { ADDONS, FEATURES, FEATURE_GROUPS, PLANS, addedFeatures, featureById, planById, yearlyCost, type PlanId } from "@/data/plans";
 import { TODAY, formatDate, formatDayLabel, formatINR, formatTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { useRole } from "@/components/shell/role-context";
-import { LockBadge, priceLine } from "@/components/shell/plan-switcher";
+import { LockBadge } from "@/components/shell/plan-switcher";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Group, GroupHeader, Inset, SectionTitle } from "@/components/ui/card";
 import { DemoFlag, Kbd, PageHeader } from "@/components/ui/misc";
-import { Dropdown, DropdownContent, DropdownLabel, DropdownRadioGroup, DropdownRadioItem, DropdownTrigger } from "@/components/ui/dropdown";
 import { StatusBadge, type Tone } from "@/components/ui/status";
 import { Tip } from "@/components/ui/tooltip";
-import { useToast } from "@/components/ui/toast";
 import { ReadingVisuals } from "./reading-visuals";
 
-/** /help — shortcuts, how the demo works (roles × plans), how to read the visuals, what is synthetic, links. */
+/**
+ * /help — shortcuts, how the demo works (roles × plans), how to read the visuals, what is synthetic,
+ * links. Each demo login is one plan and one role (spec fix 12): there is no in-app switcher, so
+ * every "switch" here links back to the demo logins on /demo.
+ */
 
 type ShortcutId = "search" | "sidebar" | "slash" | "escape" | "navigate" | "tab";
 
@@ -53,7 +54,7 @@ const SHORTCUTS: { id: ShortcutId; keys: ReactNode; does: string }[] = [
         <Kbd>K</Kbd>
       </>
     ),
-    does: "Search patients, pages and actions — or switch workspace",
+    does: "Search patients, pages and actions — or switch demo login",
   },
   {
     id: "sidebar",
@@ -99,7 +100,7 @@ const STATES: { tone: Tone; label: string; meaning: string }[] = [
   { tone: "success", label: "Saved", meaning: "Stored. In this demo: in your browser session." },
   { tone: "warning", label: "Awaiting review", meaning: "A clinician must review it before it counts." },
   { tone: "success", label: "Signed", meaning: "Locked. Corrections become attributed addenda." },
-  { tone: "info", label: "Released", meaning: "Published to the patient portal." },
+  { tone: "info", label: "Released", meaning: "Visible in the patient app (Pro). Releasing is a separate step from signing." },
   { tone: "danger", label: "Failed", meaning: "Didn't go through — nothing was sent or charged." },
   { tone: "warning", label: "Needs attention", meaning: "Someone has to act on it." },
   { tone: "neutral", label: "Self-reported", meaning: "Entered by the patient; not yet verified." },
@@ -108,7 +109,7 @@ const STATES: { tone: Tone; label: string; meaning: string }[] = [
 const TOUR: { role: Role; tip: string }[] = [
   { role: "doctor", tip: "open Kabir Malhotra's care map and today's report reviews." },
   { role: "frontdesk", tip: "register a patient while booking; watch the duplicate check." },
-  { role: "coordinator", tip: "find care that has stalled — referrals nobody accepted." },
+  { role: "coordinator", tip: "find care that has stalled — assignments nobody has seen." },
 ];
 
 const LINKS: { href: string; label: string; detail: string }[] = [
@@ -133,8 +134,7 @@ function personFor(role: Role) {
 }
 
 export function HelpPage() {
-  const { role, setRole, plan, setPlan, user } = useRole();
-  const { toast } = useToast();
+  const { role, plan, user } = useRole();
   const details = planById(plan);
   const [pressed, setPressed] = useState<ShortcutId | null>(null);
 
@@ -158,19 +158,12 @@ export function HelpPage() {
     };
   }, []);
 
-  const changePlan = (id: PlanId) => {
-    if (id === plan) return;
-    setPlan(id);
-    const p = planById(id);
-    toast({ title: `Demo switched to ${p.name}`, description: `Features and roles re-gated instantly. ${p.roles.length} ${p.roles.length === 1 ? "role" : "roles"} available. Nothing was billed.`, tone: "success" });
-  };
-
   return (
     <div className="@container flex flex-col gap-10 pb-16">
       <PageHeader
         eyebrow={<DemoFlag />}
         title="Help & shortcuts"
-        description="How this Carelane prototype works — the seven workspaces, what each plan unlocks, the keyboard shortcuts — and exactly what is synthetic."
+        description="How this Carelane prototype works — demo logins, the seven roles, what each plan includes, the keyboard shortcuts — and exactly what is synthetic."
       />
 
       {/* Session focal + shortcuts */}
@@ -187,7 +180,7 @@ export function HelpPage() {
                 {user.name}
               </h2>
               <p className="mt-1 text-sm text-white/80">
-                {DEMO_USER[role].label} workspace · {details.name} plan
+                {DEMO_USER[role].label} login · {details.name} plan
               </p>
             </div>
           </div>
@@ -205,23 +198,12 @@ export function HelpPage() {
             </div>
           </dl>
           <div className="relative mt-auto flex flex-wrap gap-2 pt-6">
-            <Dropdown>
-              <DropdownTrigger asChild>
-                <Button variant="glass" trailing={<CaretDown />}>
-                  Plan: {details.name}
-                </Button>
-              </DropdownTrigger>
-              <DropdownContent align="start" className="w-[300px]">
-                <DropdownLabel>Demo plan — re-gates features instantly</DropdownLabel>
-                <DropdownRadioGroup value={plan} onValueChange={(v) => changePlan(v as PlanId)}>
-                  {PLANS.map((p) => (
-                    <DropdownRadioItem key={p.id} value={p.id} description={`${priceLine(p.id)} · ${p.usersLabel}`}>
-                      {p.name}
-                    </DropdownRadioItem>
-                  ))}
-                </DropdownRadioGroup>
-              </DropdownContent>
-            </Dropdown>
+            <Button asChild variant="glass">
+              <Link href={`/demo?plan=${plan}`}>
+                <Swap aria-hidden="true" />
+                Switch demo login
+              </Link>
+            </Button>
             <Button asChild variant="glass">
               <Link href="/dashboard">
                 Open my home
@@ -254,8 +236,8 @@ export function HelpPage() {
       <section aria-labelledby="roles-title" className="flex flex-col gap-4">
         <SectionTitle
           as="h2"
-          title={<span id="roles-title">Seven workspaces, one patient record</span>}
-          description="Each role gets its own home and navigation over the same shared record. The role switcher is a demo convenience — in production access comes from a verified login and is checked on the server."
+          title={<span id="roles-title">Seven roles, one patient record</span>}
+          description="Each role gets its own home and navigation over the same shared record, and sees only what it acts on. In the demo each role has its own login per plan — switch on the demo logins page. In production, access comes from a verified login and is checked on the server."
         />
         <ul className="grid grid-cols-1 gap-4 @[640px]:grid-cols-2 @[1040px]:grid-cols-4">
           {ROLE_ORDER.map((r) => {
@@ -296,15 +278,21 @@ export function HelpPage() {
                     {current ? (
                       <StatusBadge tone="dark">You are here</StatusBadge>
                     ) : allowed ? (
-                      <Button size="sm" variant="secondary" leading={<Swap />} onClick={() => setRole(r)}>
-                        Switch to {DEMO_USER[r].label.toLowerCase()}
+                      <Button asChild size="sm" variant="secondary">
+                        <Link href={`/demo?plan=${plan}&role=${r}`}>
+                          <Swap aria-hidden="true" />
+                          Switch demo login
+                        </Link>
                       </Button>
                     ) : (
-                      <Tip label={`Switch the demo to the ${firstPlan?.name ?? "Clinic"} plan first`}>
-                        <span tabIndex={0} aria-disabled="true" className="inline-flex h-8 cursor-not-allowed items-center gap-1.5 rounded-full px-3 text-xs text-muted shadow-[inset_0_0_0_1px_var(--color-line-strong)] outline-none focus-visible:outline-2 focus-visible:outline-primary">
+                      <Tip label={`Not on ${details.name}. ${DEMO_USER[r].label} logins start on ${firstPlan?.name ?? "a higher plan"}.`}>
+                        <Link
+                          href={`/demo?plan=${firstPlan?.id ?? "pro"}&role=${r}`}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line-strong)] outline-none transition-colors hover:bg-surface focus-visible:outline-2 focus-visible:outline-primary"
+                        >
                           <LockBadge />
-                          Needs {firstPlan?.name ?? "Clinic"} plan
-                        </span>
+                          {firstPlan?.name ?? "Pro"} login
+                        </Link>
                       </Tip>
                     )}
                   </div>
@@ -336,25 +324,31 @@ export function HelpPage() {
       <section aria-labelledby="plans-title" className="flex flex-col gap-4">
         <SectionTitle
           as="h2"
-          title={<span id="plans-title">Plans and what each unlocks</span>}
-          description="Read straight from the plan catalogue. Switching a plan here re-gates pages, menus and buttons across the demo — locked items say which plan they need."
+          title={<span id="plans-title">Plans and what each includes</span>}
+          description="Read straight from the plan catalogue. Prices are per practitioner (doctor, nutritionist, yoga instructor) per month, before GST; each plan includes everything in the one before it. Each demo login shows only what its plan includes."
         />
         <div className="grid grid-cols-1 gap-4 @[960px]:grid-cols-3">
           {PLANS.map((p) => {
             const current = p.id === plan;
             const added = addedFeatures(p).map((f) => featureById(f).label);
-            const example = p.pricing.kind === "per-user" ? monthlyCost(p, p.pricing.maxUsers) : null;
+            const example = yearlyCost(p, 5);
             return (
               <article key={p.id} className="flex flex-col rounded-card bg-surface p-6">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-xl font-light tracking-[-0.01em] text-ink">{p.name}</h3>
-                  {current ? <StatusBadge tone="dark">Current demo plan</StatusBadge> : null}
+                  {current ? <StatusBadge tone="dark">Your demo plan</StatusBadge> : null}
                 </div>
+                <p className="mt-1 text-sm text-ink-2">{p.positioning}</p>
                 <p className="mt-1 text-sm text-muted">{p.audience}</p>
-                <p className="mt-6 text-[28px] font-light leading-none tracking-[-0.02em] text-ink tabular">{priceLine(p.id)}</p>
+                <p className="mt-6 flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-[28px] font-light leading-none tracking-[-0.02em] text-ink tabular">{formatINR(p.price.annual)}</span>
+                  <span className="text-xs text-muted">per practitioner / month</span>
+                </p>
                 <p className="mt-2 text-xs text-muted">
-                  {formatINR(p.setupFee)} one-time setup · {p.usersLabel}
-                  {example !== null && p.pricing.kind === "per-user" ? ` · ${p.pricing.maxUsers} users = ${formatINR(example)} / month` : ""}
+                  Billed annually · {formatINR(p.price.monthly)} billed monthly · {formatINR(p.onboardingFee)} one-time onboarding
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  {p.freeSeats} admin / reception seats free, then {formatINR(p.extraSeat)} · {p.branches === "unlimited" ? "unlimited branches" : `${p.branches} branch`} · {p.storageGb} GB · 5 practitioners = {formatINR(example)} / year
                 </p>
                 <h4 className="mt-6 text-xs text-muted">{p.includesPrevious ? `Everything in ${planById(p.includesPrevious).name}, plus` : "Includes"}</h4>
                 <ul className="mt-2 flex flex-col gap-1.5">
@@ -367,8 +361,8 @@ export function HelpPage() {
                 </ul>
                 <p className="mt-4 text-xs text-muted">Roles: {p.roles.map((r) => DEMO_USER[r].label).join(", ")}</p>
                 <div className="mt-auto pt-6">
-                  <Button variant={current ? "soft" : "secondary"} disabled={current} onClick={() => changePlan(p.id)} className="w-full">
-                    {current ? "In use in this demo" : `Use ${p.name} in the demo`}
+                  <Button asChild variant={current ? "soft" : "secondary"} className="w-full">
+                    <Link href={`/demo?plan=${p.id}`}>{current ? "Switch demo login" : `Open the ${p.name} demo logins`}</Link>
                   </Button>
                 </div>
               </article>
@@ -396,7 +390,8 @@ export function HelpPage() {
               Registrations, care-team changes and drafts are kept in this browser session only. Close the tab and they&apos;re gone.
             </Fact>
             <Fact icon={<Plug size={18} />} title="Nothing is connected">
-              Payments, SMS and WhatsApp, email, lab partners and ABDM are not wired up — so Carelane never shows a payment, delivery or signature as successful.
+              Add-ons ({ADDONS.map((a) => a.label).join(", ")}) and email are not wired up — they appear marked as add-ons, and Carelane never shows a payment, delivery or
+              signature as successful.
             </Fact>
             <Fact icon={<ImageIcon size={18} />} title="Illustrative images">
               Scans and organ renders are illustrations, not diagnostic images. Which organ appears follows the patient&apos;s recorded conditions.

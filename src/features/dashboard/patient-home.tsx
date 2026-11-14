@@ -1,64 +1,54 @@
 "use client";
 
 import Link from "next/link";
-import { AnimatePresence, motion } from "motion/react";
 import { useId, useMemo, useState, type FormEvent } from "react";
-import {
-  ArrowUpRight,
-  BowlFood,
-  CalendarBlank,
-  ChatCircleDots,
-  CheckCircle,
-  Clock,
-  FileArrowUp,
-  Heartbeat,
-  Lock,
-  PersonSimpleTaiChi,
-  Receipt,
-  Stethoscope,
-} from "@phosphor-icons/react";
+import { ArrowUpRight, BowlFood, CalendarBlank, ChatCircleDots, Clock, ClipboardText, Heartbeat, PersonSimpleTaiChi } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
-import { snappy } from "@/lib/motion";
-import { formatDate, formatINR, formatTime, pluralize } from "@/lib/format";
+import { formatDate, formatTime, pluralize } from "@/lib/format";
 import { useRole } from "@/components/shell/role-context";
 import { Avatar, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Checkbox } from "@/components/ui/input";
-import { ProgressBar, ProgressRing } from "@/components/ui/misc";
+import { Checkbox, Field, Input } from "@/components/ui/input";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { StatusBadge, invoiceTone } from "@/components/ui/status";
+import { Segmented } from "@/components/ui/segmented";
+import { StatusBadge } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { staffById } from "@/data/staff";
 import { patientById } from "@/data/patients";
 import { TODAY_APPOINTMENTS } from "@/data/appointments";
-import { CARE_EVENTS, CARE_PLAN } from "@/data/featured";
-import { PACKAGES } from "@/data/programs";
-import { getRecord } from "@/data/record";
-import { INVOICES, INVOICE_STATUS_LABEL, THREADS } from "@/data/records";
-import { NOW_LABEL, NOW_MIN, PATIENT_TODAY, PREPARE_ITEMS, daysSince, istMinutes, shortDate, splitMedicines, untilLabel, whenLabel } from "./data";
-import { DashboardHeader, FocalCard, FocalHead, Panel, Reveal } from "./ui";
-import { ConditionTiles, ConditionsHero, SystemsCarousel, VisitsCard } from "./patient-conditions";
+import { CARE_EVENTS, CARE_PLAN, EVENT_TYPE_LABEL, type CareEvent } from "@/data/featured";
+import { THREADS } from "@/data/records";
+import { NOW_LABEL, NOW_MIN, PATIENT_TODAY, PREPARE_ITEMS, istMinutes, shortDate, splitMedicines, untilLabel, whenLabel } from "./data";
+import { DashGrid, DashboardHeader, FocalCard, FocalHead, FocalInset, FocalStat, InsetList, ListRow, Panel, Rail, Reveal } from "./ui";
 
 /**
- * Patient home (doc §3B): my next appointment, my current plan, what I should do today and how
- * I contact the team. Everything the patient enters here is saved locally and labelled
- * self-reported; nothing is sent from the demo.
+ * Patient app home (Pro) — my appointments, my plan for today (meals logged as self-reported),
+ * home readings, the records my care team has released, and messages. Nothing unreleased is
+ * shown or hinted at; everything entered here is saved in this browser and labelled self-reported.
  */
+
+/** What a patient may see of their own record: released, reviewed, not a draft, not just planned. */
+const visibleToPatient = (e: CareEvent) => e.released && e.state !== "awaiting-review" && e.state !== "draft" && e.state !== "scheduled";
+
+type MealLog = "as-planned" | "partly" | "skipped";
+const MEAL_LOG: { value: MealLog; label: string }[] = [
+  { value: "as-planned", label: "As planned" },
+  { value: "partly", label: "Partly" },
+  { value: "skipped", label: "Skipped" },
+];
+
 export function PatientHome() {
   const { user } = useRole();
   const me = patientById(user.id)!;
-  const record = useMemo(() => getRecord(me.id), [me.id]);
-  const [systemId, setSystemId] = useState<string>(record?.systems[0]?.id ?? "");
-  const [conditionId, setConditionId] = useState<string | null>(null);
-  const system = record?.systems.find((s) => s.id === systemId) ?? record?.systems[0] ?? null;
   const mine = TODAY_APPOINTMENTS.filter((a) => a.patientId === me.id && a.status !== "cancelled").sort((a, b) => a.start.localeCompare(b.start));
   const next = mine.find((a) => istMinutes(a.start) > NOW_MIN) ?? null;
-  const pkg = PACKAGES.find((p) => p.patientId === me.id);
+  const later = next ? mine.filter((a) => istMinutes(a.start) > istMinutes(next.start)) : [];
+  const unread = THREADS.filter((t) => t.participants.includes(me.id) && t.channel === "patient" && t.unread > 0).length;
 
   return (
     <div className="flex flex-col gap-6">
       <DashboardHeader
-        summary={`${next ? `Your ${next.service.split(" · ")[0]} is at ${formatTime(next.start)}` : "No more visits today"} · ${pluralize(mine.length, "appointment")} today · ${me.balanceDue ? `${formatINR(me.balanceDue)} to pay` : "nothing to pay"}`}
+        summary={`${next ? `${next.service.split(" · ")[0]} at ${formatTime(next.start)}` : "No more visits today"}${later.length ? ` · then ${pluralize(later.length, "more visit")}` : ""} · plan v4 for today · ${unread ? `${pluralize(unread, "message")} awaiting a reply` : "no messages waiting"}`}
         actions={
           <>
             <Button asChild variant="dark">
@@ -77,119 +67,25 @@ export function PatientHome() {
         }
       />
 
-      {/*
-        Reference 3 on top (organ hero · my condition tiles · my schedule · my body systems), then
-        today's visit and checklist. DOM order is the phone reading order; xl places the blocks.
-      */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-12">
-        {record && system ? (
-          <Reveal index={0} className="md:col-span-2 xl:col-span-5 xl:col-start-1 xl:row-span-2 xl:row-start-1">
-            <ConditionsHero
-              record={record}
-              system={system}
-              activeConditionId={conditionId}
-              onCondition={setConditionId}
-              className="h-full"
-            />
-          </Reveal>
-        ) : null}
-
-        <Reveal index={1} className="md:col-span-2 xl:col-span-8 xl:col-start-1 xl:row-start-3">
-          {next ? <NextAppointmentCard apptId={next.id} later={mine.filter((a) => a.id !== next.id && istMinutes(a.start) > istMinutes(next.start)).map((a) => a.id)} /> : null}
+      <DashGrid>
+        <Reveal index={0} className="lg:col-span-2">
+          {next ? <NextAppointmentCard apptId={next.id} later={later.map((a) => a.id)} /> : <NoVisitCard />}
         </Reveal>
 
-        <Reveal index={2} className="xl:col-span-4 xl:col-start-9 xl:row-start-3">
-          <TodayChecklist />
+        <Reveal index={1} className="lg:col-span-2">
+          <TodayPlan />
         </Reveal>
 
-        {record ? (
-          <Reveal index={3} className="xl:col-span-4 xl:col-start-6 xl:row-start-1">
-            <ConditionTiles record={record} />
-          </Reveal>
-        ) : null}
-
-        <Reveal index={4} className="xl:col-span-3 xl:col-start-10 xl:row-start-1">
-          <VisitsCard patientId={me.id} />
+        <Reveal index={2} className="lg:col-span-2">
+          <ReadingsPanel patientId={me.id} />
         </Reveal>
 
-        {record && system ? (
-          <Reveal index={5} className="min-w-0 md:col-span-2 xl:col-span-7 xl:col-start-6 xl:row-start-2">
-            <SystemsCarousel
-              record={record}
-              selectedId={system.id}
-              onSelect={(id) => {
-                setSystemId(id);
-                setConditionId(null);
-              }}
-            />
-          </Reveal>
-        ) : null}
-
-        <Reveal index={6} className="xl:col-span-4 xl:row-start-4">
-          <PlanPanel />
-        </Reveal>
-
-        <Reveal index={7} className="xl:col-span-4 xl:row-start-4">
+        {/* Side rail: placed in column 3 at xl, but last in reading order on phones (today's plan comes first). */}
+        <Rail index={3} className="lg:col-span-2 xl:col-span-1 xl:col-start-3 xl:row-span-3 xl:row-start-1">
+          <RecordsPanel patientId={me.id} />
           <MessagesPanel patientId={me.id} />
-        </Reveal>
-
-        <Reveal index={8} className="flex flex-col gap-4 md:col-span-2 xl:col-span-4 xl:row-start-4">
-          <Panel icon={<Receipt />} title="Billing & sessions" subtitle={me.balanceDue ? `${formatINR(me.balanceDue)} to pay` : "Nothing to pay"} href="/portal/billing" actionLabel="Open billing">
-            {pkg ? (
-              <div className="rounded-inner bg-surface p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm text-ink">{pkg.name}</p>
-                    <p className="text-xs text-muted">Expires {formatDate(pkg.expires, { day: "numeric", month: "short" })} · in {pluralize(-daysSince(pkg.expires), "day")}</p>
-                  </div>
-                  <p className="shrink-0 text-right">
-                    <span className="block text-title font-light leading-none text-ink">{pkg.total - pkg.used}</span>
-                    <span className="text-xs text-muted">left</span>
-                  </p>
-                </div>
-                <ProgressBar value={pkg.used} max={pkg.total} tone="dark" className="mt-4" label={`${pkg.used} of ${pkg.total} sessions used`} />
-                <p className="mt-2 text-xs text-muted">
-                  {pkg.used} of {pkg.total} sessions used
-                </p>
-              </div>
-            ) : null}
-            {INVOICES.filter((i) => i.patientId === me.id).map((i) => (
-              <Link key={i.id} href="/portal/billing" className="flex items-center gap-3 rounded-inner bg-surface p-4 transition-colors hover:bg-canvas">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm text-ink">{i.items[0]?.label}</span>
-                  <span className="block text-xs text-muted">
-                    <span className="font-mono">{i.number}</span> · {shortDate(i.issuedAt)} · {i.method}
-                  </span>
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className="block text-sm text-ink tabular">{formatINR(i.total)}</span>
-                  <StatusBadge tone={invoiceTone(i.status)} className="h-5 px-2 text-[11px]">
-                    {INVOICE_STATUS_LABEL[i.status]}
-                  </StatusBadge>
-                </span>
-              </Link>
-            ))}
-          </Panel>
-
-          <section aria-labelledby="upload-cta" className="flex flex-col gap-4 rounded-card bg-surface p-6">
-            <span className="flex size-10 items-center justify-center rounded-full bg-sunken text-ink" aria-hidden="true">
-              <FileArrowUp size={20} />
-            </span>
-            <div>
-              <h2 id="upload-cta" className="text-lg font-normal tracking-[-0.01em] text-ink">
-                Got a new report?
-              </h2>
-              <p className="mt-1 text-sm text-muted">Add the date of the test when you upload — we keep it separate from the upload date, and your doctor reviews it before it joins your record.</p>
-            </div>
-            <Button asChild variant="secondary" className="self-start">
-              <Link href="/portal/records">
-                <FileArrowUp />
-                Upload a report
-              </Link>
-            </Button>
-          </section>
-        </Reveal>
-      </div>
+        </Rail>
+      </DashGrid>
     </div>
   );
 }
@@ -201,12 +97,10 @@ export function PatientHome() {
 function NextAppointmentCard({ apptId, later }: { apptId: string; later: string[] }) {
   const id = useId();
   const appt = TODAY_APPOINTMENTS.find((a) => a.id === apptId)!;
-  const doctor = staffById(appt.staffId);
+  const clinician = staffById(appt.staffId);
   const [ready, setReady] = useState<Record<string, boolean>>({});
   const done = PREPARE_ITEMS.filter((i) => ready[i.id]).length;
   const { medicines } = splitMedicines(CARE_PLAN.medical.text);
-  // A report the clinician hasn't released yet: say it exists, never show its values.
-  const pending = CARE_EVENTS.find((e) => e.state === "awaiting-review" && !e.released);
 
   return (
     <FocalCard labelledBy={id} className="h-full">
@@ -216,22 +110,17 @@ function NextAppointmentCard({ apptId, later }: { apptId: string; later: string[
         title={appt.service}
         meta={
           <span className="flex items-center gap-2">
-            <Avatar src={doctor?.avatar} name={doctor?.name ?? ""} size="xs" className="bg-white" />
+            <Avatar src={clinician?.avatar} name={clinician?.name ?? ""} size="xs" className="bg-white" />
             <span className="min-w-0">
-              {doctor?.name} · {doctor?.title.split(" · ")[0]} · {appt.room}
+              {clinician?.name} · {clinician?.title.split(" · ")[0]} · {appt.room}
             </span>
           </span>
         }
-        aside={
-          <div className="text-right">
-            <p className="text-title font-normal tabular">{formatTime(appt.start)}</p>
-            <p className="text-xs text-white/90">{untilLabel(appt.start)}</p>
-          </div>
-        }
+        aside={<FocalStat value={formatTime(appt.start)} caption={untilLabel(appt.start)} />}
       />
 
       <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="rounded-inner bg-surface p-4 text-ink">
+        <FocalInset>
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-ink">How to prepare</p>
             <span className="text-xs text-muted tabular" aria-live="polite">
@@ -255,13 +144,13 @@ function NextAppointmentCard({ apptId, later }: { apptId: string; later: string[
               );
             })}
           </ul>
-        </div>
+        </FocalInset>
         <div className="flex flex-col gap-2">
           {later.map((lid) => {
             const a = TODAY_APPOINTMENTS.find((x) => x.id === lid)!;
             const s = staffById(a.staffId);
             return (
-              <div key={lid} className="flex items-start gap-3 rounded-inner bg-surface p-4 text-ink">
+              <FocalInset key={lid} className="flex items-start gap-3">
                 <Avatar src={s?.avatar} name={s?.name ?? ""} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-muted">Then at {formatTime(a.start)}</p>
@@ -270,20 +159,20 @@ function NextAppointmentCard({ apptId, later }: { apptId: string; later: string[
                     {s?.name} · {a.room}
                   </p>
                 </div>
-              </div>
+              </FocalInset>
             );
           })}
-          {pending ? (
-            <div className="flex flex-1 items-start gap-3 rounded-inner bg-surface p-4 text-ink">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sunken text-ink-2" aria-hidden="true">
-                <Lock size={16} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm text-ink">New {pending.title.toLowerCase()} · {shortDate(pending.date)}</p>
-                <p className="text-xs text-muted">With {doctor?.name} for review. You&apos;ll see the results once they&apos;re released — likely at this visit.</p>
-              </div>
+          <FocalInset className="flex flex-1 items-start gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sunken text-ink-2" aria-hidden="true">
+              <CalendarBlank size={16} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm text-ink">{CARE_PLAN.nextReview.label}</p>
+              <p className="text-xs text-muted">
+                {formatDate(CARE_PLAN.nextReview.at, { weekday: "short", day: "numeric", month: "short" })} · {staffById(CARE_PLAN.nextReview.with)?.name}
+              </p>
             </div>
-          ) : null}
+          </FocalInset>
         </div>
       </div>
 
@@ -296,7 +185,7 @@ function NextAppointmentCard({ apptId, later }: { apptId: string; later: string[
         </Button>
         <Button asChild variant="glass">
           <Link href="/portal/appointments">
-            Reschedule
+            Ask to reschedule
             <ArrowUpRight />
           </Link>
         </Button>
@@ -309,76 +198,123 @@ function NextAppointmentCard({ apptId, later }: { apptId: string; later: string[
   );
 }
 
+function NoVisitCard() {
+  const id = useId();
+  return (
+    <FocalCard labelledBy={id} className="h-full">
+      <FocalHead id={id} label="Your appointments" title="No more visits today" meta={`${CARE_PLAN.nextReview.label} · ${shortDate(CARE_PLAN.nextReview.at)}`} />
+      <div className="mt-auto flex p-4 pt-2">
+        <Button asChild variant="secondary" className="shadow-none">
+          <Link href="/portal/appointments">My appointments</Link>
+        </Button>
+      </div>
+    </FocalCard>
+  );
+}
+
 // ---------------------------------------------------------------------------------------------
-// What I should do today
+// Today from my plan — meals logged against the plan (self-reported), practice checked off
 // ---------------------------------------------------------------------------------------------
 
-const KIND_ICON = { meal: BowlFood, practice: PersonSimpleTaiChi, log: Heartbeat } as const;
-
-function TodayChecklist() {
+function TodayPlan() {
   const { toast } = useToast();
-  const [checked, setChecked] = useState<Record<string, boolean>>({ class: true });
-  const [bp, setBp] = useState<{ sys: number; dia: number; at: string } | null>(null);
-  const total = PATIENT_TODAY.length;
-  const done = PATIENT_TODAY.filter((i) => checked[i.id]).length;
+  const [logs, setLogs] = useState<Record<string, MealLog>>({});
+  const [practice, setPractice] = useState<Record<string, boolean>>({ class: true });
+  const meals = PATIENT_TODAY.filter((i) => i.kind === "meal");
+  const logged = meals.filter((m) => logs[m.id]).length;
 
   return (
     <Panel
-      icon={<CheckCircle />}
-      title="What I should do today"
-      subtitle={done === total ? "All done for today" : `${done} of ${total} done`}
+      icon={<BowlFood />}
+      title="Today from my plan"
+      subtitle={`Plan v4 · ${logged} of ${meals.length} meals logged`}
       href="/portal/plan"
       actionLabel="Open my plan"
-      action={
-        <ProgressRing value={done} max={total} size={40} stroke={4} className={cn("rounded-full bg-surface transition-colors", done === total ? "text-success" : "text-ink")}>
-          <span className="text-ink" aria-label={`${done} of ${total} done`}>
-            {done}/{total}
-          </span>
-        </ProgressRing>
-      }
+      className="h-full"
     >
       <ul className="flex flex-col rounded-inner bg-surface p-2">
         {PATIENT_TODAY.map((item) => {
-          const Icon = KIND_ICON[item.kind];
-          const isChecked = !!checked[item.id];
-          const locked = !!item.recordedBy;
+          const Icon = item.kind === "meal" ? BowlFood : PersonSimpleTaiChi;
           return (
-            <li key={item.id}>
-              <div className="flex items-start gap-3 rounded-[12px] p-2">
-                <Checkbox
-                  checked={isChecked}
-                  disabled={locked || (item.id === "bp" && !bp)}
-                  onCheckedChange={(v) => setChecked((s) => ({ ...s, [item.id]: v === true }))}
-                  aria-label={item.label}
-                  className="mt-0.5"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className={cn("flex items-center gap-1.5 text-sm transition-colors", isChecked ? "text-muted line-through" : "text-ink")}>
-                    <Icon size={16} className="shrink-0 text-muted" aria-hidden="true" />
-                    {item.label}
-                  </span>
-                  <span className="block text-xs text-muted">
-                    {item.id === "bp" && bp ? `${bp.sys}/${bp.dia} mmHg at ${bp.at} · self-reported · saved in this browser` : item.detail}
+            <li key={item.id} className="@container rounded-[12px] p-2">
+              <div className="flex flex-col gap-2 @md:flex-row @md:items-center">
+                <span className="flex min-w-0 flex-1 items-start gap-3">
+                  <span className="w-10 shrink-0 pt-0.5 text-xs text-muted tabular">{item.at}</span>
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-sm text-ink">
+                      <Icon size={16} className="shrink-0 text-muted" aria-hidden="true" />
+                      {item.label}
+                    </span>
+                    <span className="block text-xs text-muted">{item.kind === "meal" && logs[item.id] ? `${MEAL_LOG.find((m) => m.value === logs[item.id])?.label} · self-reported` : item.detail}</span>
                   </span>
                 </span>
-                {item.id === "bp" && !bp ? (
-                  <BpLogger
-                    onSave={(sys, dia) => {
-                      setBp({ sys, dia, at: NOW_LABEL });
-                      setChecked((s) => ({ ...s, bp: true }));
-                      toast({ tone: "success", title: `Blood pressure logged · ${sys}/${dia}`, description: "Saved in this browser session and labelled self-reported — nothing was sent." });
+                {item.kind === "meal" ? (
+                  <Segmented
+                    items={MEAL_LOG}
+                    value={logs[item.id] ?? ("" as MealLog)}
+                    onChange={(v) => {
+                      setLogs((s) => ({ ...s, [item.id]: v }));
+                      toast({ title: `${item.label} logged · ${MEAL_LOG.find((m) => m.value === v)?.label.toLowerCase()}`, description: "Saved in this browser and marked self-reported until Meera reviews it." });
                     }}
+                    ariaLabel={`Log ${item.label.toLowerCase()}`}
+                    size="sm"
+                    variant="tray"
+                    className="ml-[52px] self-start @md:ml-0 @md:self-auto"
                   />
-                ) : locked ? (
-                  <StatusBadge tone="neutral" dot={false} className="shrink-0">
-                    Clinic
+                ) : item.recordedBy ? (
+                  <StatusBadge tone="success" className="ml-[52px] self-start @md:ml-0 @md:self-auto">
+                    Done
                   </StatusBadge>
-                ) : null}
+                ) : (
+                  <label className="ml-[52px] flex items-center gap-2 self-start text-xs text-ink-2 @md:ml-0 @md:self-auto">
+                    <Checkbox checked={!!practice[item.id]} onCheckedChange={(v) => setPractice((s) => ({ ...s, [item.id]: v === true }))} aria-label={`Mark ${item.label} done`} />
+                    Done
+                  </label>
+                )}
               </div>
             </li>
           );
         })}
       </ul>
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Home readings (self-reported until a practitioner reviews them)
+// ---------------------------------------------------------------------------------------------
+
+function ReadingsPanel({ patientId }: { patientId: string }) {
+  const { toast } = useToast();
+  const [readings, setReadings] = useState<{ sys: number; dia: number; at: string }[]>([]);
+  const latest = useMemo(() => CARE_EVENTS.filter((e) => e.authorId === patientId && e.state === "self-reported" && e.type === "vitals").sort((a, b) => b.date.localeCompare(a.date))[0], [patientId]);
+  const task = CARE_PLAN.actions.find((a) => a.owner === patientId && a.status !== "done");
+
+  return (
+    <Panel icon={<Heartbeat />} title="Home readings" subtitle={task ? `${task.label} · due ${shortDate(task.due)}` : "Blood pressure, sugar and weight"} href="/portal/records" actionLabel="Open my records" className="h-full">
+      <ul className="flex flex-col rounded-inner bg-surface p-2">
+        {readings.map((r, i) => (
+          <ListRow key={i} lead={<span className="w-10 shrink-0 pt-0.5 text-xs text-muted tabular">{r.at}</span>} title={`${r.sys}/${r.dia} mmHg`} meta="Blood pressure · today · saved in this browser" trailing={<StatusBadge tone="neutral">Self-reported</StatusBadge>} />
+        ))}
+        {latest ? (
+          <ListRow
+            href="/portal/records"
+            lead={<span className="w-10 shrink-0 pt-0.5 text-xs text-muted tabular">{shortDate(latest.date)}</span>}
+            title={latest.title.replace(/\s*\(self-reported\)/i, "")}
+            meta={latest.summary.replace(/\.$/, "")}
+            trailing={<StatusBadge tone="neutral">Self-reported</StatusBadge>}
+          />
+        ) : null}
+      </ul>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-1 pt-1">
+        <p className="text-xs text-muted">Your care team reviews these; until then they stay marked self-reported.</p>
+        <BpLogger
+          onSave={(sys, dia) => {
+            setReadings((xs) => [{ sys, dia, at: NOW_LABEL }, ...xs]);
+            toast({ tone: "success", title: `Blood pressure logged · ${sys}/${dia}`, description: "Saved in this browser session and labelled self-reported — nothing was sent." });
+          }}
+        />
+      </div>
     </Panel>
   );
 }
@@ -400,6 +336,8 @@ function BpLogger({ onSave }: { onSave: (sys: number, dia: number) => void }) {
     setErrors(next);
     if (next.sys || next.dia) return;
     onSave(s, d);
+    setSys("");
+    setDia("");
     setOpen(false);
   };
 
@@ -407,7 +345,7 @@ function BpLogger({ onSave }: { onSave: (sys: number, dia: number) => void }) {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button size="sm" variant="dark" className="shrink-0">
-          Log reading
+          Log a reading
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(320px,calc(100vw-32px))] p-4">
@@ -441,40 +379,29 @@ function BpLogger({ onSave }: { onSave: (sys: number, dia: number) => void }) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// My current plan
+// Records released to me (plus my own entries)
 // ---------------------------------------------------------------------------------------------
 
-function PlanPanel() {
-  const { guidance } = splitMedicines(CARE_PLAN.medical.text);
-  const pkg = PACKAGES.find((p) => p.patientId === "p-kabir");
-  const parts = [
-    { key: "nutrition", icon: <BowlFood size={16} />, title: "Nutrition plan", by: CARE_PLAN.nutrition.by, updated: CARE_PLAN.nutrition.updated, text: CARE_PLAN.nutrition.text },
-    { key: "movement", icon: <PersonSimpleTaiChi size={16} />, title: "Movement plan", by: CARE_PLAN.movement.by, updated: CARE_PLAN.movement.updated, text: CARE_PLAN.movement.text },
-    { key: "medical", icon: <Stethoscope size={16} />, title: "Doctor's guidance", by: CARE_PLAN.medical.by, updated: CARE_PLAN.medical.updated, text: `${guidance}.` },
-  ];
+function RecordsPanel({ patientId }: { patientId: string }) {
+  const records = CARE_EVENTS.filter((e) => visibleToPatient(e) && e.authorId !== patientId)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 4);
   return (
-    <Panel icon={<Heartbeat />} title="My current plan" subtitle={CARE_PLAN.episode.replace(" (", " · ").replace(")", "")} href="/portal/plan" actionLabel="Open my plan">
-      <div className="rounded-inner bg-surface p-4">
-        <p className="text-xs text-muted">Our goal</p>
-        <p className="mt-1 text-sm text-ink">{CARE_PLAN.goal}</p>
-      </div>
-      {parts.map((p) => (
-        <div key={p.key} className="rounded-inner bg-surface p-4">
-          <div className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-full bg-sunken text-ink-2" aria-hidden="true">
-              {p.icon}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm text-ink">{p.title}</span>
-              <span className="block truncate text-xs text-muted">
-                {staffById(p.by)?.name} · updated {shortDate(p.updated)}
-              </span>
-            </span>
-          </div>
-          <p className="mt-3 text-xs leading-relaxed text-ink-2">{p.text}</p>
-          {p.key === "movement" && pkg ? <ProgressBar value={pkg.used} max={pkg.total} tone="dark" className="mt-3" label={`${pkg.used} of ${pkg.total} yoga sessions done`} /> : null}
-        </div>
-      ))}
+    <Panel icon={<ClipboardText />} title="My records" subtitle="Released to you by your care team" href="/portal/records" actionLabel="Open my records">
+      <InsetList label="Latest released records">
+        {records.map((e) => {
+          const by = staffById(e.authorId);
+          return (
+            <ListRow
+              key={e.id}
+              href="/portal/records"
+              lead={<span className="w-12 shrink-0 pt-0.5 text-xs text-muted tabular">{shortDate(e.date)}</span>}
+              title={e.title}
+              meta={`${EVENT_TYPE_LABEL[e.type]}${by ? ` · ${by.name}` : ""}`}
+            />
+          );
+        })}
+      </InsetList>
     </Panel>
   );
 }
@@ -484,45 +411,31 @@ function PlanPanel() {
 // ---------------------------------------------------------------------------------------------
 
 function MessagesPanel({ patientId }: { patientId: string }) {
-  const threads = THREADS.filter((t) => t.participants.includes(patientId)).sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+  const threads = THREADS.filter((t) => t.participants.includes(patientId) && t.channel === "patient").sort((a, b) => b.lastAt.localeCompare(a.lastAt));
   return (
     <Panel icon={<ChatCircleDots />} title="Messages" subtitle="Replies within 1 working day" href="/messages" actionLabel="Open messages">
-      <AnimatePresence initial={false}>
-        {threads.map((t) => {
-          const staff = t.participants.filter((p) => p !== patientId).map((id) => staffById(id)).filter((s) => !!s);
-          // A patient-channel thread the team hasn't read yet ends with the patient's own message.
-          const awaitingReply = t.unread > 0;
-          return (
-            <motion.div key={t.id} layout transition={snappy}>
-              <Link href="/messages" className="block rounded-inner bg-surface p-4 transition-colors hover:bg-canvas">
-                <span className="flex items-start justify-between gap-3">
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm text-ink">{t.subject}</span>
-                    <span className="block text-xs text-muted">{whenLabel(t.lastAt)}</span>
-                  </span>
-                  <AvatarStack people={staff.map((s) => ({ name: s.name, avatar: s.avatar }))} size="xs" />
-                </span>
-                <span className="mt-3 block text-sm text-ink-2">
-                  {awaitingReply ? "You: " : `${staff[0]?.name.split(" ")[0] ?? "Team"}: `}“{t.lastMessage}”
-                </span>
-                <span className="mt-3 flex items-center gap-1.5 text-xs">
-                  {awaitingReply ? (
-                    <StatusBadge tone="warning">Awaiting reply · {t.expectedResponse.replace(/^Reply\s+/i, "")}</StatusBadge>
-                  ) : (
-                    <StatusBadge tone="success">Answered</StatusBadge>
-                  )}
-                </span>
-              </Link>
-            </motion.div>
-          );
-        })}
-      </AnimatePresence>
-      <Button asChild variant="secondary" className="mt-auto self-start shadow-none">
-        <Link href="/messages?new=1">
-          <ChatCircleDots />
-          New message
-        </Link>
-      </Button>
+      {threads.map((t) => {
+        const staff = t.participants
+          .filter((p) => p !== patientId)
+          .map((sid) => staffById(sid))
+          .filter((s) => !!s);
+        const awaitingReply = t.unread > 0;
+        return (
+          <Link key={t.id} href="/messages" className="block rounded-inner bg-surface p-4 transition-colors hover:bg-canvas">
+            <span className="flex items-start justify-between gap-3">
+              <span className="min-w-0">
+                <span className="block truncate text-sm text-ink">{t.subject}</span>
+                <span className="block text-xs text-muted">{whenLabel(t.lastAt)}</span>
+              </span>
+              <AvatarStack people={staff.map((s) => ({ name: s.name, avatar: s.avatar }))} size="xs" />
+            </span>
+            <span className="mt-2 block text-sm text-ink-2">
+              {awaitingReply ? "You: " : `${staff[0]?.name.split(" ")[0] ?? "Team"}: `}“{t.lastMessage}”
+            </span>
+            <span className="mt-3 block">{awaitingReply ? <StatusBadge tone="warning">Awaiting reply · {t.expectedResponse.replace(/^Reply\s+/i, "")}</StatusBadge> : <StatusBadge tone="success">Answered</StatusBadge>}</span>
+          </Link>
+        );
+      })}
     </Panel>
   );
 }

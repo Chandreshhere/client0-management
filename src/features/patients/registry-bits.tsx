@@ -1,18 +1,20 @@
 "use client";
 
 import type { Icon } from "@phosphor-icons/react";
-import { CalendarBlank, CaretLeft, CaretRight, ClipboardText, CurrencyInr, Plus, Users, Warning } from "@phosphor-icons/react";
+import { CalendarBlank, CaretLeft, CaretRight, ClipboardText, CurrencyInr, Path, Plus, ShieldWarning, Users, Warning } from "@phosphor-icons/react";
 import type { PatientStatus } from "@/data/types";
 import { PATIENT_STATUS_LABEL } from "@/data/patients";
 import { APPOINTMENT_STATUS_LABEL } from "@/data/appointments";
 import { staffById } from "@/data/staff";
 import { formatDate, formatINR, formatTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { AvatarStack } from "@/components/ui/avatar";
+import { usePlan } from "@/components/shell/role-context";
+import { Avatar, AvatarStack } from "@/components/ui/avatar";
 import { IconButton } from "@/components/ui/icon-button";
 import { StatusBadge, appointmentTone, type Tone } from "@/components/ui/status";
 import { Tip } from "@/components/ui/tooltip";
-import { FLAG_LABEL, dayWord, isLive, type FlagId, type RegistryPatient, type Visit } from "./data";
+import { FLAG_LABEL, dayWord, isLive, precautionsFor, type FlagId, type RegistryLens, type RegistryPatient, type Visit } from "./data";
+import { OrganGlyph } from "./organ-glyph";
 
 /** Small presentational pieces shared by the registry table, the cards and the summary. */
 
@@ -24,9 +26,12 @@ export const STATUS_TONE: Record<PatientStatus, Tone> = {
 };
 
 export function PatientStatusBadge({ status, className }: { status: PatientStatus; className?: string }) {
+  const { has } = usePlan();
+  // Programmes are a Pro feature; below Pro a finished episode of care is just "Care complete".
+  const label = status === "completed" && !has("programmes") ? "Care complete" : PATIENT_STATUS_LABEL[status];
   return (
     <StatusBadge tone={STATUS_TONE[status]} className={className}>
-      {PATIENT_STATUS_LABEL[status]}
+      {label}
     </StatusBadge>
   );
 }
@@ -43,19 +48,46 @@ export function flagText(flag: FlagId, patient: RegistryPatient) {
   return flag === "balance" ? `${formatINR(patient.balanceDue)} due` : FLAG_LABEL[flag];
 }
 
-export function FlagPill({ flag, patient }: { flag: FlagId; patient: RegistryPatient }) {
+export function FlagPill({ flag, patient, onClick }: { flag: FlagId; patient: RegistryPatient; onClick?: () => void }) {
   const s = FLAG_STYLE[flag];
   const Glyph = s.icon;
+  const cls = cn("inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full px-2 text-xs", s.cls);
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={cn(cls, "underline decoration-current/30 underline-offset-2 transition-[text-decoration-color] hover:decoration-current")}>
+        <Glyph size={14} aria-hidden="true" className="shrink-0" />
+        {flagText(flag, patient)}
+        <span className="sr-only"> — review</span>
+      </button>
+    );
+  }
   return (
-    <span className={cn("inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full px-2 text-xs", s.cls)}>
+    <span className={cls}>
       <Glyph size={14} aria-hidden="true" className="shrink-0" />
       {flagText(flag, patient)}
     </span>
   );
 }
 
-/** Flags with a "+N" overflow. Balance is hidden for roles without billing permission. */
-export function FlagPills({ flags, patient, max = 2, showBalance, quietWhenEmpty }: { flags: FlagId[]; patient: RegistryPatient; max?: number; showBalance: boolean; quietWhenEmpty?: boolean }) {
+/**
+ * Flags with a "+N" overflow. Balance is hidden for roles without billing permission; the admin
+ * can open a possible duplicate from its flag.
+ */
+export function FlagPills({
+  flags,
+  patient,
+  max = 2,
+  showBalance,
+  quietWhenEmpty,
+  onDuplicate,
+}: {
+  flags: FlagId[];
+  patient: RegistryPatient;
+  max?: number;
+  showBalance: boolean;
+  quietWhenEmpty?: boolean;
+  onDuplicate?: () => void;
+}) {
   const visible = flags.filter((f) => f !== "balance" || showBalance);
   if (!visible.length) {
     if (quietWhenEmpty) return null;
@@ -71,7 +103,7 @@ export function FlagPills({ flags, patient, max = 2, showBalance, quietWhenEmpty
   return (
     <div className="flex flex-wrap gap-1">
       {shown.map((f) => (
-        <FlagPill key={f} flag={f} patient={patient} />
+        <FlagPill key={f} flag={f} patient={patient} onClick={f === "duplicate" ? onDuplicate : undefined} />
       ))}
       {rest.length ? (
         <Tip label={rest.map((f) => flagText(f, patient)).join(" · ")}>
@@ -90,8 +122,19 @@ const lastVisitWord = (iso: string) => {
   return d === "Today" || d === "Yesterday" ? d.toLowerCase() : formatDate(iso, { day: "numeric", month: "short" });
 };
 
-/** "Today 12:00" + service, or the live queue state, or "Not booked" + last visit. */
-export function NextVisitLine({ visit, last, className }: { visit: Visit | null; last: string | null; className?: string }) {
+/**
+ * "Today 12:00" + service, or the live queue state, or "Not booked" + last visit. Without the
+ * diary (Core) it is the follow-up date on the record — no time, no queue state.
+ */
+export function NextVisitLine({ visit, last, className, diary = true }: { visit: Visit | null; last: string | null; className?: string; diary?: boolean }) {
+  if (!diary) {
+    return (
+      <div className={cn("min-w-0", className)}>
+        <p className="whitespace-nowrap text-sm text-ink-2">{visit ? dayWord(visit.start) : "Not set"}</p>
+        <p className="truncate text-xs text-muted">{last ? `Last visit ${lastVisitWord(last)}` : "No visits yet"}</p>
+      </div>
+    );
+  }
   if (!visit) {
     return (
       <div className={cn("min-w-0", className)}>
@@ -143,6 +186,102 @@ export function CareTeamStack({ ids, onAssign, max = 4 }: { ids: string[]; onAss
         <span className="sr-only">Care team: {names}</span>
       </span>
     </Tip>
+  );
+}
+
+export const CONCERN_HEADER: Record<RegistryLens["concern"], string> = {
+  diagnosis: "Primary concern",
+  precautions: "Precautions",
+  none: "Programme",
+};
+
+/**
+ * The concern cell for clinical roles: the concern with its organ (doctor, nutritionist), the
+ * doctor's precautions (yoga — never a diagnosis), or the programme (coordinator).
+ */
+export function ConcernCell({ patient: p, lens, programmeBelow, onOpen, className }: { patient: RegistryPatient; lens: RegistryLens; programmeBelow?: string; onOpen?: () => void; className?: string }) {
+  if (lens.concern === "none") {
+    return (
+      <div className={cn("flex min-w-0 items-center gap-2", className)}>
+        <Path size={16} aria-hidden="true" className="shrink-0 text-muted" />
+        <p className="line-clamp-2 text-ink-2">{p.program ?? <span className="text-muted">No programme</span>}</p>
+      </div>
+    );
+  }
+  if (lens.concern === "precautions") {
+    const pr = p.local ? null : precautionsFor(p.id);
+    return (
+      <div className={cn("flex min-w-0 items-start gap-2", className)}>
+        <ShieldWarning size={16} aria-hidden="true" className={cn("mt-0.5 shrink-0", pr?.changed ? "text-warning" : "text-muted")} />
+        <div className="min-w-0">
+          <p className="text-pretty text-ink-2">{pr?.text ?? <span className="text-muted">No precautions recorded</span>}</p>
+          {pr?.changed ? <p className="text-xs text-warning">Changed — acknowledge before the next session</p> : null}
+        </div>
+      </div>
+    );
+  }
+  const concern = p.primaryConcern || <span className="text-muted">Not recorded yet</span>;
+  return (
+    <div className={cn("flex min-w-0 items-start gap-3", className)}>
+      <OrganGlyph patient={p} />
+      <div className="min-w-0 flex-1">
+        {onOpen ? (
+          <button type="button" onClick={onOpen} className="text-left text-sm leading-snug text-ink-2 hover:text-ink">
+            {concern}
+          </button>
+        ) : (
+          <p className="text-pretty text-ink-2">{concern}</p>
+        )}
+        {p.local ? (
+          <p className="mt-0.5 truncate text-xs text-muted">Registered in this session</p>
+        ) : lens.programmes ? (
+          <p className={cn("mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted", programmeBelow)}>
+            <Path size={14} aria-hidden="true" className="shrink-0" />
+            <span className="truncate">{p.program ?? "No programme"}</span>
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Primary doctor for demographic views: avatar and name, or "Assign" for those who set care teams. */
+export function PrimaryDoctor({ id, onAssign }: { id: string | undefined; onAssign?: () => void }) {
+  const s = staffById(id);
+  if (!s) {
+    return onAssign ? (
+      <button
+        type="button"
+        onClick={onAssign}
+        className="inline-flex h-8 items-center gap-1.5 rounded-full pl-1 pr-3 text-xs text-ink-2 transition-colors hover:bg-sunken hover:text-ink"
+      >
+        <span className="flex size-6 items-center justify-center rounded-full border border-dashed border-line-strong text-muted" aria-hidden="true">
+          <Plus size={12} />
+        </span>
+        Assign doctor
+      </button>
+    ) : (
+      <span className="text-xs text-muted">Not assigned</span>
+    );
+  }
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <Avatar src={s.avatar} name={s.name} size="sm" />
+      <span className="min-w-0">
+        <span className="block truncate text-sm text-ink-2">{s.name}</span>
+        {s.status === "on-leave" ? <span className="block truncate text-xs text-warning">On leave</span> : null}
+      </span>
+    </span>
+  );
+}
+
+/** Registration date (Core demographic views, where there's no appointment diary). */
+export function RegisteredLine({ patient, className }: { patient: RegistryPatient; className?: string }) {
+  return (
+    <div className={cn("min-w-0", className)}>
+      <p className="whitespace-nowrap text-sm text-ink-2">{formatDate(patient.registeredAt, { day: "numeric", month: "short", year: "numeric" })}</p>
+      <p className="truncate text-xs text-muted">{patient.local ? `By ${patient.local.registeredBy}` : patient.intakeComplete ? "Intake complete" : "Intake pending"}</p>
+    </div>
   );
 }
 

@@ -16,12 +16,12 @@ import { BodyConditionCard } from "@/components/viz/condition";
 import { OrganImage } from "@/components/viz/organ";
 import { FocalCard, PortalHeader, Reveal } from "../ui";
 import { usePortalStore } from "../store";
-import { IMAGING, LAB_RESULTS, RECORD_YEARS, RELEASED_PAST, SYSTEMS, releasedByType } from "../record";
+import { IMAGING, LAB_RESULTS, PRIMARY_DOCTOR, RECORD_YEARS, RELEASED_PAST, SYSTEMS, releasedByType } from "../record";
 import { dayLabel, shortDate } from "../time";
 import { PENDING, ROWS, rowFromEvent, type RecordRow } from "./data";
 import { ImagingSection, LabsSection, SummariesSection } from "./sections";
 import { RecordSheet } from "./record-sheet";
-import { UploadModal, formatSize } from "./upload-modal";
+import { MAX_UPLOAD_MB, UploadModal, formatSize } from "./upload-modal";
 import { AccessRequestCard } from "./access-form";
 import { recordsStore, removeUpload } from "./store";
 
@@ -63,7 +63,7 @@ export function RecordsView() {
 
       <PortalHeader
         title="My records"
-        description={`${pluralize(RELEASED_PAST.length, "record")} released to you${RECORD_YEARS.length > 1 ? ` across ${RECORD_YEARS.at(-1)}–${RECORD_YEARS[0]}` : ""}, grouped by body system.${PENDING.length ? ` ${pluralize(PENDING.length, "new report")} with your care team for review.` : ""}`}
+        description={`${pluralize(RELEASED_PAST.length, "record")} released to you${RECORD_YEARS.length > 1 ? ` across ${RECORD_YEARS.at(-1)}–${RECORD_YEARS[0]}` : ""}, grouped by body system. You see a note, report or plan once your clinician releases it.${PENDING.length ? ` ${pluralize(PENDING.length, "report")} waiting for review.` : ""}`}
         actions={
           <>
             <Button variant="dark" leading={<FileArrowUp />} onClick={openUpload}>
@@ -129,10 +129,10 @@ export function RecordsView() {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm text-ink">
-                  New {p.event.title.toLowerCase()} · reported {shortDate(p.event.date)}
+                  {p.event.title} · issued {shortDate(p.event.date)}
                 </span>
                 <span className="block text-xs text-muted">
-                  Received {dayLabel(p.event.enteredAt).toLowerCase()} {formatTime(p.event.enteredAt)} · with {p.reviewer?.name ?? "your doctor"} for review. You&apos;ll see the results once they&apos;re released — they&apos;re not shown before then.
+                  Added {dayLabel(p.event.enteredAt).toLowerCase()} {formatTime(p.event.enteredAt)} · with {p.reviewer?.name ?? "your doctor"} for review. The results show here once they&apos;re released to you.
                 </span>
               </span>
               <StatusBadge tone="warning" className="hidden shrink-0 sm:inline-flex">
@@ -241,6 +241,9 @@ function TypeBubbles({ year, onYear, systemId, total }: { year: number; onYear: 
   );
 }
 
+/** Patient uploads go to the clinic's intake queue and are reviewed by the primary doctor (F4). */
+const REVIEWER = PRIMARY_DOCTOR;
+
 function UploadsPanel({ uploads, onUpload }: { uploads: { id: string; title: string; type: string; reportDate: string; uploadedAt: string; fileName: string; fileSize: number; where?: string }[]; onUpload: () => void }) {
   return (
     <section aria-labelledby="rec-uploads" className="flex h-full flex-col gap-2 rounded-card bg-sunken p-2">
@@ -252,9 +255,9 @@ function UploadsPanel({ uploads, onUpload }: { uploads: { id: string; title: str
           <h2 id="rec-uploads" className="truncate text-sm font-medium text-ink">
             My uploads
           </h2>
-          <p className="truncate text-xs text-muted">Reviewed by your care team before they join your record</p>
+          <p className="truncate text-xs text-muted">Matched and reviewed by {REVIEWER?.name ?? "your doctor"} before they join your record</p>
         </div>
-        <Button size="sm" variant="dark" onClick={onUpload}>
+        <Button size="sm" variant="secondary" onClick={onUpload}>
           Upload
         </Button>
       </div>
@@ -269,15 +272,16 @@ function UploadsPanel({ uploads, onUpload }: { uploads: { id: string; title: str
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm text-ink">{u.title}</span>
                   <span className="block text-xs text-muted">
-                    {u.type} · test done {shortDate(`${u.reportDate}T12:00:00+05:30`)} · uploaded {dayLabel(u.uploadedAt).toLowerCase()} {formatTime(u.uploadedAt)}
+                    {u.type} · issued {shortDate(`${u.reportDate}T12:00:00+05:30`)} · uploaded {dayLabel(u.uploadedAt).toLowerCase()} {formatTime(u.uploadedAt)}
                   </span>
                   <span className="block truncate text-xs text-faint">
                     {u.fileName} · {formatSize(u.fileSize)}
                     {u.where ? ` · ${u.where}` : ""}
                   </span>
                   <StatusBadge tone="warning" className="mt-2">
-                    Uploaded · awaiting review
+                    In the intake queue
                   </StatusBadge>
+                  <span className="mt-1 block text-xs text-muted">{REVIEWER?.name ?? "Your doctor"} reviews it before it joins your record — not a result until then.</span>
                 </span>
                 <IconButton label={`Remove ${u.title}`} variant="ghost" size="sm" onClick={() => removeUpload(u.id)}>
                   <Trash size={16} />
@@ -293,8 +297,8 @@ function UploadsPanel({ uploads, onUpload }: { uploads: { id: string; title: str
             <FileArrowUp size={18} />
           </span>
           <p className="text-sm text-ink">No uploads yet</p>
-          <p className="max-w-[40ch] text-xs text-muted">Got a report from another lab or hospital? Upload it with the date of the test — we keep that separate from the upload date.</p>
-          <p className="text-[11px] text-faint">PDF, JPG or PNG · up to 10 MB</p>
+          <p className="max-w-[40ch] text-xs text-muted">Got a report from another lab or hospital? Upload it with the date it was issued — the upload date is recorded separately.</p>
+          <p className="text-[11px] text-faint">PDF, JPG or PNG · up to {MAX_UPLOAD_MB} MB</p>
         </div>
       )}
       <p className="px-2 pb-2 text-[11px] text-muted">Demo: files stay in this browser — nothing is uploaded to the clinic.</p>

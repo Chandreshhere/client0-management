@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { CalendarPlus, ChatCircleDots } from "@phosphor-icons/react";
+import { CalendarPlus } from "@phosphor-icons/react";
 import { formatTime, pluralize } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -16,7 +15,7 @@ import { CancelModal, RescheduleModal } from "./change-modals";
 import { DetailsSheet } from "./details-sheet";
 import { NextAppointmentCard } from "./next-card";
 import { BookWidget, CareTeamList, VisitMonths } from "./overview";
-import { PortalHeader, Reveal, downloadFile } from "../ui";
+import { MessageButton, PortalHeader, Reveal, downloadFile } from "../ui";
 import { usePortalStore } from "../store";
 import { NOW_MS, TODAY_KEY, untilLabel } from "../time";
 
@@ -90,12 +89,7 @@ export function AppointmentsView() {
             <Button variant="dark" onClick={() => openBook()} leading={<CalendarPlus />}>
               Book or request
             </Button>
-            <Button asChild variant="secondary">
-              <Link href="/messages?new=1">
-                <ChatCircleDots />
-                Message the clinic
-              </Link>
-            </Button>
+            <MessageButton />
           </>
         }
       />

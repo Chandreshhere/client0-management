@@ -26,11 +26,12 @@ const ICON: Record<NotificationKind, React.ReactNode> = {
 
 /** Action-first notifications (doc §5G): only events that need someone to do something. */
 export function Notifications() {
-  const { role } = useRole();
+  const { role, has } = useRole();
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"action" | "all">("action");
 
-  const mine = useMemo(() => NOTIFICATIONS.filter((n) => n.roles.includes(role)).sort((a, b) => b.at.localeCompare(a.at)), [role]);
+  // one owner per notification, and only what the plan includes (no no-show alerts on Core, etc.)
+  const mine = useMemo(() => NOTIFICATIONS.filter((n) => n.roles.includes(role) && (!n.feature || has(n.feature))).sort((a, b) => b.at.localeCompare(a.at)), [role, has]);
   const isRead = (id: string, read: boolean) => read || readIds.has(id);
   const unread = mine.filter((n) => !isRead(n.id, n.read)).length;
   const list = tab === "action" ? mine.filter((n) => !isRead(n.id, n.read)) : mine;

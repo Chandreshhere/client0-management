@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps } from "react";
-import { ArrowsLeftRight, CalendarCheck, CalendarPlus, CaretDown, CheckCircle, CloudCheck, Info, LockSimple, NotePencil, PaperPlaneTilt, PencilSimple, Plus, Trash, WarningCircle } from "@phosphor-icons/react";
+import { ArrowsLeftRight, CalendarCheck, CalendarPlus, CaretDown, CheckCircle, CloudCheck, Info, LockSimple, NotePencil, PaperPlaneTilt, PencilSimple, Plus, Printer, Trash, WarningCircle } from "@phosphor-icons/react";
 import type { Patient } from "@/data/types";
 import { staffById } from "@/data/staff";
 import { usePlan, useRole } from "@/components/shell/role-context";
-import { LockBadge, priceLine } from "@/components/shell/plan-switcher";
 import { Button, Spinner } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
@@ -25,7 +24,7 @@ import type { LocalReferral, NextReview, SaveState, useDraftBook } from "./use-d
 type DraftsApi = ReturnType<typeof useDraftBook>;
 type Dialogs = null | "referral" | "review" | "instructions";
 
-const DISCIPLINE: Record<LocalReferral["to"], string> = { nutrition: "Nutrition", movement: "Movement", medical: "Medical" };
+const DISCIPLINE: Record<LocalReferral["to"], string> = { nutrition: "Nutrition", movement: "Yoga", medical: "Medical" };
 
 /** Right side of the split view: today's structured note. */
 export function NoteEditor({ patient, api, focusToken }: { patient: Patient; api: DraftsApi; focusToken: number }) {
@@ -88,7 +87,13 @@ export function NoteEditor({ patient, api, focusToken }: { patient: Patient; api
 
   const createReferral = (r: LocalReferral) => {
     api.updateActive((x) => ({ ...x, referrals: [...x.referrals, r] }));
-    toast({ title: `Referral to ${staffById(r.toId)?.name ?? "the team"} recorded`, description: "Saved with this draft in this browser — the recipient wasn't notified. In production it starts at “Requested”.", tone: "success" });
+    toast({ title: `Assignment to ${staffById(r.toId)?.name ?? "the team"} added to this note`, description: "Saved with this draft in this browser. It reaches their pending list as “assigned” and shows as seen once they open it.", tone: "success" });
+  };
+
+  // Core and Clinic: the patient gets a printed visit summary (no patient app).
+  const printSummary = () => {
+    toast({ title: "Printing the visit summary", description: "Use the print dialog to print on the letterhead or save as PDF. This prototype prints the current page." });
+    window.setTimeout(() => window.print(), 300);
   };
 
   const schedule = (r: NextReview) => {
@@ -99,7 +104,7 @@ export function NoteEditor({ patient, api, focusToken }: { patient: Patient; api
 
   const publish = (text: string) => {
     api.updateActive((x) => ({ ...x, instructions: { text, at: new Date().toISOString(), by: user.name } }));
-    toast({ title: "Instructions marked as published", description: "Recorded in this browser session. The patient portal isn't connected in this prototype, so nothing was sent.", tone: "success" });
+    toast({ title: "Released to the patient app", description: "Recorded in this browser session. Releasing is a separate step from signing; nothing was sent in this prototype.", tone: "success" });
   };
 
   const instructionsSeed = d.instructions?.text ?? [d.sections.advice.trim(), d.sections.followUp.trim()].filter(Boolean).join("\n\n");
@@ -167,34 +172,30 @@ export function NoteEditor({ patient, api, focusToken }: { patient: Patient; api
       <section aria-label="From this consultation" className="mx-6 mt-6 rounded-inner bg-canvas p-4">
         <p className="text-xs text-muted">From this consultation</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {has("referrals") ? (
-            <Button variant="secondary" size="sm" leading={<ArrowsLeftRight />} onClick={() => setDialog("referral")}>
-              Create referral
+          <Button variant="secondary" size="sm" leading={<ArrowsLeftRight />} onClick={() => setDialog("referral")}>
+            Assign to nutrition or yoga
+          </Button>
+          <Button variant="secondary" size="sm" leading={<CalendarPlus />} onClick={() => setDialog("review")}>
+            Set next review
+          </Button>
+          {has("release") ? (
+            <Button variant="secondary" size="sm" leading={<PaperPlaneTilt />} onClick={() => setDialog("instructions")}>
+              {d.instructions ? "Update what the patient sees" : "Release to patient"}
             </Button>
           ) : (
-            <Tip label={`Referrals are on the Team plan · ${priceLine("team")}`}>
-              <span tabIndex={0} className="inline-flex rounded-full">
-                <Button variant="secondary" size="sm" disabled leading={<ArrowsLeftRight />} trailing={<LockBadge />}>
-                  Create referral
-                </Button>
-              </span>
-            </Tip>
+            <Button variant="secondary" size="sm" leading={<Printer />} onClick={printSummary}>
+              Print visit summary
+            </Button>
           )}
-          <Button variant="secondary" size="sm" leading={<CalendarPlus />} onClick={() => setDialog("review")}>
-            Schedule next review
-          </Button>
-          <Button variant="secondary" size="sm" leading={<PaperPlaneTilt />} trailing={has("portal") ? undefined : <LockBadge />} onClick={() => setDialog("instructions")}>
-            {d.instructions ? "Update patient instructions" : "Publish patient instructions"}
-          </Button>
         </div>
         {d.referrals.length || d.nextReview || d.instructions ? (
           <ul className="mt-4 flex flex-col gap-2">
             {d.referrals.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
                 <ArrowsLeftRight size={14} className="text-muted" aria-hidden="true" />
-                Referral to {staffById(r.toId)?.name} · {DISCIPLINE[r.to]}
+                Assigned to {staffById(r.toId)?.name} · {DISCIPLINE[r.to]}
                 {r.priority !== "normal" ? ` · ${r.priority}` : ""}
-                <StatusBadge tone="neutral">Requested · not sent</StatusBadge>
+                <StatusBadge tone="neutral">Assigned · sent when the note is signed</StatusBadge>
               </li>
             ))}
             {d.nextReview ? (
@@ -207,13 +208,13 @@ export function NoteEditor({ patient, api, focusToken }: { patient: Patient; api
             {d.instructions ? (
               <li className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
                 <PaperPlaneTilt size={14} className="text-muted" aria-hidden="true" />
-                Patient instructions published in this session
+                What the patient sees, released in this session
                 <StatusBadge tone="info">Released · local only</StatusBadge>
               </li>
             ) : null}
           </ul>
         ) : (
-          <p className="mt-3 text-xs text-muted">Referrals, review requests and patient instructions made here stay attached to this draft.</p>
+          <p className="mt-3 text-xs text-muted">Assignments, the next review and {has("release") ? "what you release to the patient" : "the printed visit summary"} stay attached to this draft.</p>
         )}
       </section>
 

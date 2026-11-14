@@ -3,7 +3,7 @@ import { TasksView } from "@/features/tasks/tasks-view";
 
 export const metadata: Metadata = { title: "Tasks" };
 
-/** Care-team tasks: list grouped by due date, board by status, detail drawer, ?new=1 modal. */
+/** Pending items per role (one owner each): Mine · Raised by me · Whole clinic; detail drawer, ?new=1 modal. */
 export default function TasksPage() {
   return <TasksView />;
 }

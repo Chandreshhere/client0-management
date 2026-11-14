@@ -28,8 +28,8 @@ export function CtaBand({ title = "Want to see one patient move from consultatio
             {title}
           </h2>
           <p className="mt-4 max-w-[52ch] text-base leading-relaxed text-white">
-            The live demo opens a fictional clinic full of synthetic patients. Pick a plan and a role, then follow Kabir&apos;s record through every discipline — no sign-up, nothing
-            sent anywhere.
+            The live demo opens a fictional clinic full of synthetic patients. Pick a demo login — one plan, one role — then follow Kabir&apos;s record through every
+            discipline. No sign-up, nothing sent anywhere.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Magnetic>

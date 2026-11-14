@@ -1,5 +1,8 @@
+import { ADDONS, PLANS, yearlyCost } from "@/data/plans";
 import { PlanCards } from "@/features/pricing/plan-cards";
+import { EXAMPLE_PRACTITIONERS } from "@/features/pricing/model";
 import { cn } from "@/lib/cn";
+import { formatINR } from "@/lib/format";
 import { ArrowLink } from "./cta";
 import { LANDING_FAQ, LANDING_FAQ_TOPICS } from "./faq-data";
 import { FaqTopics } from "./faq-topics";
@@ -15,11 +18,34 @@ export function PricingSection() {
       <SectionIntro
         id="pricing-title"
         eyebrow="Pricing"
-        title="How much does clinic management software cost for a team of one to ten?"
-        lead="Three plans, priced in rupees: a one-time setup fee, then a monthly fee — flat for a single practitioner, per user for a team. Every plan can be explored in the live demo first."
+        title="How much does clinic management software cost per practitioner?"
+        lead={`${PLANS.map((p) => `${p.name} ${formatINR(p.price.annual)}`).join(", ")} per practitioner a month, billed annually and before GST. Admin and reception seats are free up to each plan's limit, onboarding is a one-time fee, and each plan includes everything in the one before it.`}
         aside={<ArrowLink href="/pricing">Compare every feature and work out your cost</ArrowLink>}
       />
       <PlanCards className="mt-12 md:mt-16" />
+      <div className={cn("mt-4 grid grid-cols-1 gap-4 md:grid-cols-2", s.reveal)}>
+        <div className="rounded-card bg-sunken p-6">
+          <p className="text-xs text-muted">Example · {EXAMPLE_PRACTITIONERS} practitioners, billed annually</p>
+          <p className="mt-2 text-base text-ink">
+            {PLANS.map((p, i) => (
+              <span key={p.id}>
+                {i > 0 ? " · " : ""}
+                <span className="whitespace-nowrap">
+                  {p.name} <span className="tabular">{formatINR(yearlyCost(p, EXAMPLE_PRACTITIONERS))}</span>/yr
+                </span>
+              </span>
+            ))}
+          </p>
+          <p className="mt-1 text-sm text-muted">Plus the one-time onboarding fee.</p>
+        </div>
+        <div className="rounded-card bg-sunken p-6">
+          <p className="text-xs text-muted">Add-ons · any plan, priced separately</p>
+          <p className="mt-2 text-base text-ink">{ADDONS.map((a) => a.label).join(" · ")}</p>
+          <ArrowLink href="/pricing#add-ons" className="mt-2">
+            See how add-ons are priced
+          </ArrowLink>
+        </div>
+      </div>
     </Section>
   );
 }

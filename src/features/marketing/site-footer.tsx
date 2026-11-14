@@ -10,7 +10,7 @@ const COLUMNS = [
       { href: "/#anatomy", label: "Anatomy by condition" },
       { href: "/#product", label: "Workspaces" },
       { href: "/#journey", label: "Care journey" },
-      { href: "/#workflows", label: "Referral workflow" },
+      { href: "/#workflows", label: "Assignments" },
       { href: "/#modules", label: "Modules" },
       { href: "/#india", label: "India-first details" },
     ],
@@ -20,7 +20,8 @@ const COLUMNS = [
     links: [
       { href: "/pricing", label: "Pricing" },
       { href: "/pricing#calculator", label: "Cost calculator" },
-      { href: "/pricing#compare", label: "Compare features" },
+      { href: "/pricing#compare", label: "Compare plans" },
+      { href: "/pricing#add-ons", label: "Add-ons" },
       { href: "/#faq", label: "FAQ" },
     ],
   },

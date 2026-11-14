@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { MagnifyingGlass, UserPlus, Warning } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/input";
+import { Checkbox, Field, Input, Select } from "@/components/ui/input";
+import { useRole } from "@/components/shell/role-context";
 import { useToast } from "@/components/ui/toast";
 import { useSchedule, type Person } from "./store";
 
@@ -116,7 +118,7 @@ export function PatientPicker({
           const p = registerPatient(input);
           setRegistering(false);
           pick(p);
-          toast({ title: `${p.name} registered`, description: "Saved in this browser session only — no record was created on a server.", tone: "success" });
+          toast({ title: `${p.name} registered · ${p.clinicNo}`, description: "Consent recorded. Complete date of birth, address and emergency contact at the desk.", tone: "success" });
         }}
       />
     );
@@ -207,14 +209,27 @@ function RegisterForm({
   onUseExisting: (p: Person) => void;
 }) {
   const { allPeople } = useSchedule();
+  const { user } = useRole();
   const [name, setName] = useState(initialName.trim());
   const [phone, setPhone] = useState("");
   const [age, setAge] = useState("");
   const [sex, setSex] = useState<string>("");
-  const [errors, setErrors] = useState<{ name?: string; phone?: string; age?: string }>({});
+  const [consent, setConsent] = useState(false);
+  const [errors, setErrors] = useState<{ name?: string; phone?: string; age?: string; consent?: string }>({});
 
   const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
-  const duplicate = name.trim().length > 3 ? allPeople().find((p) => norm(p.name) === norm(name)) : undefined;
+  // Duplicate check by phone first (spec F2): the registry shows masked numbers ("+91 98•• ••• 214"),
+  // so the visible digits are compared. A match is shown before saving and never merged here.
+  const digits = phone.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+  const byPhone =
+    digits.length === 10
+      ? allPeople().find((p) => {
+          const m = p.phone.match(/\+91\s*(\d{2})\D+(\d{3})\s*$/);
+          return !!m && m[1] === digits.slice(0, 2) && m[2] === digits.slice(7);
+        })
+      : undefined;
+  const byName = name.trim().length > 3 ? allPeople().find((p) => norm(p.name) === norm(name)) : undefined;
+  const duplicate = byPhone ?? byName;
 
   const submit = () => {
     const next: typeof errors = {};
@@ -223,6 +238,7 @@ function RegisterForm({
     if (digits.length !== 10) next.phone = "Enter a 10-digit mobile number.";
     const ageNum = age ? Number(age) : null;
     if (ageNum !== null && (!Number.isInteger(ageNum) || ageNum < 0 || ageNum > 120)) next.age = "Age must be between 0 and 120.";
+    if (!consent) next.consent = "Record the patient's consent to create a record.";
     setErrors(next);
     if (Object.keys(next).length) return;
     const masked = `+91 ${digits.slice(0, 2)}•• ••• ${digits.slice(7)}`;
@@ -233,7 +249,9 @@ function RegisterForm({
     <div className="rounded-inner bg-sunken p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium text-ink">Register a new patient</p>
-        <p className="text-xs text-muted">Quick registration · details can be completed at check-in</p>
+        <Link href="/patients?new=1" className="text-xs text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">
+          Full registration form
+        </Link>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Full name" error={errors.name}>
@@ -265,13 +283,20 @@ function RegisterForm({
         <div role="status" className="mt-4 flex flex-wrap items-center gap-3 rounded-[12px] bg-warning-soft px-3 py-2 text-sm text-warning">
           <Warning size={18} aria-hidden="true" className="shrink-0" />
           <span className="min-w-0 flex-1">
-            Possible duplicate: <span className="font-medium">{duplicate.name}</span> (<span className="font-mono">{duplicate.clinicNo}</span>) is already registered.
+            Possible existing record{duplicate === byPhone ? " with the same mobile" : ""}: <span className="font-medium">{duplicate.name}</span> (<span className="font-mono">{duplicate.clinicNo}</span>). Admin reviews and merges duplicates — never automatically.
           </span>
           <Button size="sm" variant="secondary" onClick={() => onUseExisting(duplicate)}>
             Use existing record
           </Button>
         </div>
       ) : null}
+      <label className="mt-4 flex items-start gap-3 rounded-[12px] bg-surface p-3 text-sm">
+        <Checkbox checked={consent} onCheckedChange={(v) => setConsent(v === true)} className="mt-0.5" aria-invalid={errors.consent ? true : undefined} />
+        <span className="min-w-0">
+          <span className="block text-ink">The patient consents to the clinic keeping this record (DPDP)</span>
+          <span className={cn("block text-xs", errors.consent ? "text-danger" : "text-muted")}>{errors.consent ?? `Recorded by ${user.name} today.`}</span>
+        </span>
+      </label>
       <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onCancel}>
           Back to search

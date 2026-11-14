@@ -10,12 +10,12 @@ import { snappy, spring } from "@/lib/motion";
 import { BRANCHES } from "@/data/staff";
 import { PATIENTS } from "@/data/patients";
 import { useRole } from "./role-context";
-import { NAV, type NavItem } from "./nav-config";
+import { navFor, type NavItem } from "./nav-config";
 import { Tip } from "@/components/ui/tooltip";
 import { Avatar } from "@/components/ui/avatar";
 import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownTrigger } from "@/components/ui/dropdown";
 import { Logo } from "./logo";
-import { PlanSwitcher, LockBadge } from "./plan-switcher";
+import { DemoLoginCard, LockBadge } from "./plan-switcher";
 import { minPlanFor } from "@/data/plans";
 
 export const SIDEBAR_EXPANDED = 248;
@@ -58,7 +58,7 @@ export function Sidebar() {
         </div>
         <NavBody collapsed={collapsed} />
         <div className={cn("shrink-0 border-t border-line p-3", collapsed && "flex flex-col items-center gap-2 px-2")}>
-          {collapsed ? <PlanSwitcher collapsed /> : null}
+          {collapsed ? <DemoLoginCard collapsed /> : null}
           {collapsed ? (
             <Tip label="Expand sidebar" shortcut="⌘B" side="right">
               <button
@@ -73,7 +73,7 @@ export function Sidebar() {
             </Tip>
           ) : (
             <div className="flex flex-col gap-2">
-              <PlanSwitcher collapsed={false} />
+              <DemoLoginCard collapsed={false} />
               <p className="px-1 text-[11px] leading-snug text-muted">Prototype · synthetic data, no backend.</p>
             </div>
           )}
@@ -87,7 +87,8 @@ export function Sidebar() {
 export function NavBody({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const { role, has } = useRole();
-  const sections = NAV[role];
+  // only what the plan includes (spec rule 7) — nothing locked in the menu
+  const sections = navFor(role, has);
   const recent = role === "patient" ? [] : PATIENTS.filter((p) => ["p-kabir", "p-aditi", "p-arun"].includes(p.id));
 
   // On short screens the nav scrolls (scrollbar hidden): fade its bottom edge while more items

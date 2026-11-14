@@ -5,7 +5,6 @@ out
 next-env.d.ts
 .DS_Store
 ._*
-.env*
 !.env.example
 
 # internal product brief — kept local (repository is public)
@@ -15,3 +14,4 @@ next-env.d.ts
 
 # Vercel CLI link
 .vercel
+config.bat

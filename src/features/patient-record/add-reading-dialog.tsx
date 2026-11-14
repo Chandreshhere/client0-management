@@ -32,6 +32,7 @@ export function AddReadingDialog({
   open,
   onOpenChange,
   selfOnly,
+  homeReadings = true,
   patient,
   measures,
   initialKey,
@@ -39,6 +40,8 @@ export function AddReadingDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   selfOnly: boolean;
+  /** false on Core and Clinic: home (self-reported) readings need the patient app */
+  homeReadings?: boolean;
   patient: Patient;
   measures: VitalMeasure[];
   initialKey?: string;
@@ -216,6 +219,7 @@ export function AddReadingDialog({
             </Field>
           </div>
 
+          {homeReadings ? (
           <div className="flex flex-col gap-2">
             <span className="text-sm text-ink" id="reading-source-label">
               Source
@@ -240,6 +244,7 @@ export function AddReadingDialog({
                   : "A clinic measurement you took or witnessed."}
             </p>
           </div>
+          ) : null}
           <button type="submit" className="sr-only">
             Add reading
           </button>

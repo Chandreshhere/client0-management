@@ -9,7 +9,7 @@ import s from "./motion.module.css";
 /**
  * India-first details, stated honestly: what the prototype shows today versus what is planned.
  * Wording follows the product brief (doc §7): ABHA is voluntary and kept separate from the clinic
- * number; ABDM is a later workstream; DPDP obligations depend on the phased commencement.
+ * number; ABDM record sharing is an add-on (any plan); DPDP obligations depend on the phased commencement.
  */
 const kabir = patientById("p-kabir")!;
 
@@ -37,14 +37,14 @@ const NOTES: Note[] = [
   },
   {
     icon: <UserCheck />,
-    title: "Consent and preferences in the portal",
-    body: "Patients set their communication preferences and can request access to, or correction of, their record from the patient portal.",
+    title: "DPDP consent at registration, on every plan",
+    body: "Consent is recorded when a patient is registered, with the date and who recorded it — never behind a higher plan. On Pro, patients also manage their preferences in the patient app.",
     status: "prototype",
   },
   {
     icon: <ShareNetwork />,
     title: "ABDM integration",
-    body: "Planned as its own workstream on ABDM's published FHIR R4 profiles, through the official onboarding process. Record sharing will be consent-based.",
+    body: "An add-on with any plan, priced per clinic: consent-based record sharing via ABHA, built on ABDM's published FHIR R4 profiles through the official onboarding process. Not part of this prototype.",
     status: "roadmap",
   },
   {
@@ -68,7 +68,7 @@ export function IndiaFirst() {
         id="india-title"
         eyebrow="India-first"
         title="Will it handle ABHA, consent and India's data-protection rules?"
-        lead="Partly today; the rest is on the roadmap, and each item below says which. Carelane is planned India-first: rupee pricing, the clinic's own patient number kept apart from ABHA, and consent handled in the patient portal."
+        lead="Partly today; the rest is on the roadmap, and each item below says which. Carelane is planned India-first: rupee pricing, the clinic's own patient number kept apart from ABHA, and DPDP consent recorded at registration on every plan."
       />
       <ul className="mt-12 grid grid-cols-1 gap-4 md:mt-16 md:grid-cols-2 lg:grid-cols-3">
         {NOTES.map((n) => (

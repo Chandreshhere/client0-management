@@ -147,10 +147,21 @@ function generatedMeasures(patientId: string, readings: AddedReading[]): VitalMe
   });
 }
 
-export function vitalMeasures(patientId: string, readings: AddedReading[]): VitalMeasure[] {
-  if (isFeaturedPatient(patientId)) return kabirMeasures(readings);
-  if (!recordOf(patientId)) return [];
-  return generatedMeasures(patientId, readings);
+export function vitalMeasures(patientId: string, readings: AddedReading[], selfReport = true): VitalMeasure[] {
+  const list = isFeaturedPatient(patientId) ? kabirMeasures(readings) : recordOf(patientId) ? generatedMeasures(patientId, readings) : [];
+  return selfReport ? list : list.map(clinicOnly).filter((m) => m.points.length > 0);
+}
+
+/**
+ * Home readings need the patient app (Pro, spec F14). On Core and Clinic only clinic and lab
+ * values exist, so self-reported points are dropped and the latest status is recomputed.
+ */
+function clinicOnly(m: VitalMeasure): VitalMeasure {
+  const points = m.points.filter((p) => !p.self);
+  if (points.length === m.points.length) return m;
+  const latest = points[points.length - 1];
+  const status: VitalMeasure["status"] = m.twoValues ? (latest ? (latest.v >= 130 || (latest.v2 ?? 0) >= 80 ? "above" : "within") : "none") : statusOf(latest?.v, m.range?.low, m.range?.high);
+  return { ...m, points, source: m.lab ? m.source : "Clinic", status };
 }
 
 export const measureValueText = (m: VitalMeasure, p: MeasurePoint) => (m.twoValues ? `${p.v}/${p.v2 ?? "—"}` : p.v.toFixed(m.decimals));

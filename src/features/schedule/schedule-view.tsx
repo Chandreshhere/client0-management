@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpRight, CalendarBlank, CalendarPlus, EyeSlash, Info, Warning } from "@phosphor-icons/react";
+import { CalendarBlank, CalendarPlus, EyeSlash, Info, Warning } from "@phosphor-icons/react";
 import { DISCIPLINE_LABEL } from "@/data/appointments";
 import { ChipGroup } from "@/components/viz/cards";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,7 @@ import { Switch } from "@/components/ui/input";
 import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
-import { usePlan, useRole } from "@/components/shell/role-context";
+import { useRole } from "@/components/shell/role-context";
 import { spring } from "@/lib/motion";
 import { DAY_END, DAY_START, DIARY_FROM, DIARY_TO, LEAVE, LUNCH, NOW_ISO, NOW_MIN, PRACTITIONERS, TODAY_KEY } from "./data";
 import { DiaryOverview, describeEvent } from "./diary-overview";
@@ -34,7 +33,9 @@ import {
   type Booking,
   type DiaryEvent,
 } from "./engine";
+import { scheduleAccess, serviceText } from "./access";
 import { Agenda } from "./agenda";
+import { CheckoutModal } from "./checkout-modal";
 import { CancelModal, RescheduleModal } from "./booking-modals";
 import { EventDetails, type EventAction } from "./event-details";
 import { NewAppointmentModal, type BookingPrefill } from "./new-appointment-modal";
@@ -64,8 +65,9 @@ export function ScheduleView() {
 function Diary() {
   const sp = useSearchParams();
   const router = useRouter();
-  const { user } = useRole();
-  const { has } = usePlan();
+  const { user, role, has } = useRole();
+  const access = scheduleAccess(role);
+  const multiBranch = has("branches");
   const { toast } = useToast();
   const { events, doubleIds, recentIds, privacy, setPrivacy, person, checkIn, patchBooking, restoreBooking, occupants, classSeats } = useSchedule();
 
@@ -80,14 +82,14 @@ function Diary() {
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [cancelId, setCancelId] = useState<string | null>(null);
+  const [checkoutId, setCheckoutId] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [newSession, setNewSession] = useState(0);
   const [prefill, setPrefill] = useState<BookingPrefill>({});
   const [scrollTo, setScrollTo] = useState<{ min: number; n: number; lead?: number } | null>(null);
   const scrollSeq = useRef(0);
 
-  const multi = has("multi-role");
-  const allowed = useMemo(() => (multi ? PRACTITIONERS : PRACTITIONERS.filter((p) => p.id === user.id)), [multi, user.id]);
+  const allowed = PRACTITIONERS;
   const selfId = PRACTITIONERS.some((p) => p.id === user.id) ? user.id : undefined;
 
   // ---------------------------------------------------------------- new appointment (?new=1)
@@ -99,7 +101,7 @@ function Diary() {
     setNewOpen(true);
   }, []);
 
-  const wantsNew = sp.get("new") === "1";
+  const wantsNew = sp.get("new") === "1" && access.canBook;
   useEffect(() => {
     if (!wantsNew) return;
     const pf: BookingPrefill = {};
@@ -228,9 +230,9 @@ function Diary() {
   const subOf = useCallback(
     (ev: DiaryEvent) => {
       if (ev.cls) return `${ev.cls.enrolled.filter((e) => e.attendance !== "cancelled").length} of ${ev.cls.capacity} enrolled`;
-      return privacy ? undefined : ev.booking?.service;
+      return privacy || !ev.booking ? undefined : serviceText(ev.booking.service, access.clinical);
     },
-    [privacy],
+    [privacy, access.clinical],
   );
 
   // ---------------------------------------------------------------- actions
@@ -246,7 +248,7 @@ function Diary() {
           const token = checkIn(b.id, has("queue"));
           toast({
             title: `${name} checked in${token ? ` · token ${token}` : ""}`,
-            description: has("queue") ? "Added to the front-desk queue. Recorded in this browser session — no arrival alert was sent." : "Recorded in this browser session. The token queue is part of the Team plan.",
+            description: "Added to Arrived on the check-in board.",
             tone: "success",
             action: undo(prev),
           });
@@ -254,24 +256,25 @@ function Diary() {
         }
         case "start": {
           const prev = patchBooking(b.id, { status: "in-session", calledAt: NOW_ISO });
-          toast({ title: `Session started · ${name}`, description: "Status updated in this browser session.", tone: "success", action: undo(prev) });
+          toast({ title: b.staffId === user.id ? `Session started · ${name}` : `${name} sent in`, description: `With ${PRACTITIONERS.find((p) => p.id === b.staffId)?.name ?? "the practitioner"} · ${b.room}.`, tone: "success", action: undo(prev) });
           break;
         }
         case "checkout": {
           const prev = patchBooking(b.id, { status: "checkout" });
-          toast({ title: `${name} sent to checkout`, description: "No payment is taken or recorded in this prototype.", action: undo(prev) });
+          toast({ title: `${name} sent to checkout`, description: "Reception records the payment and books the next visit.", action: undo(prev) });
           break;
         }
-        case "complete": {
-          const prev = patchBooking(b.id, { status: "completed", doneAt: NOW_ISO });
-          toast({ title: "Visit completed", description: "Recorded locally. Book the follow-up before the patient leaves.", tone: "success", action: undo(prev) });
-          break;
-        }
-        case "no-show": {
-          const prev = patchBooking(b.id, { status: "no-show" });
+        case "pay":
           setSelectedId(null);
           setSheetId(null);
-          toast({ title: `${name} marked as no-show`, description: "Recorded locally — no follow-up task or message was created.", tone: "warning", action: undo(prev) });
+          setCheckoutId(b.id);
+          break;
+        case "no-show": {
+          const early = b.status === "arrived" || b.status === "waiting";
+          const prev = patchBooking(b.id, early ? { status: "no-show", cancelReason: "Left without being seen" } : { status: "no-show", cancelReason: "Did not attend" }, early ? "Left without being seen" : "Marked as no-show");
+          setSelectedId(null);
+          setSheetId(null);
+          toast({ title: `${name} marked as ${early ? "left without being seen" : "no-show"}`, description: "Added to the visit history and the activity log. Rebook from the visit.", tone: "warning", action: undo(prev) });
           break;
         }
         case "reschedule":
@@ -290,7 +293,7 @@ function Diary() {
           break;
       }
     },
-    [person, privacy, restoreBooking, checkIn, has, toast, patchBooking, openNew],
+    [person, privacy, restoreBooking, checkIn, has, toast, patchBooking, openNew, user.id],
   );
 
   const renderDetails = useCallback((ev: DiaryEvent) => <EventDetails ev={ev} onAction={(a) => act(ev, a)} />, [act]);
@@ -455,9 +458,11 @@ function Diary() {
               <span>Privacy mode</span>
               <Switch checked={privacy} onCheckedChange={setPrivacy} aria-label="Privacy mode: show initials and hide services" />
             </label>
-            <Button variant="primary" leading={<CalendarPlus />} onClick={() => openNew({ date: date >= TODAY_KEY ? date : TODAY_KEY })}>
-              New appointment
-            </Button>
+            {access.canBook ? (
+              <Button variant="primary" leading={<CalendarPlus />} onClick={() => openNew({ date: date >= TODAY_KEY ? date : TODAY_KEY })}>
+                New appointment
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -504,7 +509,7 @@ function Diary() {
             />
           </div>
           <PractitionerFilter all={PRACTITIONERS} allowedIds={allowed.map((s) => s.id)} selected={staffSel} onChange={setStaffSel} selfId={selfId} hideEmpty={hideEmpty} onHideEmpty={setHideEmpty} />
-          <RoomFilter selected={roomSel} onChange={setRoomSel} />
+          <RoomFilter selected={roomSel} onChange={setRoomSel} multiBranch={multiBranch} />
           {filtersActive ? (
             <Button size="sm" variant="ghost" onClick={clearFilters}>
               Clear
@@ -525,7 +530,7 @@ function Diary() {
           describe={describe}
           onJump={jumpTo}
           onOpenDay={openDay}
-          onBook={bookAt}
+          onBook={access.canBook ? bookAt : undefined}
         />
 
         <AnimatePresence initial={false}>
@@ -559,7 +564,7 @@ function Diary() {
                 selectedId={selectedVisible}
                 recentIds={recentIds}
                 doubleIds={doubleIds}
-                onSlot={onSlot}
+                onSlot={access.canBook ? onSlot : undefined}
                 scrollTo={scrollTo}
                 privacy={privacy}
                 nameOf={nameOf}
@@ -570,7 +575,7 @@ function Diary() {
               empty
             )
           ) : weekRows.length ? (
-            <WeekBoard days={days} rows={weekRows} selectedId={selectedVisible} recentIds={recentIds} doubleIds={doubleIds} onCell={onCell} onOpenChange={setSelectedId} renderDetails={renderDetails} nameOf={nameOf} />
+            <WeekBoard days={days} rows={weekRows} selectedId={selectedVisible} recentIds={recentIds} doubleIds={doubleIds} onCell={access.canBook ? onCell : undefined} onOpenChange={setSelectedId} renderDetails={renderDetails} nameOf={nameOf} />
           ) : (
             empty
           )}
@@ -579,7 +584,11 @@ function Diary() {
         <div className="hidden flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted md:flex">
           <span className="inline-flex items-center gap-1.5">
             <Info size={14} aria-hidden="true" />
-            {view === "day" ? "Click an empty slot to book it · click a booking for details and actions." : "Click a day cell to book · click a booking for details."}
+            {access.canBook
+              ? view === "day"
+                ? "Click an empty slot to book it · click a booking for details and actions."
+                : "Click a day cell to book · click a booking for details."
+              : "Click a booking for details · Reception books and changes appointments."}
           </span>
           {view === "day" ? (
             <span className="inline-flex items-center gap-1.5">
@@ -593,16 +602,10 @@ function Diary() {
               {doubleInView} {doubleInView === 1 ? "booking overlaps" : "bookings overlap"} another for the same practitioner — walk-ins are squeezed in at the current time; new bookings are checked for clashes.
             </span>
           ) : null}
-          {!multi ? (
-            <span className="inline-flex items-center gap-1.5">
-              Starter covers one practitioner&apos;s diary.
-              <Link href="/pricing" className="inline-flex items-center gap-0.5 text-ink underline-offset-2 hover:underline">
-                Compare plans <ArrowUpRight size={12} aria-hidden="true" />
-              </Link>
-            </span>
-          ) : null}
         </div>
       </div>
+
+      <CheckoutModal bookingId={checkoutId} onClose={() => setCheckoutId(null)} />
 
       <NewAppointmentModal open={newOpen} session={newSession} prefill={prefill} onOpenChange={(o) => (o ? setNewOpen(true) : closeNew())} onBooked={onBooked} />
 
@@ -615,7 +618,7 @@ function Diary() {
           const t = minOf(next.start);
           toast({
             title: `Moved to ${shortDay(d)}, ${rangeLabel(t, t + next.durationMin)}`,
-            description: "Recorded in this browser session. The patient hasn't been notified — messaging isn't connected.",
+            description: "Added to the booking history. Let the patient know by phone.",
             tone: "success",
             action: d !== date ? { label: `Go to ${shortDay(d)}`, onClick: () => setDate(d) } : { label: "Undo", onClick: () => restoreBooking(prev) },
           });
@@ -630,7 +633,7 @@ function Diary() {
           setCancelId(null);
           toast({
             title: "Appointment cancelled",
-            description: offer ? "Recorded locally. Open the waitlist to offer the freed slot — nobody was contacted." : "Recorded locally — no cancellation message was sent.",
+            description: offer ? "Reason kept in the booking history. Offer the freed slot from the waitlist." : "Reason kept in the booking history.",
             tone: "warning",
             action: offer ? { label: "Open waitlist", onClick: () => router.push("/schedule/waitlist") } : { label: "Undo", onClick: () => restoreBooking(prev) },
           });

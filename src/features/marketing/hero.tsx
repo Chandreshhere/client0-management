@@ -42,7 +42,7 @@ export function Hero() {
           </div>
           <div className="lg:col-span-4 lg:pb-2">
             <p className={cn("max-w-[46ch] text-base leading-relaxed text-muted", s.enter)} style={i(1)}>
-              Carelane is clinic management software for outpatient clinics that combine medicine, nutrition and yoga. Referrals, care plans, reports and sessions stay on one
+              Carelane is clinic management software for outpatient clinics that combine medicine, nutrition and yoga. Assignments, care plans, reports and sessions stay on one
               timeline, so everyone can see where a patient&apos;s care stands — and where it stopped.
             </p>
             <div className={cn("mt-6 flex flex-wrap items-center gap-3", s.enter)} style={i(2)}>

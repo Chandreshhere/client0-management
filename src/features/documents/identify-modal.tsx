@@ -16,12 +16,12 @@ import { staffOptions } from "@/features/tasks/people";
 import { RedactedLines } from "@/features/tasks/ui";
 import { TODAY_KEY, addDays, isoAt, shortDay } from "@/features/tasks/time";
 import { DOC_CONTENT, INTAKE_HINTS } from "./data";
-import { DOC_TYPES, SOURCE_ICON, TYPE_ICON, uploadedText } from "./doc-meta";
+import { DOC_TYPES, SOURCE_ICON, SOURCE_SHORT, TYPE_ICON, uploadedText } from "./doc-meta";
 import { contentAccess, patchDocument, type CareDocument } from "./store";
 
 /**
- * Intake routing (doc §2A / §3A): match the patient, classify, assign a reviewer — without the
- * router needing to read the clinical content.
+ * Match an unmatched document to a patient (admin / Reception): confirm the type and date issued;
+ * reports then go to the patient's primary doctor for review. Done without reading the content.
  */
 export function IdentifyModal({ doc, onClose, onRouted }: { doc: CareDocument | null; onClose: () => void; onRouted: (d: CareDocument, status: DocStatus) => void }) {
   const [shown, setShown] = useState<CareDocument | null>(doc);
@@ -48,10 +48,9 @@ function IdentifyBody({ doc, onClose, onRouted }: { doc: CareDocument; onClose: 
   const [due, setDue] = useState(addDays(TODAY_KEY, 1));
   const [errors, setErrors] = useState<{ patient?: string; date?: string; reviewer?: string }>({});
 
-  // Default the reviewer to the matched patient's doctor.
+  // The reviewer is the matched patient's primary doctor.
   useEffect(() => {
-    const doctor = patientById(patientId)?.careTeam.doctor;
-    setReviewerId(doctor && staffById(doctor)?.status !== "on-leave" ? doctor : "s-ananya");
+    setReviewerId(patientById(patientId)?.careTeam.doctor ?? "");
   }, [patientId]);
 
   const q = query.trim().toLowerCase();
@@ -69,7 +68,7 @@ function IdentifyBody({ doc, onClose, onRouted }: { doc: CareDocument; onClose: 
     const next: typeof errors = {};
     if (!patientId) next.patient = "Match the document to a patient first.";
     if (!reportDate) next.date = "Enter the date printed on the report.";
-    else if (reportDate > TODAY_KEY) next.date = "The report date can't be in the future.";
+    else if (reportDate > TODAY_KEY) next.date = "The date issued can't be in the future.";
     if (needsReview && !reviewerId) next.reviewer = "Choose who reviews it.";
     setErrors(next);
     if (Object.keys(next).length) return;
@@ -87,11 +86,8 @@ function IdentifyBody({ doc, onClose, onRouted }: { doc: CareDocument; onClose: 
     const patient = patientById(patientId);
     onRouted(doc, status);
     toast({
-      title: needsReview ? `Routed to ${reviewer?.name} for review` : `Filed to ${patient?.name}'s record`,
-      description:
-        access === "full"
-          ? `Saved in this browser session — ${needsReview ? `${reviewer?.name} wasn't notified` : "nothing was sent"}.`
-          : "Saved in this browser session. You routed it without opening the clinical content.",
+      title: needsReview ? `Matched · sent to ${reviewer?.name} for review` : `Matched · filed to ${patient?.name}'s record`,
+      description: `Saved in this browser session${needsReview ? ` — ${reviewer?.name} wasn't notified` : ""}.`,
       tone: "success",
     });
   };
@@ -101,8 +97,8 @@ function IdentifyBody({ doc, onClose, onRouted }: { doc: CareDocument; onClose: 
 
   return (
     <ModalContent
-      title="Identify & route"
-      description="Match the patient, confirm what it is, and send it to the right reviewer."
+      title={doc.patientId ? "Confirm & file" : "Match to a patient"}
+      description="Find the patient, confirm the type and the date issued. Reports then go to the patient's primary doctor for review."
       size="lg"
       footer={
         <>
@@ -110,7 +106,7 @@ function IdentifyBody({ doc, onClose, onRouted }: { doc: CareDocument; onClose: 
             Cancel
           </Button>
           <Button variant="dark" onClick={submit}>
-            {needsReview ? `Route to ${staffById(reviewerId)?.name ?? "reviewer"}` : "File to record"}
+            {needsReview ? `Match & send to ${staffById(reviewerId)?.name ?? "doctor"}` : "Match & file"}
           </Button>
         </>
       }
@@ -135,7 +131,7 @@ function IdentifyBody({ doc, onClose, onRouted }: { doc: CareDocument; onClose: 
               <dt className="text-muted">Source</dt>
               <dd className="inline-flex items-center gap-1.5 text-ink">
                 <SourceIcon size={14} aria-hidden="true" />
-                {doc.source} · {doc.uploadedBy}
+                {SOURCE_SHORT[doc.source]} · {doc.uploadedBy}
               </dd>
             </div>
           </dl>
@@ -152,7 +148,7 @@ function IdentifyBody({ doc, onClose, onRouted }: { doc: CareDocument; onClose: 
                   <ShieldCheck size={14} className="text-success" aria-hidden="true" />
                   Content hidden
                 </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-muted">You can route this without reading it. Clinical content opens only for the care team.</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted">You see the file name and type only. Clinical content opens for the patient&apos;s care team.</p>
                 <RedactedLines lines={5} className="mt-3" />
               </>
             )}
@@ -226,23 +222,23 @@ function IdentifyBody({ doc, onClose, onRouted }: { doc: CareDocument; onClose: 
             <Field label="Document type">
               {(p) => <Select {...p} value={type} onValueChange={(v) => { setType(v as ClinicalDocument["type"]); if (v === "Consent form") setNeedsReview(false); }} options={DOC_TYPES.map((t) => ({ value: t, label: t }))} />}
             </Field>
-            <Field label="Report date" error={errors.date} hint="Printed on the report — not the upload date.">
+            <Field label="Date issued" error={errors.date} hint="Printed on the report — not the upload date.">
               {(p) => <Input {...p} type="date" max={TODAY_KEY} value={reportDate} onChange={(e) => { setReportDate(e.target.value); setErrors((x) => ({ ...x, date: undefined })); }} />}
             </Field>
           </section>
 
           <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex items-center justify-between gap-4 sm:col-span-2">
-              <h3 className="text-sm text-ink">3 · Route</h3>
+              <h3 className="text-sm text-ink">3 · Review</h3>
               <label className="flex items-center gap-2 text-sm text-ink-2">
-                Needs clinical review
+                Needs a doctor&apos;s review
                 <Switch checked={needsReview} onCheckedChange={setNeedsReview} aria-label="Needs clinical review" />
               </label>
             </div>
             {needsReview ? (
               <>
-                <Field label="Reviewer" error={errors.reviewer}>
-                  {(p) => <Select {...p} value={reviewerId} onValueChange={setReviewerId} options={staffOptions((s) => s.role === "doctor" || s.role === "nutritionist")} />}
+                <Field label="Reviewer" error={errors.reviewer} hint={patientById(patientId)?.careTeam.doctor === reviewerId && reviewerId ? "Primary doctor" : "No primary doctor on record — choose one"}>
+                  {(p) => <Select {...p} value={reviewerId} onValueChange={setReviewerId} placeholder="Choose a doctor" options={staffOptions((s) => s.role === "doctor")} />}
                 </Field>
                 <Field label="Review by" hint={`Due ${shortDay(isoAt(due, "18:00"))}, 18:00`}>
                   {(p) => <Input {...p} type="date" min={TODAY_KEY} value={due} onChange={(e) => setDue(e.target.value)} />}

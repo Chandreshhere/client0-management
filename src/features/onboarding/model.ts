@@ -1,6 +1,7 @@
 import type { Role } from "@/data/types";
 import { BRANCHES, CLINIC, DEMO_USER, staffById } from "@/data/staff";
-import { monthlyCost, planById, type Plan, type PlanId } from "@/data/plans";
+import { PLANS, monthlyCost, planById, type Billing, type Plan, type PlanId } from "@/data/plans";
+import { formatINR } from "@/lib/format";
 
 /**
  * Onboarding wizard model: data shape, defaults, per-step validation, derived costs and
@@ -32,13 +33,18 @@ export const WEEKDAYS: { id: Weekday; short: string; label: string }[] = [
 export const CITIES = ["Bengaluru", "Mumbai", "Delhi NCR", "Chennai", "Hyderabad", "Pune", "Kolkata", "Ahmedabad", "Kochi", "Jaipur", "Chandigarh", "Other city"];
 export const DURATIONS = [15, 20, 30, 45, 60, 90];
 export const MAX_BRANCHES = 5;
-export const MAX_USERS = 10;
+export const MAX_PRACTITIONERS = 30;
+export const MAX_STAFF_SEATS = 12;
+
+/** Roles billed per practitioner; every other staff role uses an admin / reception seat. */
+export const PRACTITIONER_ROLES: StaffRole[] = ["doctor", "nutritionist", "yoga"];
+export const isPractitionerRole = (r: StaffRole | "") => r !== "" && PRACTITIONER_ROLES.includes(r);
 
 export const STEPS = [
   { id: "clinic", label: "Clinic", title: "Tell us about your clinic", description: "The basics we use to suggest services, plans and hours." },
-  { id: "plan", label: "Plan", title: "Choose a plan", description: "Exact prices. No payment is taken in this prototype." },
+  { id: "plan", label: "Plan", title: "Choose a plan", description: "Priced per practitioner, before GST. No payment is taken in this prototype." },
   { id: "services", label: "Services", title: "Services you offer", description: "Suggested from your specialities. Edit names, durations and fees." },
-  { id: "team", label: "Team", title: "Invite your team", description: "Who will work in Carelane, and in which workspace." },
+  { id: "team", label: "Team", title: "Invite your team", description: "Who will work in Carelane, and in which role. Only your plan's roles are offered." },
   { id: "hours", label: "Hours", title: "Working hours", description: "Opening days and times for each branch, including lunch." },
   { id: "review", label: "Review", title: "Review and finish", description: "Check everything once. You can edit any section." },
 ] as const;
@@ -74,7 +80,8 @@ export interface BranchHours {
 
 export interface OnboardingData {
   clinic: { name: string; city: string; branches: number; specialities: Speciality[] };
-  plan: { id: PlanId; users: number };
+  /** practitioners are billed each; staffSeats are admin / reception seats (free up to the plan's limit) */
+  plan: { id: PlanId; practitioners: number; staffSeats: number; billing: Billing };
   services: ServiceRow[];
   /** true once the person edits services; until then suggestions follow the specialities */
   servicesEdited: boolean;
@@ -141,7 +148,7 @@ export function defaultHours(index: number, from?: BranchHours): BranchHours {
 export function freshData(): OnboardingData {
   return {
     clinic: { name: "", city: "", branches: 1, specialities: [] },
-    plan: { id: "team", users: 4 },
+    plan: { id: "clinic", practitioners: 4, staffSeats: 2, billing: "annual" },
     services: [],
     servicesEdited: false,
     owner: { name: "", email: "" },
@@ -186,21 +193,29 @@ export function withSample(d: OnboardingData): OnboardingData {
 
 export function planCosts(d: OnboardingData) {
   const plan = planById(d.plan.id);
-  const monthly = monthlyCost(plan, d.plan.users);
-  return { plan, monthly, setup: plan.setupFee, firstYear: monthly === null ? null : plan.setupFee + monthly * 12 };
+  const { practitioners, staffSeats, billing } = d.plan;
+  const monthly = monthlyCost(plan, practitioners, staffSeats, billing);
+  const extraSeats = Math.max(0, staffSeats - plan.freeSeats);
+  return { plan, billing, practitioners, staffSeats, extraSeats, monthly, yearly: monthly * 12, onboarding: plan.onboardingFee, firstYear: monthly * 12 + plan.onboardingFee };
 }
 
-/** "Clinic covers 5–10 users" */
-export function userRangeText(plan: Plan) {
-  return plan.pricing.kind === "flat" ? `${plan.name} is a single-practitioner workspace` : `${plan.name} covers ${plan.pricing.minUsers}–${plan.pricing.maxUsers} users`;
-}
+/** "Core includes 2 admin / reception seats free, then ₹300 each a month" */
+export const seatRuleText = (plan: Plan) => `${plan.name} includes ${plan.freeSeats} admin / reception seats free, then ${formatINR(plan.extraSeat)} a seat a month`;
 
-/** Seats the person bought on the Plan step (clamped into the plan's range). */
-export function seatLimit(d: OnboardingData) {
+/** People on the team by how they are billed: the owner starts as the plan's first role (Doctor). */
+export function teamCounts(d: OnboardingData) {
   const plan = planById(d.plan.id);
-  if (plan.pricing.kind === "flat") return 1;
-  return Math.max(plan.pricing.minUsers, Math.min(plan.pricing.maxUsers, d.plan.users));
+  const ownerRole = plan.roles[0] as StaffRole;
+  const roles: (StaffRole | "")[] = [ownerRole, ...d.invites.map((i) => i.role)];
+  return {
+    practitioners: roles.filter((r) => isPractitionerRole(r)).length,
+    staff: roles.filter((r) => r !== "" && !isPractitionerRole(r)).length,
+    unassigned: roles.filter((r) => r === "").length,
+  };
 }
+
+/** The cheapest plan that runs more than one branch (multi-branch is a top-plan feature). */
+export const branchPlan = () => PLANS.find((p) => p.branches === "unlimited" || p.branches > 1) ?? PLANS[PLANS.length - 1];
 
 /** Roles staff can be invited into on a plan (patients get portal access from their record). */
 export const invitableRoles = (planId: PlanId): StaffRole[] => planById(planId).roles.filter((r): r is StaffRole => r !== "patient");
@@ -237,10 +252,7 @@ export function validateClinic(d: OnboardingData): Errors {
 
 export function validatePlan(d: OnboardingData): Errors {
   const e: Errors = {};
-  const plan = planById(d.plan.id);
-  if (plan.pricing.kind === "per-user" && monthlyCost(plan, d.plan.users) === null) {
-    e["plan.users"] = `${userRangeText(plan)}. You chose ${d.plan.users}.`;
-  }
+  if (d.plan.practitioners < 1) e["plan.practitioners"] = "Count at least one practitioner.";
   return e;
 }
 
@@ -267,13 +279,9 @@ export function validateTeam(d: OnboardingData): Errors {
   const plan = planById(d.plan.id);
   if (!d.owner.name.trim()) e["owner.name"] = "Enter your name.";
   if (!EMAIL_RE.test(d.owner.email.trim())) e["owner.email"] = d.owner.email.trim() ? "Enter an email like name@clinic.in." : "Enter your email.";
-  if (plan.pricing.kind === "flat") {
-    if (d.invites.length) e["invites"] = "Starter is a 1 practitioner workspace. Remove the invites, or choose Team or Clinic.";
-    return e;
-  }
-  const limit = seatLimit(d);
-  const used = 1 + d.invites.length;
-  if (used > limit) e["invites"] = `${used} people need ${used} seats, but you chose ${limit} on the Plan step.`;
+  const counts = teamCounts(d);
+  if (counts.practitioners > d.plan.practitioners) e["invites.practitioners"] = `${counts.practitioners} practitioners on the team, but the plan is billed for ${d.plan.practitioners}.`;
+  if (counts.staff > d.plan.staffSeats) e["invites.seats"] = `${counts.staff} people need admin / reception seats, but you chose ${d.plan.staffSeats} on the Plan step.`;
   const roles = invitableRoles(d.plan.id);
   const emails = new Set([d.owner.email.trim().toLowerCase()]);
   for (const inv of d.invites) {
@@ -283,7 +291,7 @@ export function validateTeam(d: OnboardingData): Errors {
     else if (!EMAIL_RE.test(mail)) e[`invites.${inv.id}.email`] = "Check this email.";
     else if (emails.has(mail)) e[`invites.${inv.id}.email`] = "Already on the team.";
     else emails.add(mail);
-    if (!inv.role) e[`invites.${inv.id}.role`] = "Choose a workspace.";
+    if (!inv.role) e[`invites.${inv.id}.role`] = "Choose a role.";
     else if (!roles.includes(inv.role)) e[`invites.${inv.id}.role`] = `Not available on ${plan.name}.`;
   }
   return e;
@@ -340,7 +348,13 @@ function normalize(raw: unknown): Progress | null {
       branches: Math.max(1, Math.min(MAX_BRANCHES, num(clinic.branches, 1))),
       specialities: Array.isArray(clinic.specialities) ? specs.filter((s) => (clinic.specialities as unknown[]).includes(s)) : [],
     },
-    plan: { id: oneOf(plan.id, ["starter", "team", "clinic"] as const, base.plan.id), users: Math.max(1, Math.min(MAX_USERS, num(plan.users, base.plan.users))) },
+    plan: {
+      id: oneOf(plan.id, ["core", "clinic", "pro"] as const, base.plan.id),
+      // older saved setups counted "users": read them as practitioners
+      practitioners: Math.max(1, Math.min(MAX_PRACTITIONERS, num(plan.practitioners, num(plan.users, base.plan.practitioners)))),
+      staffSeats: Math.max(0, Math.min(MAX_STAFF_SEATS, num(plan.staffSeats, base.plan.staffSeats))),
+      billing: oneOf(plan.billing, ["annual", "monthly"] as const, base.plan.billing),
+    },
     services: Array.isArray(d.services)
       ? d.services.filter(isRecord).map((s) => ({
           id: str(s.id, uid("svc")),

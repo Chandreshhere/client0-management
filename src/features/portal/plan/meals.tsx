@@ -7,6 +7,7 @@ import { staffById } from "@/data/staff";
 import { ProgressBar } from "@/components/ui/misc";
 import { Panel, SelfReportedBadge } from "../ui";
 import { TODAY_KEY, longDate, shortDate, dayLabel } from "../time";
+import { MEAL_MATCH_LABEL, todaysMeals, type MealLog } from "./store";
 import {
   CURRENT_VERSION,
   LOG_MATCH_LABEL,
@@ -41,8 +42,9 @@ function MealList({ slots, label }: { slots: MealSlot[]; label: string }) {
   );
 }
 
-/** Nutrition plan (published version) as meal slots in plain words, with the day's totals vs targets. */
-export function MealsPanel() {
+/** Nutrition plan (published version) as meal slots in plain words, with the day's totals vs targets and the food log. */
+export function MealsPanel({ meals }: { meals?: Record<string, MealLog> }) {
+  const sessionLogs = todaysMeals(meals).sort((a, b) => b.at.localeCompare(a.at));
   if (!NUTRITION || !MEAL_SLOTS.length) {
     return (
       <Panel icon={<BowlFood />} title="Meal plan" subtitle="No plan published yet">
@@ -137,13 +139,25 @@ export function MealsPanel() {
               </p>
             </section>
           ) : null}
-          {MY_FOOD_LOGS.length ? (
+          {MY_FOOD_LOGS.length || sessionLogs.length ? (
             <section aria-labelledby="meal-logs" className="order-10 rounded-inner bg-surface p-4 sm:order-none">
               <h3 id="meal-logs" className="text-sm text-ink">
-                Your recent food logs
+                Your food log
               </h3>
+              <p className="mt-0.5 text-xs text-muted">Meals you logged against this plan. Self-reported until {author?.name ?? "your nutritionist"} reviews them.</p>
               <ul className="mt-2 flex flex-col divide-y divide-line">
-                {MY_FOOD_LOGS.slice(0, 3).map((l) => {
+                {sessionLogs.map((l) => (
+                  <li key={`local-${l.slotId}`} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3">
+                    <span className="min-w-[12rem] flex-1">
+                      <span className="block text-sm text-ink">{MEAL_SLOTS.find((s) => s.id === l.slotId)?.label ?? "Meal"}</span>
+                      <span className="block text-xs text-muted">
+                        Today · logged {formatTime(l.at)} · {MEAL_MATCH_LABEL[l.match].toLowerCase()}
+                      </span>
+                    </span>
+                    <SelfReportedBadge />
+                  </li>
+                ))}
+                {MY_FOOD_LOGS.slice(0, Math.max(1, 3 - sessionLogs.length)).map((l) => {
                   const slot = MEAL_SLOTS.find((s) => s.id === l.slot);
                   const day = l.eatenAt.slice(0, 10);
                   const office = isOfficeDay(day);

@@ -1,139 +1,161 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent } from "react";
-import { addedFeatures, featureById, PLANS, type Plan, type PlanId } from "@/data/plans";
+import { useEffect } from "react";
+import { ArrowUpRight, Info } from "@phosphor-icons/react";
+import { PLANS, addedFeatures, featureById, minPlanForRole, type Plan, type PlanId } from "@/data/plans";
 import { patientById } from "@/data/patients";
 import { DEMO_USER, staffById } from "@/data/staff";
 import type { Role } from "@/data/types";
 import { Avatar } from "@/components/ui/avatar";
+import { Spinner } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { formatINR } from "@/lib/format";
-import { ExploreDemoButton } from "./explore-demo-button";
-import { basePlanName, priceParts } from "./model";
+import { scrollToElement } from "@/lib/scroll";
+import { useDemoLogin } from "./explore-demo-button";
+import { addedRoles, availabilityLabel, basePlanName, roleLabel } from "./model";
 
 /**
- * The shareable demo entry: the three plans as choice cards. Each card shows price, users, what
- * it unlocks and the roles available on it; picking a role and entering sets cl_plan + cl_role
- * and opens /dashboard. Clinic — the full tour — is the cobalt focal card.
+ * Separate demo logins per plan and role (spec fix 12): three plan columns, each listing its roles
+ * as login buttons. A login sets cl_plan + cl_role and opens /dashboard — each demo is one real
+ * setup, so there is no in-app switcher; "Switch demo login" inside the demo comes back here.
+ * `?plan=` highlights a plan (and scrolls to it on narrow screens); `?role=` highlights that role's
+ * logins and says which plans include it. The visitor's current login, if any, is marked.
  */
-const FOCAL: PlanId = "clinic";
+export type DemoLogin = { plan: PlanId; role: Role };
+
+export const demoPlanAnchor = (id: PlanId) => `demo-plan-${id}`;
 
 function demoPerson(role: Role) {
   const id = DEMO_USER[role].personId;
   const staff = staffById(id);
-  if (staff) return { name: staff.name, avatar: staff.avatar, title: staff.title };
+  if (staff) return { name: staff.name, avatar: staff.avatar };
   const p = patientById(id);
-  return { name: p?.name ?? "Demo patient", avatar: p?.avatar ?? null, title: "Synthetic patient" };
+  return { name: p?.name ?? "Demo patient", avatar: p?.avatar ?? null };
 }
 
-export function DemoChooser() {
-  return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      {PLANS.map((plan) => (
-        <PlanChoice key={plan.id} plan={plan} />
-      ))}
-    </div>
-  );
-}
-
-function PlanChoice({ plan }: { plan: Plan }) {
-  const focal = plan.id === FOCAL;
-  const [role, setRole] = useState<Role>(plan.roles[0]);
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const { amount, unit } = priceParts(plan);
+function addsLine(plan: Plan) {
   const base = basePlanName(plan);
-  const unlocks = (plan.includesPrevious ? addedFeatures(plan) : plan.features).map((f) => featureById(f).label);
-  const who = demoPerson(role);
-  const sub = focal ? "text-white/90" : "text-muted";
+  if (!base) return `${plan.features.length} features: the whole shared patient record, with consent, access rules and the activity log.`;
+  return `Everything in ${base}, plus ${addedFeatures(plan)
+    .map((f) => featureById(f).label.toLowerCase())
+    .join(", ")}.`;
+}
 
-  const onKey = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const keys: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
-    let next: number | null = null;
-    if (e.key in keys) next = (index + keys[e.key] + plan.roles.length) % plan.roles.length;
-    if (e.key === "Home") next = 0;
-    if (e.key === "End") next = plan.roles.length - 1;
-    if (next === null) return;
-    e.preventDefault();
-    setRole(plan.roles[next]);
-    refs.current[next]?.focus();
-  };
+export function DemoChooser({ highlightPlan, highlightRole, current }: { highlightPlan?: PlanId; highlightRole?: Role; current?: DemoLogin }) {
+  const { login, pending, target } = useDemoLogin();
+
+  // Columns stack below lg: bring the requested plan into view (from a locked page's "Open the Pro demo").
+  useEffect(() => {
+    if (!highlightPlan || !window.matchMedia("(max-width: 1023px)").matches) return;
+    const raf = requestAnimationFrame(() => scrollToElement(`#${demoPlanAnchor(highlightPlan)}`, 96, { instant: true }));
+    return () => cancelAnimationFrame(raf);
+  }, [highlightPlan]);
+
+  const rolePlans = highlightRole ? PLANS.filter((p) => p.roles.includes(highlightRole)) : [];
 
   return (
-    <article aria-labelledby={`demo-${plan.id}`} className={cn("flex flex-col rounded-card p-2", focal ? "bg-primary text-white" : "bg-surface text-ink")}>
-      <div className="p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 id={`demo-${plan.id}`} className="text-[26px] font-light leading-none tracking-[-0.02em]">
-            {plan.name}
-          </h2>
-          <span className={cn("inline-flex h-8 items-center rounded-full px-3 text-xs", focal ? "shadow-[inset_0_0_0_1px_rgb(255_255_255/0.4)]" : "text-muted shadow-[inset_0_0_0_1px_var(--color-line-strong)]")}>
-            {plan.roles.length === 1 ? "1 workspace" : `${plan.roles.length} workspaces`}
+    <div className="flex flex-col gap-4">
+      {highlightRole ? (
+        <p className="flex items-start gap-3 rounded-inner bg-primary-soft p-4 text-sm text-primary-ink" role="status">
+          <Info size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
+          <span>
+            {roleLabel(highlightRole)} {rolePlans.length === PLANS.length ? "is on every plan" : `is on ${availabilityLabel(minPlanForRole(highlightRole))}`}. Pick the plan you want
+            to see — each login shows only what that plan includes.
           </span>
-        </div>
-        <p className={cn("mt-4 text-sm", sub)}>
-          <span className="whitespace-nowrap">
-            <span className={cn("text-[22px] font-light tracking-[-0.02em] tabular", focal ? "text-white" : "text-ink")}>{amount}</span> {unit}
-          </span>{" "}
-          · <span className="whitespace-nowrap">{formatINR(plan.setupFee)} setup</span> · <span className="whitespace-nowrap">{plan.usersLabel}</span>
         </p>
+      ) : null}
 
-        <p className="mt-6 text-sm">{base ? `Everything in ${base}, plus` : "Unlocks"}</p>
-        <ul className="mt-2 flex flex-wrap gap-1.5">
-          {unlocks.map((u) => (
-            <li key={u} className={cn("inline-flex h-7 items-center rounded-full px-2.5 text-xs", focal ? "bg-black/15 text-white" : "bg-sunken text-ink-2")}>
-              {u}
-            </li>
-          ))}
-        </ul>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+        {PLANS.map((plan) => {
+          const focus = plan.id === highlightPlan;
+          const added = addedRoles(plan);
+          const base = basePlanName(plan);
+          return (
+            <article
+              key={plan.id}
+              id={demoPlanAnchor(plan.id)}
+              aria-labelledby={`${demoPlanAnchor(plan.id)}-name`}
+              className={cn("flex scroll-mt-28 flex-col rounded-card bg-surface p-2", focus && "shadow-[inset_0_0_0_2px_var(--color-primary)]")}
+            >
+              <header className="p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 id={`${demoPlanAnchor(plan.id)}-name`} className="text-[26px] font-light leading-none tracking-[-0.02em] text-ink">
+                    {plan.name}
+                  </h2>
+                  {focus ? (
+                    <span className="inline-flex h-6 items-center rounded-full bg-primary px-2.5 text-xs text-white">The plan you asked for</span>
+                  ) : current?.plan === plan.id ? (
+                    <span className="inline-flex h-6 items-center rounded-full px-2.5 text-xs text-muted shadow-[inset_0_0_0_1px_var(--color-line-strong)]">Your current plan</span>
+                  ) : null}
+                </div>
+                <p className="mt-3 text-sm text-ink">{plan.positioning}</p>
+                <p className="mt-1 text-sm text-muted">
+                  <span className="whitespace-nowrap">{formatINR(plan.price.annual)} / practitioner / month</span> · billed annually ·{" "}
+                  <span className="whitespace-nowrap">+ {formatINR(plan.onboardingFee)} onboarding</span>
+                </p>
+                <p className="mt-4 text-xs leading-5 text-muted lg:min-h-[60px]">{addsLine(plan)}</p>
+              </header>
+
+              <div className="flex flex-col rounded-inner bg-sunken p-2">
+                <p className="px-2 pb-2 pt-1 text-xs text-muted">
+                  {plan.roles.length} demo logins{base ? ` · adds ${added.map(roleLabel).join(" and ")}` : ""}
+                </p>
+                <ul className="flex flex-col gap-1">
+                  {plan.roles.map((r) => {
+                    const key = `${plan.id}:${r}`;
+                    const busy = pending && target === key;
+                    const isNew = base !== null && added.includes(r);
+                    const isCurrent = current?.plan === plan.id && current.role === r;
+                    const asked = highlightRole === r;
+                    const who = demoPerson(r);
+                    return (
+                      <li key={r}>
+                        <button
+                          type="button"
+                          onClick={() => login(plan.id, r)}
+                          disabled={pending}
+                          aria-busy={busy || undefined}
+                          aria-label={`Log in to the ${plan.name} demo as ${roleLabel(r)} (${who.name})${isCurrent ? ", your current login" : ""}`}
+                          data-testid={`demo-login-${plan.id}-${r}`}
+                          className={cn(
+                            "group/login flex w-full items-center gap-3 rounded-[8px] bg-surface p-3 text-left transition-[background-color,box-shadow] duration-200 hover:bg-canvas disabled:cursor-wait",
+                            (asked || isCurrent) && "shadow-[inset_0_0_0_2px_var(--color-charcoal)]",
+                          )}
+                        >
+                          <Avatar src={who.avatar} name={who.name} size="sm" loading="eager" />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="text-sm text-ink">{roleLabel(r)}</span>
+                              {isNew ? <span className="inline-flex h-5 items-center rounded-full bg-charcoal px-2 text-[11px] text-white">New in {plan.name}</span> : null}
+                              {isCurrent ? <span className="inline-flex h-5 items-center rounded-full bg-sunken px-2 text-[11px] text-ink-2">Current</span> : null}
+                            </span>
+                            <span className="mt-0.5 line-clamp-2 block text-xs text-muted">{DEMO_USER[r].description}</span>
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sunken text-ink transition-colors group-hover/login:bg-charcoal group-hover/login:text-white"
+                          >
+                            {busy ? (
+                              <Spinner />
+                            ) : (
+                              <ArrowUpRight size={16} className="transition-transform duration-500 [transition-timing-function:var(--ease-spring-pop)] group-hover/login:rotate-45" />
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {highlightRole && !plan.roles.includes(highlightRole) ? (
+                  <p className="px-2 pb-1 pt-3 text-xs text-muted">
+                    No {roleLabel(highlightRole)} login on {plan.name} — it starts on {minPlanForRole(highlightRole).name}.
+                  </p>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
       </div>
-
-      <div className={cn("mt-auto flex flex-col gap-4 rounded-inner p-4", focal ? "bg-black/10" : "bg-sunken")}>
-        <div>
-          <p id={`demo-${plan.id}-roles`} className="text-sm">
-            Explore as
-          </p>
-          <div role="radiogroup" aria-labelledby={`demo-${plan.id}-roles`} className="mt-2 flex flex-wrap gap-1.5">
-            {plan.roles.map((r, index) => {
-              const on = r === role;
-              return (
-                <button
-                  key={r}
-                  ref={(el) => {
-                    refs.current[index] = el;
-                  }}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  tabIndex={on ? 0 : -1}
-                  onClick={() => setRole(r)}
-                  onKeyDown={(e) => onKey(e, index)}
-                  className={cn(
-                    "inline-flex h-8 items-center rounded-full px-3 text-xs transition-[background-color,color,box-shadow] duration-200",
-                    focal
-                      ? on
-                        ? "bg-white text-ink"
-                        : "text-white shadow-[inset_0_0_0_1px_rgb(255_255_255/0.4)] hover:bg-white/10"
-                      : on
-                        ? "bg-charcoal text-white"
-                        : "bg-surface text-ink-2 hover:text-ink",
-                  )}
-                >
-                  {DEMO_USER[r].label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className={cn("flex items-center gap-3 rounded-[8px] p-3", focal ? "bg-white/10" : "bg-surface")} aria-live="polite">
-          <Avatar src={who.avatar} name={who.name} size="md" loading="eager" />
-          <div className="min-w-0">
-            <p className="truncate text-sm">You&apos;ll be {who.name}</p>
-            <p className={cn("line-clamp-2 text-xs", sub)}>{DEMO_USER[role].description}</p>
-          </div>
-        </div>
-
-        <ExploreDemoButton planId={plan.id} role={role} tone={focal ? "light" : "dark"} label={`Enter as ${DEMO_USER[role].label.toLowerCase()}`} className="w-full" />
-      </div>
-    </article>
+    </div>
   );
 }

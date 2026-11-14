@@ -1,45 +1,43 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HandCoins, ShieldWarning } from "@phosphor-icons/react";
+import { HandCoins } from "@phosphor-icons/react";
 import { patientById } from "@/data/patients";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, ModalContent } from "@/components/ui/dialog";
-import { Checkbox, Field, Input } from "@/components/ui/input";
+import { Field, Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 import { useRole } from "@/components/shell/role-context";
-import { InfoNote } from "@/features/settings/ui";
+import { AddOnNotice } from "@/components/shell/plan-switcher";
 import { RECORDABLE_METHODS } from "./data";
 import { METHOD_ICON, money } from "./meta";
 import { recordPayment, undoPayment, type InvoiceView } from "./store";
 
 type Method = (typeof RECORDABLE_METHODS)[number];
-type Errors = Partial<Record<"amount" | "proof", string>>;
+type Errors = Partial<Record<"amount", string>>;
 
 /**
- * Manual payment entry. Saved in this browser session only and labelled "Recorded manually —
- * gateway confirmation not connected" wherever it shows; never presented as a gateway success.
+ * Record a payment taken at the desk: cash, UPI or card, with an optional reference. The invoice
+ * counts as paid only once payments covering it are recorded. Online payments and confirmed UPI are
+ * the payment-gateway add-on, never simulated here. Saved in this browser session only.
  */
 export function RecordPaymentModal({ invoice, onClose, onRecorded }: { invoice: InvoiceView | null; onClose: () => void; onRecorded: (invoiceId: string) => void }) {
   const { toast } = useToast();
   const { user } = useRole();
   const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState<Method>("UPI");
+  const [method, setMethod] = useState<Method>("Cash");
   const [reference, setReference] = useState("");
-  const [proof, setProof] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
 
   useEffect(() => {
     if (!invoice) return;
     setAmount(String(invoice.balance));
-    setMethod(invoice.method && invoice.method !== "Package credit" ? invoice.method : "UPI");
+    setMethod("Cash");
     setReference("");
-    setProof(false);
     setErrors({});
   }, [invoice]);
 
-  const failed = invoice?.display === "failed";
   const p = invoice ? patientById(invoice.patientId) : undefined;
 
   function validate(): Errors {
@@ -50,7 +48,6 @@ export function RecordPaymentModal({ invoice, onClose, onRecorded }: { invoice: 
     else if (!/^\d+$/.test(raw)) e.amount = "Use whole rupees, digits only.";
     else if (n <= 0) e.amount = "The amount must be more than ₹0.";
     else if (invoice && n > invoice.balance) e.amount = `That's more than the balance due (${money(invoice.balance)}).`;
-    if (failed && !proof) e.proof = "Confirm you've seen proof of payment before recording it.";
     return e;
   }
 
@@ -62,10 +59,11 @@ export function RecordPaymentModal({ invoice, onClose, onRecorded }: { invoice: 
     const n = Number(amount.trim());
     const id = recordPayment({ invoiceId: invoice.id, amount: n, method, reference, byId: user.id });
     onRecorded(invoice.id);
+    const left = invoice.balance - n;
     toast({
       tone: "success",
-      title: "Payment recorded manually",
-      description: `${money(n)} by ${method} on ${invoice.number}. ${method === "Cash" ? "Saved in this browser session only." : "Gateway confirmation isn't connected, so it shows as “Recorded manually”. Saved in this browser session only."}`,
+      title: left > 0 ? `${money(n)} recorded · ${money(left)} still due` : `${money(n)} recorded · ${invoice.number} paid`,
+      description: `${method} payment recorded by you. Saved in this browser session only — no receipt was sent.`,
       action: { label: "Undo", onClick: () => undoPayment(id, user.id) },
     });
     onClose();
@@ -101,12 +99,6 @@ export function RecordPaymentModal({ invoice, onClose, onRecorded }: { invoice: 
             }}
             noValidate
           >
-            {failed ? (
-              <InfoNote tone="danger" icon={<ShieldWarning />}>
-                The UPI request for this invoice was never confirmed by the gateway. Only record a payment if you have proof — a bank statement entry or UTR. A screenshot or browser redirect is not proof of payment.
-              </InfoNote>
-            ) : null}
-
             <Field label="Amount received" error={errors.amount} hint={`Balance due ${money(invoice.balance)}${invoice.paidNow > 0 ? ` · ${money(invoice.paidNow)} already paid` : ""}`}>
               {(a) => (
                 <div className="relative">
@@ -151,39 +143,18 @@ export function RecordPaymentModal({ invoice, onClose, onRecorded }: { invoice: 
             </div>
 
             {method !== "Cash" ? (
-              <Field label={method === "Card" ? "Terminal approval code" : method === "UPI" ? "UPI reference (UTR)" : "Bank reference"} optional hint="Copy it from the terminal slip or the patient's payment app. It helps reconciliation later.">
-                {(a) => <Input {...a} className="font-mono" autoComplete="off" placeholder={method === "Card" ? "AUTH 000000" : method === "UPI" ? "UTR 000000 000000" : "NEFT ref"} value={reference} onChange={(ev) => setReference(ev.target.value)} />}
+              <Field
+                label={method === "Card" ? "Terminal approval code" : "UPI reference (UTR)"}
+                optional
+                hint={method === "UPI" ? "Check the payment in the clinic's UPI app before recording it — a screenshot from the patient is not proof." : "Copy it from the terminal slip. It helps reconciliation later."}
+              >
+                {(a) => <Input {...a} className="font-mono" autoComplete="off" placeholder={method === "Card" ? "AUTH 000000" : "UTR 000000 000000"} value={reference} onChange={(ev) => setReference(ev.target.value)} />}
               </Field>
             ) : null}
 
-            {failed ? (
-              <div className="flex flex-col gap-2">
-                <label className="flex items-start gap-3 text-sm text-ink">
-                  <Checkbox
-                    checked={proof}
-                    onCheckedChange={(v) => {
-                      setProof(v === true);
-                      if (errors.proof) setErrors((x) => ({ ...x, proof: undefined }));
-                    }}
-                    aria-invalid={errors.proof ? true : undefined}
-                    aria-describedby={errors.proof ? "proof-error" : undefined}
-                    className="mt-0.5"
-                  />
-                  I&apos;ve seen proof of this payment (bank statement entry or UTR).
-                </label>
-                {errors.proof ? (
-                  <p id="proof-error" className="text-xs text-danger">
-                    {errors.proof}
-                  </p>
-                ) : null}
-              </div>
+            {method === "UPI" ? (
+              <AddOnNotice addOn="payments">Online payments and UPI confirmed automatically by a payment gateway. Without it, record UPI payments here once you&apos;ve seen them arrive.</AddOnNotice>
             ) : null}
-
-            <InfoNote>
-              {method === "Cash"
-                ? "Recorded manually at the desk. It's saved in this browser session only — nothing is sent to an accounting system."
-                : "Recorded manually — gateway confirmation not connected. The invoice shows “Recorded manually” rather than “Paid”, and nothing is sent anywhere. Saved in this browser session only."}
-            </InfoNote>
             <button type="submit" className="sr-only" tabIndex={-1}>
               Record payment
             </button>

@@ -2,63 +2,55 @@
 
 import { Check, Info } from "@phosphor-icons/react";
 import { DEMO_USER } from "@/data/staff";
-import { PLANS, type Plan } from "@/data/plans";
-import { Button } from "@/components/ui/button";
+import { ADDONS, PLANS, planById, type Billing, type Plan } from "@/data/plans";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/input";
-import { Pill } from "@/components/ui/pill";
+import { Segmented } from "@/components/ui/segmented";
 import { formatINR, pluralize } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { MAX_USERS, planCosts, specialityLabel, userRangeText } from "../model";
+import { MAX_PRACTITIONERS, MAX_STAFF_SEATS, branchPlan, invitableRoles, planCosts, seatRuleText } from "../model";
 import { Stepper, type StepProps } from "../controls";
 
+const BILLING: { value: Billing; label: string }[] = [
+  { value: "annual", label: "Billed annually" },
+  { value: "monthly", label: "Billed monthly" },
+];
+
 function rolesLine(plan: Plan) {
-  if (plan.roles.length >= 7) return "All 7 workspaces, including the patient portal";
-  return plan.roles.map((r) => DEMO_USER[r].label).join(" · ");
+  if (!plan.includesPrevious) return plan.roles.map((r) => DEMO_USER[r].label).join(" · ");
+  return `${planById(plan.includesPrevious).name} roles ${plan.rolesAdded}`;
 }
 
-/** Team is the focal (cobalt) card; selection is shown separately with a ring + check. */
-function PlanOption({ plan, selected, onSelect }: { plan: Plan; selected: boolean; onSelect: () => void }) {
-  const focal = plan.id === "team";
-  const sub = focal ? "text-white" : "text-muted";
+/** One radio card per plan; the selected card takes the cobalt accent and a check. */
+function PlanOption({ plan, billing, selected, onSelect }: { plan: Plan; billing: Billing; selected: boolean; onSelect: () => void }) {
+  const sub = selected ? "text-white/90" : "text-muted";
   return (
     <label
       data-testid={`plan-${plan.id}`}
       className={cn(
-        "relative flex cursor-pointer flex-col rounded-card p-6 transition-[box-shadow,background-color] duration-200",
+        "relative flex cursor-pointer flex-col rounded-card p-6 transition-[box-shadow,background-color,color] duration-200",
         "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary",
-        focal ? "bg-primary text-white hover:bg-primary-hover" : "bg-surface text-ink hover:shadow-[inset_0_0_0_1px_var(--color-line-strong)]",
-        selected && !focal && "shadow-[inset_0_0_0_2px_var(--color-charcoal)] hover:shadow-[inset_0_0_0_2px_var(--color-charcoal)]",
-        selected && focal && "shadow-[0_0_0_2px_var(--color-canvas),0_0_0_4px_var(--color-charcoal)]",
+        selected ? "bg-primary text-white" : "bg-surface text-ink hover:shadow-[inset_0_0_0_1px_var(--color-line-strong)]",
       )}
     >
       <input type="radio" name="plan" value={plan.id} checked={selected} onChange={onSelect} className="sr-only" />
       <span className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2">
-          <span className="text-lg">{plan.name}</span>
-          {focal ? (
-            <Pill tone="instances-light" size="sm" className="text-white">
-              Recommended
-            </Pill>
-          ) : null}
-        </span>
+        <span className="text-lg">{plan.name}</span>
         <span
           aria-hidden="true"
-          className={cn(
-            "flex size-6 shrink-0 items-center justify-center rounded-full",
-            selected ? (focal ? "bg-white text-primary" : "bg-charcoal text-white") : focal ? "shadow-[inset_0_0_0_1.5px_rgb(255_255_255/0.7)]" : "shadow-[inset_0_0_0_1.5px_var(--color-line-strong)]",
-          )}
+          className={cn("flex size-6 shrink-0 items-center justify-center rounded-full", selected ? "bg-white text-primary" : "shadow-[inset_0_0_0_1.5px_var(--color-line-strong)]")}
         >
           {selected ? <Check size={14} weight="bold" /> : null}
         </span>
       </span>
-      <span className={cn("mt-2 text-pretty text-sm md:min-h-[60px]", sub)}>{plan.audience}</span>
-      <span className="mt-6 flex items-baseline gap-2">
-        <span className="text-[26px] font-light leading-none tracking-[-0.01em] tabular">{formatINR(plan.pricing.monthly)}</span>
-        <span className={cn("text-xs", sub)}>{plan.pricing.kind === "flat" ? "per month, flat" : "per user / month"}</span>
+      <span className="mt-2 text-sm">{plan.positioning}</span>
+      <span className={cn("mt-1 text-pretty text-xs md:min-h-[48px]", sub)}>{plan.audience}</span>
+      <span className="mt-6 flex flex-wrap items-baseline gap-x-2">
+        <span className="text-[26px] font-light leading-none tracking-[-0.01em] tabular">{formatINR(plan.price[billing])}</span>
+        <span className={cn("text-xs", sub)}>per practitioner / month</span>
       </span>
       <span className={cn("mt-4 text-xs", sub)}>
-        {formatINR(plan.setupFee)} one-time setup · {plan.usersLabel}
+        {formatINR(plan.onboardingFee)} one-time onboarding · {plan.freeSeats} admin / reception seats free
       </span>
       <span className={cn("mt-1 text-pretty text-xs", sub)}>{rolesLine(plan)}</span>
       <span className="sr-only">{selected ? "Selected" : ""}</span>
@@ -67,16 +59,17 @@ function PlanOption({ plan, selected, onSelect }: { plan: Plan; selected: boolea
 }
 
 export function PlanStep({ data, update }: StepProps) {
-  const { plan, monthly, setup, firstYear } = planCosts(data);
-  const perUser = plan.pricing.kind === "per-user" ? plan.pricing : null;
-  const invalidUsers = perUser !== null && monthly === null;
-  const fixTo = perUser ? Math.max(perUser.minUsers, Math.min(perUser.maxUsers, data.plan.users)) : data.plan.users;
+  const { plan, billing, practitioners, staffSeats, extraSeats, monthly, yearly, onboarding, firstYear } = planCosts(data);
+  const setPlan = (patch: Partial<typeof data.plan>) => update((d) => ({ ...d, plan: { ...d.plan, ...patch } }));
 
   const notes: string[] = [];
-  const extra = data.clinic.specialities.filter((s) => s !== "medical");
-  if (plan.id === "starter" && extra.length) notes.push(`Starter includes only the doctor workspace. ${extra.map(specialityLabel).join(" and ")} need Team or Clinic.`);
-  if (data.clinic.branches > 1 && plan.id !== "clinic") notes.push(`You have ${pluralize(data.clinic.branches, "branch", "branches")}. Managing several branches is included in Clinic only.`);
-  if (plan.id === "starter" && data.invites.length) notes.push(`Starter has no invites — the ${pluralize(data.invites.length, "teammate")} you added would need Team or Clinic.`);
+  const multi = branchPlan();
+  if (data.clinic.branches > 1 && plan.branches !== "unlimited" && data.clinic.branches > plan.branches)
+    notes.push(`You have ${pluralize(data.clinic.branches, "branch", "branches")}. ${plan.name} runs ${pluralize(Number(plan.branches), "branch", "branches")}; several branches need ${multi.name}.`);
+  if (staffSeats > 0 && !plan.roles.includes("frontdesk")) notes.push(`On ${plan.name} these seats are for admins. Reception arrives with ${PLANS.find((p) => p.roles.includes("frontdesk"))?.name ?? "a higher plan"}.`);
+  const roles = invitableRoles(plan.id);
+  const misfit = data.invites.filter((i) => i.role && !roles.includes(i.role));
+  if (misfit.length) notes.push(`${pluralize(misfit.length, "teammate")} you added ${misfit.length === 1 ? "has a role" : "have roles"} ${plan.name} doesn't include — change ${misfit.length === 1 ? "it" : "them"} on the Team step.`);
 
   return (
     <div className="flex flex-col gap-6">
@@ -84,70 +77,62 @@ export function PlanStep({ data, update }: StepProps) {
         <legend className="sr-only">Plan</legend>
         <div className="grid gap-4 md:grid-cols-3">
           {PLANS.map((p) => (
-            <PlanOption key={p.id} plan={p} selected={p.id === data.plan.id} onSelect={() => update((d) => ({ ...d, plan: { ...d.plan, id: p.id } }))} />
+            <PlanOption key={p.id} plan={p} billing={billing} selected={p.id === data.plan.id} onSelect={() => setPlan({ id: p.id })} />
           ))}
         </div>
       </fieldset>
 
       <Card className="grid gap-6 md:grid-cols-2">
-        <div className="flex flex-col gap-4">
-          {perUser ? (
-            <Field label="Users" hint={invalidUsers ? undefined : `${userRangeText(plan)}. Each user gets their own sign-in.`}>
-              {(p) => (
-                <Stepper
-                  id={p.id}
-                  describedBy={invalidUsers ? "plan-users-error" : p["aria-describedby"]}
-                  value={data.plan.users}
-                  min={1}
-                  max={MAX_USERS}
-                  onChange={(n) => update((d) => ({ ...d, plan: { ...d.plan, users: n } }))}
-                  noun="users"
-                  testId="users"
-                  invalid={invalidUsers}
-                />
-              )}
-            </Field>
-          ) : (
-            <div>
-              <p className="text-sm text-ink">Users</p>
-              <p className="mt-2 text-[26px] font-light leading-tight tracking-[-0.01em]">1 practitioner workspace</p>
-              <p className="mt-2 text-xs text-muted">Starter is a flat {formatINR(plan.pricing.monthly)} a month for a single practitioner.</p>
-            </div>
-          )}
-          {invalidUsers && perUser ? (
-            <div id="plan-users-error" role="alert" className="flex flex-col items-start gap-3 rounded-inner bg-danger-soft p-4 text-sm text-danger">
-              <p>
-                {userRangeText(plan)}. You chose {pluralize(data.plan.users, "user")}.
-              </p>
-              <Button size="sm" variant="secondary" onClick={() => update((d) => ({ ...d, plan: { ...d.plan, users: fixTo } }))} data-testid="users-fix">
-                Use {pluralize(fixTo, "user")}
-              </Button>
-            </div>
-          ) : null}
+        <div className="flex flex-col gap-6">
+          <Segmented<Billing> ariaLabel="Billing" variant="tray" value={billing} onChange={(b) => setPlan({ billing: b })} items={BILLING} className="w-fit" />
+          <Field label="Practitioners" hint="Doctors, nutritionists and yoga instructors, including you. Each is billed per month.">
+            {(p) => (
+              <Stepper
+                id={p.id}
+                describedBy={p["aria-describedby"]}
+                value={practitioners}
+                min={1}
+                max={MAX_PRACTITIONERS}
+                onChange={(n) => setPlan({ practitioners: n })}
+                noun="practitioners"
+                testId="practitioners"
+              />
+            )}
+          </Field>
+          <Field label="Admin and reception seats" hint={`${seatRuleText(plan)}.`}>
+            {(p) => (
+              <Stepper
+                id={p.id}
+                describedBy={p["aria-describedby"]}
+                value={staffSeats}
+                min={0}
+                max={MAX_STAFF_SEATS}
+                onChange={(n) => setPlan({ staffSeats: n })}
+                noun="seats"
+                testId="staff-seats"
+              />
+            )}
+          </Field>
         </div>
 
         <div className="rounded-inner bg-canvas p-4" aria-live="polite">
           <dl className="flex flex-col gap-3 text-sm">
-            <div className="flex items-baseline justify-between gap-4">
-              <dt className="text-muted">Monthly</dt>
-              <dd className="text-right tabular text-ink">
-                {monthly === null ? "—" : formatINR(monthly)}
-                <span className="block text-xs text-muted">
-                  {perUser ? (monthly === null ? "Adjust users" : `${formatINR(perUser.monthly)} × ${pluralize(data.plan.users, "user")}`) : "Flat fee"}
-                </span>
-              </dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-4">
-              <dt className="text-muted">One-time setup</dt>
-              <dd className="tabular text-ink">{formatINR(setup)}</dd>
-            </div>
+            <Line label="Practitioners" detail={`${practitioners} × ${formatINR(plan.price[billing])}`} value={formatINR(practitioners * plan.price[billing])} />
+            <Line
+              label="Admin / reception seats"
+              detail={extraSeats ? `${pluralize(extraSeats, "seat")} beyond ${plan.freeSeats} free × ${formatINR(plan.extraSeat)}` : `${staffSeats} of ${plan.freeSeats} free`}
+              value={formatINR(extraSeats * plan.extraSeat)}
+            />
+            <Line label="Monthly" detail={billing === "annual" ? "Billed annually" : "Billed monthly"} value={formatINR(monthly)} strong />
+            <Line label="Yearly" detail="12 months" value={formatINR(yearly)} />
+            <Line label="Onboarding" detail="One-time" value={formatINR(onboarding)} />
             <div className="mt-1 flex items-end justify-between gap-4 border-t border-line pt-4">
               <dt className="text-ink">
                 First-year total
-                <span className="block text-xs text-muted">Setup + 12 months</span>
+                <span className="block text-xs text-muted">12 months + onboarding, before GST</span>
               </dt>
               <dd className="text-[26px] font-light leading-none tracking-[-0.01em] tabular text-ink" data-testid="first-year-total">
-                {firstYear === null ? "—" : formatINR(firstYear)}
+                {formatINR(firstYear)}
               </dd>
             </div>
           </dl>
@@ -163,9 +148,21 @@ export function PlanStep({ data, update }: StepProps) {
         ))}
         <p className="flex items-start gap-2 text-sm text-muted">
           <Info size={18} className="mt-px shrink-0" aria-hidden="true" />
-          Estimate only — no payment is taken in this prototype.
+          Estimate only — no payment is taken in this prototype. Add-ons ({ADDONS.map((a) => a.label).join(", ")}) are priced separately on any plan.
         </p>
       </div>
+    </div>
+  );
+}
+
+function Line({ label, detail, value, strong }: { label: string; detail: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <dt className="text-muted">
+        {label}
+        <span className="block text-xs">{detail}</span>
+      </dt>
+      <dd className={cn("text-right tabular", strong ? "text-ink" : "text-ink-2")}>{value}</dd>
     </div>
   );
 }

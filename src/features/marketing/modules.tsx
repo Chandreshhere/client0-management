@@ -5,6 +5,7 @@ import { APPOINTMENT_STATUS_LABEL, TODAY_APPOINTMENTS } from "@/data/appointment
 import { CARE_EVENTS, CARE_PLAN } from "@/data/featured";
 import { patientById } from "@/data/patients";
 import { minPlanFor, type FeatureId } from "@/data/plans";
+import { availabilityLabel } from "@/features/pricing/model";
 import { NUTRITION_PLANS } from "@/data/programs";
 import { DOCUMENTS, DOC_STATUS_LABEL, THREADS } from "@/data/records";
 import { staffById } from "@/data/staff";
@@ -26,9 +27,10 @@ const pname = (id: string | null | undefined) => patientById(id)?.name ?? "Unide
 const sname = (id: string | null | undefined) => staffById(id ?? undefined)?.name ?? "Unassigned";
 const short = (iso: string) => formatDate(iso, { day: "numeric", month: "short" });
 
+/** "On every plan" · "Clinic and Pro plans" · "Pro plan only" — from the plan data. */
 const availability = (f: FeatureId) => {
-  const p = minPlanFor(f);
-  return p.id === "starter" ? "On every plan" : p.id === "team" ? "Team and Clinic plans" : "Clinic plan";
+  const label = availabilityLabel(minPlanFor(f));
+  return label === "Every plan" ? "On every plan" : label.endsWith(" only") ? label.replace(/ only$/, " plan only") : `${label} plans`;
 };
 
 export function Modules() {

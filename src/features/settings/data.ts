@@ -1,5 +1,5 @@
 import type { Discipline, Role } from "@/data/types";
-import type { PlanId } from "@/data/plans";
+import type { FeatureId, PlanId } from "@/data/plans";
 import { BRANCHES, CLINIC } from "@/data/staff";
 import { INVOICES } from "@/data/records";
 import { TODAY_APPOINTMENTS, WEEK_APPOINTMENTS } from "@/data/appointments";
@@ -15,10 +15,11 @@ import { istDayKey, istMinutes } from "./time";
 // Who may change what
 // ---------------------------------------------------------------------------------------------
 
-/** On Clinic, administrators manage settings; on Starter/Team the doctor is the practice owner. */
+/** Every plan has an Admin role: administrators manage the clinic profile, rooms, services and templates. */
 export function settingsAccess(role: Role, plan: PlanId) {
-  const owner = role === "admin" || (role === "doctor" && plan !== "clinic");
-  return { canEditClinic: owner, canEditServices: owner, ownerLabel: plan === "clinic" ? "administrators" : "the practice owner (doctor)" };
+  void plan; // the same on every plan
+  const owner = role === "admin";
+  return { canEditClinic: owner, canEditServices: owner, ownerLabel: "administrators" };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -50,7 +51,7 @@ export const CLINIC_SEED: ClinicProfile = {
   phone: "+91 80 4000 2626",
   email: "hello@prana.example",
   slotMinutes: "30",
-  receiptNote: "Receipts are issued only after a payment is confirmed by the gateway, the bank or the desk.",
+  receiptNote: "Receipts are issued only after a payment is recorded at the desk.",
 };
 
 export const CLINIC_FIXED = {
@@ -104,8 +105,8 @@ export type ServiceBilling = "per-visit" | "programme-credit" | "lab-partner";
 
 export const BILLING_LABEL: Record<ServiceBilling, string> = {
   "per-visit": "Billed per visit",
-  "programme-credit": "Uses a programme credit",
-  "lab-partner": "Sample sent to lab partner",
+  "programme-credit": "Uses a package credit",
+  "lab-partner": "Sample sent to an outside lab",
 };
 
 export interface Service {
@@ -200,6 +201,8 @@ export interface Template {
   name: string;
   purpose: string;
   channel: TemplateChannel;
+  /** plan feature the template belongs to (hidden on plans without it) */
+  needs?: FeatureId;
   /** clinical templates: an administrator's edit waits for the clinical lead */
   clinical: boolean;
   owner: string;
@@ -211,27 +214,32 @@ export interface Template {
 
 export const TEMPLATE_SEED: Template[] = [
   {
-    id: "tp-reminder", name: "Appointment reminder", purpose: "Sent the evening before a booking", channel: "SMS", clinical: false, owner: "Front desk",
+    id: "tp-reminder", name: "Appointment reminder", purpose: "The evening before a booking", channel: "SMS", needs: "calendar", clinical: false, owner: "Front desk",
     body: "Hi {{patient.firstName}}, a reminder of your {{appointment.service}} with {{appointment.clinician}} on {{appointment.date}} at {{appointment.time}}, {{branch.name}}. Reply C to confirm or call {{clinic.phone}} to change it. - {{clinic.shortName}}",
     status: "published", editedBy: "s-sneha", editedAt: "2026-10-14T11:20:00+05:30",
   },
   {
-    id: "tp-intake", name: "Intake form invite", purpose: "Before a first visit", channel: "WhatsApp", clinical: false, owner: "Front desk",
+    id: "tp-intake", name: "Intake form link", purpose: "Before a first visit", channel: "WhatsApp", needs: "calendar", clinical: false, owner: "Front desk",
     body: "Hi {{patient.firstName}}, please fill in your intake form before your visit on {{appointment.date}}: {{link.intake}}\nIt takes about 8 minutes and saves time at the desk. - {{clinic.shortName}}",
     status: "published", editedBy: "s-sneha", editedAt: "2026-09-30T16:05:00+05:30",
   },
   {
-    id: "tp-payment", name: "Payment reminder", purpose: "Open balance after 7 days", channel: "WhatsApp", clinical: false, owner: "Billing",
-    body: "Hi {{patient.firstName}}, invoice {{invoice.number}} has {{invoice.balance}} outstanding. You can pay at the desk or with the UPI link we send separately. If you've already paid, please ignore this — bank confirmations can take a day. - {{clinic.shortName}}",
+    id: "tp-payment", name: "Payment reminder", purpose: "Open balance after 7 days", channel: "WhatsApp", needs: "billing", clinical: false, owner: "Billing",
+    body: "Hi {{patient.firstName}}, invoice {{invoice.number}} has {{invoice.balance}} outstanding. You can pay at the desk by cash, UPI or card on your next visit. If you've already paid, please ignore this. - {{clinic.shortName}}",
     status: "published", editedBy: "s-neha", editedAt: "2026-10-21T10:00:00+05:30",
   },
   {
-    id: "tp-receipt", name: "Payment receipt", purpose: "Issued after a confirmed payment", channel: "Print", clinical: false, owner: "Billing",
+    id: "tp-receipt", name: "Payment receipt", purpose: "Issued once a payment is recorded", channel: "Print", needs: "billing", clinical: false, owner: "Billing",
     body: "Receipt for {{invoice.number}}\n{{clinic.legal}}\n\nReceived {{payment.amount}} by {{payment.method}} on {{payment.date}}.\nConfirmation: {{payment.confirmation}}\n\n{{clinic.receiptNote}}",
     status: "published", editedBy: "s-neha", editedAt: "2026-08-02T09:30:00+05:30",
   },
   {
-    id: "tp-consent", name: "Programme enrolment consent", purpose: "Signed before a programme starts", channel: "Print", clinical: false, owner: "Front desk · clinical lead",
+    id: "tp-dpdp", name: "Registration & consent", purpose: "Signed at registration (DPDP)", channel: "Print", clinical: false, owner: "Admin",
+    body: "{{clinic.name}} · Patient registration\nName: {{patient.name}}\nClinic ID: [clinic ID]\n\nI consent to {{clinic.name}} keeping my health record so my doctor, nutritionist and yoga instructor can plan my care together. I can ask what is held and who has seen it, and withdraw consent at any time.\n\nSigned: ____________  Date: {{today}}\nRecorded by: [staff name]",
+    status: "published", editedBy: "s-neha", editedAt: "2026-09-02T10:00:00+05:30",
+  },
+  {
+    id: "tp-consent", name: "Programme enrolment consent", purpose: "Signed before a programme starts", channel: "Print", needs: "programmes", clinical: false, owner: "Front desk · clinical lead",
     body: "I, {{patient.name}}, agree to join {{programme.name}} at {{clinic.name}}.\nI understand my doctor, nutritionist and yoga instructor will share one record so they can plan my care together, and that I can ask what is shared and with whom.\n\nSigned: ____________  Date: {{today}}",
     status: "published", editedBy: "s-ananya", editedAt: "2026-07-11T15:40:00+05:30",
   },

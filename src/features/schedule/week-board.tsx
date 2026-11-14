@@ -44,7 +44,8 @@ export function WeekBoard({
   selectedId: string | null;
   recentIds: string[];
   doubleIds: Set<string>;
-  onCell: (staffId: string, date: string) => void;
+  /** omitted for roles that can't book */
+  onCell?: (staffId: string, date: string) => void;
   onOpenChange: (id: string | null) => void;
   renderDetails: (ev: DiaryEvent) => ReactNode;
   nameOf: (ev: DiaryEvent) => string;
@@ -151,21 +152,22 @@ const Cell = memo(function Cell({
   selectedId: string | null;
   recentIds: string[];
   doubleIds: Set<string>;
-  onCell: (staffId: string, date: string) => void;
+  /** omitted for roles that can't book */
+  onCell?: (staffId: string, date: string) => void;
   onOpenChange: (id: string | null) => void;
   renderDetails: (ev: DiaryEvent) => ReactNode;
   nameOf: (ev: DiaryEvent) => string;
 }) {
   const past = isPastDay(date);
-  const bookable = !past && !leave;
+  const bookable = !past && !leave && !!onCell;
   return (
     <td
       className={cn("group/cell rounded-inner p-1 align-top", leave ? "bg-hatch bg-sunken" : "bg-sunken", bookable && "cursor-pointer")}
       onClick={(e) => {
-        if (bookable && e.target === e.currentTarget) onCell(staff.id, date);
+        if (bookable && e.target === e.currentTarget) onCell?.(staff.id, date);
       }}
     >
-      <ul className="flex min-h-[88px] flex-col gap-1" onClick={(e) => bookable && e.target === e.currentTarget && onCell(staff.id, date)}>
+      <ul className="flex min-h-[88px] flex-col gap-1" onClick={(e) => bookable && e.target === e.currentTarget && onCell?.(staff.id, date)}>
         {leave && events.length === 0 ? <li className="px-2 py-1.5 text-xs text-warning">{leave}</li> : null}
         {events.map((ev) => (
           <li key={ev.id}>
@@ -176,7 +178,7 @@ const Cell = memo(function Cell({
           <li className="mt-auto">
             <button
               type="button"
-              onClick={() => onCell(staff.id, date)}
+              onClick={() => onCell?.(staff.id, date)}
               aria-label={`Book ${staff.name} on ${shortDay(date)}`}
               className="flex h-8 w-full items-center gap-1.5 rounded-[12px] px-2 text-xs text-muted opacity-0 transition-opacity duration-200 hover:bg-surface/70 hover:text-ink focus-visible:opacity-100 group-hover/cell:opacity-100"
             >

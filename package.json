@@ -2,11 +2,11 @@
   "name": "carelane",
   "version": "0.1.0",
   "private": true,
-  "description": "Carelane — multidisciplinary clinic management platform (UI prototype with synthetic data).",
+  "description": "Carelane \u2014 multidisciplinary clinic management platform (UI prototype with synthetic data).",
   "scripts": {
-    "dev": "node node_modules/next/dist/bin/next dev -p 3417",
-    "build": "node node_modules/next/dist/bin/next build",
-    "start": "node node_modules/next/dist/bin/next start -p 3417",
+    "dev": "node init && node node_modules/next/dist/bin/next dev -p 3417",
+    "build": "node init && node node_modules/next/dist/bin/next build",
+    "start": "node init && node node_modules/next/dist/bin/next start -p 3417",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit"
   },
   "dependencies": {

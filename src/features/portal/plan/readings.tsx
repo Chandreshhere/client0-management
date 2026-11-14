@@ -47,8 +47,8 @@ export function ReadingsPanel({ readings, onLog }: { readings: LoggedReading[]; 
   return (
     <Panel
       icon={<Pulse />}
-      title="My readings"
-      subtitle="Your own readings stay labelled self-reported until reviewed"
+      title="Home readings"
+      subtitle="Blood pressure, heart rate, weight and peak flow, with dates · self-reported until reviewed"
       action={
         <Button size="sm" variant="dark" leading={<PlusCircle />} onClick={() => onLog(metricId)}>
           Log

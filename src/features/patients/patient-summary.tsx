@@ -11,10 +11,8 @@ import { REFERRALS, TASKS } from "@/data/care";
 import { DOCUMENTS, INVOICES } from "@/data/records";
 import { CLASSES, NUTRITION_PLANS, PACKAGES } from "@/data/programs";
 import { APPOINTMENT_STATUS_LABEL } from "@/data/appointments";
-import { minPlanFor } from "@/data/plans";
 import { formatDate, formatTime } from "@/lib/format";
 import { useRole } from "@/components/shell/role-context";
-import { LockBadge } from "@/components/shell/plan-switcher";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Group, Inset } from "@/components/ui/card";
@@ -22,7 +20,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
 import { Tip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
-import { BILLING_ROLES, CARE_SLOTS, branchLabel, careTeamIds, dayWord, flagsFor, isLive, lastVisitAt, recentVisits, relatedRecords, upcomingVisits } from "./data";
+import { BILLING_ROLES, CARE_SLOTS, CARE_TEAM_ROLES, branchLabel, careTeamIds, dayWord, flagsFor, isLive, lastVisitAt, recentVisits, relatedRecords, upcomingVisits } from "./data";
 import { usePatientsSession, withSessionCareTeam } from "./session-store";
 import { FlagPills, PatientStatusBadge } from "./registry-bits";
 import { AssignCareTeamModal } from "./assign-care-team";
@@ -65,6 +63,9 @@ export function PatientSummary({ patient: base }: { patient: Patient }) {
   const { session, setCareTeams } = usePatientsSession();
   const [assignOpen, setAssignOpen] = useState(false);
   const patient = useMemo(() => withSessionCareTeam(base, session), [base, session]);
+  // Doctors and the admin set care teams (spec "Care team"); coordinators exist on Pro only.
+  const canAssign = CARE_TEAM_ROLES.includes(role);
+  const slots = CARE_SLOTS.filter((s) => s.key !== "coordinator" || has("coordinator"));
 
   const data = useMemo(() => {
     const upcoming = upcomingVisits(patient, session.visits);
@@ -103,7 +104,7 @@ export function PatientSummary({ patient: base }: { patient: Patient }) {
   if (role === "patient" && patient.id !== DEMO_USER.patient.personId) return <NotYourRecord />;
 
   const no = clinicNumber(patient.id);
-  const showBilling = BILLING_ROLES.includes(role);
+  const showBilling = has("billing") && BILLING_ROLES.includes(role);
   const firstName = patient.name.split(" ")[0];
 
   // Record set-up: what is on file and what is still missing — each step read from the data.
@@ -150,8 +151,8 @@ export function PatientSummary({ patient: base }: { patient: Patient }) {
       id: "team",
       label: "Care team assigned",
       state: teamIds.length ? "done" : "todo",
-      detail: teamIds.length ? teamIds.map((id) => staffById(id)?.name).filter(Boolean).join(", ") : has("multi-role") ? "Nobody assigned yet" : `Nobody assigned yet · care teams are on the ${minPlanFor("multi-role").name} plan`,
-      action: !teamIds.length && has("multi-role") ? (
+      detail: teamIds.length ? teamIds.map((id) => staffById(id)?.name).filter(Boolean).join(", ") : "Nobody assigned yet",
+      action: !teamIds.length && canAssign ? (
         <Button size="sm" variant="secondary" onClick={() => setAssignOpen(true)}>
           Assign
         </Button>
@@ -201,12 +202,14 @@ export function PatientSummary({ patient: base }: { patient: Patient }) {
                 <span className="font-mono text-ink-2">{no}</span> · {onJourney ? "Journey" : "Patient summary"} · nothing recorded yet
               </p>
               <div className="flex shrink-0 items-center gap-2">
-                <Button asChild variant="dark" size="md">
-                  <Link href={`/schedule?new=1&patient=${patient.id}`}>
-                    <CalendarPlus aria-hidden="true" />
-                    Book
-                  </Link>
-                </Button>
+                {has("calendar") ? (
+                  <Button asChild variant="dark" size="md">
+                    <Link href={`/schedule?new=1&patient=${patient.id}`}>
+                      <CalendarPlus aria-hidden="true" />
+                      Book
+                    </Link>
+                  </Button>
+                ) : null}
                 {has("messages") ? (
                   <Tip label="Message">
                     <Link
@@ -217,14 +220,7 @@ export function PatientSummary({ patient: base }: { patient: Patient }) {
                       <ChatCircleText size={18} />
                     </Link>
                   </Tip>
-                ) : (
-                  <Tip label={`Messaging is on the ${minPlanFor("messages").name} plan`}>
-                    <span tabIndex={0} aria-disabled="true" className="flex size-10 cursor-not-allowed items-center justify-center rounded-full bg-surface text-faint shadow-[inset_0_0_0_1px_var(--color-line)] outline-none focus-visible:outline-2 focus-visible:outline-primary">
-                      <ChatCircleText size={18} aria-hidden="true" />
-                      <span className="sr-only">Message — available on the {minPlanFor("messages").name} plan</span>
-                    </span>
-                  </Tip>
-                )}
+                ) : null}
                 <Dropdown>
                   <DropdownTrigger asChild>
                     <IconButton label="More actions" variant="white" className="data-[state=open]:bg-canvas">
@@ -233,17 +229,13 @@ export function PatientSummary({ patient: base }: { patient: Patient }) {
                   </DropdownTrigger>
                   <DropdownContent className="w-[264px]">
                     <DropdownLabel>{patient.name}</DropdownLabel>
-                    {has("multi-role") ? (
+                    {canAssign ? (
                       <DropdownItem icon={<UsersThree />} onSelect={() => setAssignOpen(true)}>
                         Assign care team
                       </DropdownItem>
-                    ) : (
-                      <DropdownItem disabled icon={<UsersThree />} description={`Available on ${minPlanFor("multi-role").name} plan`}>
-                        <span className="flex items-center gap-2">Assign care team <LockBadge /></span>
-                      </DropdownItem>
-                    )}
+                    ) : null}
                     <DropdownItem icon={<Copy />} onSelect={copy} description={<span className="font-mono">{no}</span>}>
-                      Copy clinic number
+                      Copy clinic ID
                     </DropdownItem>
                     <DropdownSeparator />
                     <DropdownItem asChild icon={<Users />}>
@@ -255,11 +247,12 @@ export function PatientSummary({ patient: base }: { patient: Patient }) {
             </div>
             <h1 className="mt-2 text-[32px] font-light leading-[1.05] tracking-[-0.028em] text-ink @[640px]:text-[40px]">{patient.name}</h1>
             <p className="mt-2 text-sm text-muted">
-              {patient.age} years · {patient.sex} · {patient.area} · {branchLabel(patient.branch)} branch
+              {patient.age} years · {patient.sex} · {patient.area}
+              {has("branches") ? ` · ${branchLabel(patient.branch)} branch` : ""}
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <PatientStatusBadge status={patient.status} />
-              {patient.program ? <span className="inline-flex h-6 items-center rounded-full bg-sunken px-2.5 text-xs text-ink-2">{patient.program}</span> : null}
+              {patient.program && has("programmes") ? <span className="inline-flex h-6 items-center rounded-full bg-sunken px-2.5 text-xs text-ink-2">{patient.program}</span> : null}
               <span className="inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-xs text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line-strong)]">
                 <ShieldCheck size={14} aria-hidden="true" />
                 ABHA {patient.abhaLinked ? "linked" : "not linked"}
@@ -269,14 +262,14 @@ export function PatientSummary({ patient: base }: { patient: Patient }) {
           </div>
         </Inset>
         <ul className="grid grid-cols-1 gap-2 @[480px]:grid-cols-2" aria-label="Care team">
-          {CARE_SLOTS.map((slot) => {
+          {slots.map((slot) => {
             const s = staffById(patient.careTeam[slot.key]);
             return (
               <li key={slot.key}>
                 <Inset className="flex h-full items-center gap-3">
                   {s ? (
                     <Avatar src={s.avatar} name={s.name} size="md" />
-                  ) : has("multi-role") ? (
+                  ) : canAssign ? (
                     <Tip label={`Assign ${slot.label.toLowerCase()}`}>
                       <button
                         type="button"

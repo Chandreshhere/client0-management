@@ -64,7 +64,7 @@ export function passwordError(pw: string): string | undefined {
   return undefined;
 }
 
-/** "Starter, Team and Clinic" */
+/** "Core, Clinic and Pro" */
 export function joinList(items: string[]) {
   if (items.length <= 1) return items.join("");
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;

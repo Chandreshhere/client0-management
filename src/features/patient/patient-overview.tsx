@@ -133,7 +133,7 @@ function OverviewInner({ patient }: { patient: Patient }) {
               }}
               onOpenCondition={setConditionId}
               onAddEvent={(systemId) => setAddFor({ systemId })}
-              onOpenRecords={() => router.push(`/patients/${patient.id}/documents`)}
+              onOpenRecords={() => router.push(`/patients/${patient.id}/reports`)}
               hoveredCondition={hovered}
               onHoverCondition={setHovered}
               patient={patient}

@@ -17,7 +17,17 @@ export const TAB_NOUN: Record<RecordTab, string> = {
   vitals: "vital signs",
 };
 
-export const recordHref = (patientId: string, tab?: RecordTab) => `/patients/${patientId}${tab ? `/${tab}` : ""}`;
+/** Where each record view lives in the five-section profile — Medical and Reports hold them. */
+const TAB_PATH: Record<RecordTab, string> = {
+  notes: "medical",
+  vitals: "medical/vitals",
+  documents: "reports",
+  labs: "reports/labs",
+  imaging: "reports/imaging",
+};
+
+/** Link to a record view; without a tab, the profile entry (opens on the section for the role). */
+export const recordHref = (patientId: string, tab?: RecordTab) => `/patients/${patientId}${tab ? `/${TAB_PATH[tab]}` : ""}`;
 
 /* ------------------------------------------------------------------ documents */
 
@@ -126,10 +136,10 @@ export const CHANGES: RecordChange[] = [
   { id: "ch-lipid", kind: "report", date: "2026-11-11", title: "Lipid profile", detail: "LDL-C 118 mg/dL (high), HDL-C 44, triglycerides 148. Reported 11 Nov, uploaded 12 Nov.", by: "lab:Anand Diagnostics", target: { tab: "documents", docId: "d1" } },
   { id: "ch-bp", kind: "report", date: "2026-11-12", title: "Home BP log · 7 days", detail: "Average 126/80 mmHg, resting HR 68.", by: "p-kabir", target: { tab: "vitals" }, selfReported: true },
   { id: "ch-ecg", kind: "report", date: "2026-11-10", title: "ECG from 2019 uploaded", detail: "Report dated 2 Mar 2019 — historical, not a new test.", by: "p-kabir", target: { tab: "documents", docId: "kd-ecg19" } },
-  { id: "ch-np4", kind: "plan", date: "2026-11-12", title: "Nutrition plan v4 published", detail: "Dinner by 19:30 on office days; millet swaps added.", by: "s-meera", target: { href: "/nutrition", label: "Open nutrition plans" } },
-  { id: "ch-move", kind: "plan", date: "2026-11-11", title: "Movement plan updated", detail: "Supported standing poses added; 17 of 24 sessions done.", by: "s-kavya", target: { href: "/classes", label: "Open classes" } },
-  { id: "ch-ack", kind: "guidance", date: "2026-11-07", title: "Exercise guidance acknowledged", detail: "Kavya Nair confirmed: keep HR below 110 bpm, no breath retention.", by: "s-kavya", target: { href: "/patients/p-kabir", label: "Open care plan on overview" } },
-  { id: "ch-miss", kind: "missed", date: "2026-11-08", title: "Missed cardiac rehab yoga · session 16", detail: "Saturday class — no reason recorded. Coordinator notified.", by: "s-kavya", target: { href: "/classes", label: "Open classes" } },
+  { id: "ch-np4", kind: "plan", date: "2026-11-12", title: "Nutrition plan v4 published", detail: "Dinner by 19:30 on office days; millet swaps added.", by: "s-meera", target: { href: "/patients/p-kabir/nutrition", label: "Open nutrition" } },
+  { id: "ch-move", kind: "plan", date: "2026-11-11", title: "Movement plan updated", detail: "Supported standing poses added; 17 of 24 sessions done.", by: "s-kavya", target: { href: "/patients/p-kabir/yoga", label: "Open yoga" } },
+  { id: "ch-ack", kind: "guidance", date: "2026-11-07", title: "Exercise guidance acknowledged", detail: "Kavya Nair confirmed: keep HR below 110 bpm, no breath retention.", by: "s-kavya", target: { href: "/patients/p-kabir/yoga", label: "Open precautions" } },
+  { id: "ch-miss", kind: "missed", date: "2026-11-08", title: "Missed cardiac rehab yoga · session 16", detail: "Saturday class — no reason recorded. Coordinator notified.", by: "s-kavya", target: { href: "/patients/p-kabir/yoga", label: "Open yoga" } },
 ];
 
 /* ------------------------------------------------------------------ labs */

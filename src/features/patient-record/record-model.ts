@@ -91,7 +91,8 @@ export const baseDocuments = memo((patientId: string): RecordDocument[] => {
       return [
         {
           id: e.id,
-          title: e.title,
+          // referral events are assignments now (assigned → seen, spec F5)
+          title: referral ? e.title.replace(/^Referral → movement/, "Assignment → yoga").replace(/^Referral → nutrition/, "Assignment → nutrition") : e.title,
           patientId,
           type,
           reportDate: e.date,
@@ -553,11 +554,11 @@ export const derivedChanges = memo((patientId: string): DerivedChange[] => {
         const value = e.values?.map((v) => `${v.label} ${v.value}${v.unit ? ` ${v.unit}` : ""}`).join(", ");
         return [{ ...base, kind: "report", title: e.title, detail: value ? `${value}.` : readableDates(e.summary), target: { tab: "vitals" } }];
       }
-      if (e.type === "medication") return [{ ...base, kind: "plan", title: e.title, detail: readableDates(e.summary), target: { href: `/patients/${patientId}/journey`, label: "Open in the care journey" } }];
+      if (e.type === "medication") return [{ ...base, kind: "plan", title: e.title, detail: readableDates(e.summary), target: { href: `/patients/${patientId}/timeline`, label: "Open on the timeline" } }];
       if (e.type === "nutrition" || e.type === "movement") {
         // a booked session the patient didn't attend is a missed session, not a plan change
         const missed = /absent|did not attend/i.test(`${e.title} ${e.summary}`);
-        const target: ChangeTarget = e.type === "nutrition" ? { href: "/nutrition", label: "Open nutrition plans" } : { href: "/classes", label: "Open classes" };
+        const target: ChangeTarget = e.type === "nutrition" ? { href: `/patients/${patientId}/nutrition`, label: "Open nutrition" } : { href: `/patients/${patientId}/yoga`, label: "Open yoga" };
         return [{ ...base, kind: missed ? "missed" : "plan", title: e.title, detail: readableDates(e.summary), target }];
       }
       return [];

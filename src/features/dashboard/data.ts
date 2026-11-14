@@ -32,6 +32,7 @@ export const NOW_LABEL = formatTime(NOW_ISO); // "09:40"
 export const TODAY_KEY = istDayKey(NOW_ISO); // "2026-11-13"
 
 export const minutesUntil = (iso: string) => Math.round((new Date(iso).getTime() - TODAY.getTime()) / 60_000);
+export const hoursSince = (iso: string) => (TODAY.getTime() - new Date(iso).getTime()) / 3_600_000;
 
 /** 80 → "1 h 20 min" */
 export function spanLabel(totalMin: number) {
@@ -68,8 +69,6 @@ export const firstName = (name: string) => name.replace(/^(Dr\.?|Mr\.?|Ms\.?|Mrs
 
 export const byStart = (a: { start: string }, b: { start: string }) => a.start.localeCompare(b.start);
 
-export const endMinutes = (a: Appointment) => istMinutes(a.start) + a.durationMin;
-
 /** Today's appointments for one practitioner, in time order. */
 export const appointmentsFor = (staffId: string) => TODAY_APPOINTMENTS.filter((a) => a.staffId === staffId).sort(byStart);
 
@@ -79,8 +78,7 @@ export const nowIndex = (items: { start: string }[]) => {
   return i === -1 ? items.length : i;
 };
 
-export const personName = (id: string) => staffById(id)?.name ?? patientById(id)?.name ?? id;
-export const personAvatar = (id: string) => staffById(id)?.avatar ?? patientById(id)?.avatar ?? null;
+export const endIso = (a: Pick<Appointment, "start" | "durationMin">) => new Date(Date.parse(a.start) + a.durationMin * 60_000).toISOString();
 
 /** The demo identity's branch (all demo users work at Indiranagar). */
 export function branchFor(role: Role): { id: BranchId; name: string } {
@@ -94,6 +92,22 @@ export function splitMedicines(text: string): { medicines: string[]; guidance: s
   const [first, ...rest] = text.split(/\.\s+/);
   const medicines = first.split(/,\s*/).map((m) => m.charAt(0).toUpperCase() + m.slice(1).replace(/\.$/, ""));
   return { medicines, guidance: rest.join(". ").replace(/\.$/, "") };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Where an item opens. Every row on a home links to the patient profile section it belongs to
+// (spec: Summary · Medical · Reports · Nutrition · Yoga, plus the Timeline) or to its own screen.
+// ---------------------------------------------------------------------------------------------
+
+export type ProfileSection = "summary" | "medical" | "reports" | "nutrition" | "yoga" | "timeline";
+
+/**
+ * One place that maps a profile section to its route. The bare profile URL opens on the section
+ * for the viewer's role (doctor → Summary, nutritionist → Nutrition, instructor → Yoga; F1).
+ */
+export function profileHref(patientId: string, section: ProfileSection = "summary") {
+  const base = `/patients/${patientId}`;
+  return section === "summary" ? base : `${base}/${section}`;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -113,44 +127,36 @@ export interface ContactAttempt {
   byId: string;
 }
 
+/** Channels a coordinator records by hand. Sending WhatsApp / SMS from Carelane is an add-on; logging one you made is not. */
 export const CONTACT_CHANNELS: ContactChannel[] = ["Call", "SMS", "WhatsApp", "Email"];
 export const CONTACT_OUTCOMES: ContactOutcome[] = ["No answer", "Spoke to patient", "Left message", "No reply", "Wrong number"];
 
 /** Care-coordinator contact log (demo). */
 export const CONTACT_ATTEMPTS: ContactAttempt[] = [
   { id: "ca-1", patientId: "p-rajesh", channel: "Call", outcome: "No answer", note: "After the 09:00 nutrition no-show. Retry after lunch.", at: "2026-11-13T09:25:00+05:30", byId: "s-farhan" },
-  { id: "ca-2", patientId: "p-arun", channel: "Call", outcome: "Spoke to patient", note: "Said he would attend Friday's 07:30 class — marked absent today.", at: "2026-11-12T11:15:00+05:30", byId: "s-farhan" },
-  { id: "ca-3", patientId: "p-harish", channel: "WhatsApp", outcome: "Left message", note: "Asked him to call back to book the overdue cardiology review.", at: "2026-11-11T17:40:00+05:30", byId: "s-farhan" },
+  { id: "ca-2", patientId: "p-arun", channel: "Call", outcome: "Spoke to patient", note: "Said he would attend Friday's 07:30 class.", at: "2026-11-12T11:15:00+05:30", byId: "s-farhan" },
+  { id: "ca-3", patientId: "p-harish", channel: "WhatsApp", outcome: "Left message", note: "Asked him to call back to book the overdue review.", at: "2026-11-11T17:40:00+05:30", byId: "s-farhan" },
   { id: "ca-4", patientId: "p-deepak", channel: "Email", outcome: "No reply", note: "Programme completion summary — asked which format he prefers.", at: "2026-11-10T10:05:00+05:30", byId: "s-farhan" },
 ];
 
-export type ActivityKind = "registration" | "document" | "guidance" | "schedule" | "payment" | "account" | "export" | "plan";
-
 /**
- * Admin activity history. Times are taken from the shared records where one exists
- * (document uploads, registrations, notifications); account and export entries are demo-only.
+ * Admin: access that needs a decision. The temporary cover grant mirrors the activity-log entry
+ * of 10 Nov (granted by Neha Joshi, approved by the clinical lead); the branch move only exists
+ * with more than one branch (Pro).
  */
-export const ACTIVITY: { id: string; at: string; actorId: string | null; actorLabel?: string; action: string; kind: ActivityKind }[] = [
-  { id: "ac-1", at: "2026-11-13T09:02:00+05:30", actorId: "s-sneha", action: "Scanned a 3-page report into the intake queue — patient not matched", kind: "document" },
-  { id: "ac-2", at: "2026-11-13T08:55:00+05:30", actorId: "s-sneha", action: "Registered walk-in Kunal Mehta — flagged as a possible duplicate", kind: "registration" },
-  { id: "ac-3", at: "2026-11-13T08:45:00+05:30", actorId: "s-sana", action: "Changed session guidance for Rekha Iyengar (SpO₂ floor 92%)", kind: "guidance" },
-  { id: "ac-4", at: "2026-11-13T08:10:00+05:30", actorId: "s-sneha", action: "Moved Zoya Siddiqui's follow-up to 1 Dec and added her to the waitlist", kind: "schedule" },
-  { id: "ac-5", at: "2026-11-13T08:05:00+05:30", actorId: null, actorLabel: "Payment gateway", action: "UPI confirmation for INV-2611-0412 not received — invoice left unpaid", kind: "payment" },
-  { id: "ac-6", at: "2026-11-12T18:15:00+05:30", actorId: null, actorLabel: "Lab partner · Anand Diagnostics", action: "Uploaded a lipid profile for Kabir Malhotra (reported 11 Nov)", kind: "document" },
-  { id: "ac-7", at: "2026-11-12T17:05:00+05:30", actorId: "s-meera", action: "Published nutrition plan v4 for Kabir Malhotra", kind: "plan" },
-  { id: "ac-8", at: "2026-11-12T10:30:00+05:30", actorId: "s-neha", action: "Moved Ishaan Gupta from Indiranagar to HSR Layout — access review opened", kind: "account" },
-  { id: "ac-9", at: "2026-11-11T18:30:00+05:30", actorId: "s-neha", action: "Exported the appointment list (no clinical fields)", kind: "export" },
+export const ACCESS_REVIEWS: { id: string; staffId: string; title: string; detail: string; due: string; needs?: "branches" }[] = [
+  { id: "ar-cover", staffId: "s-vikram", title: "Temporary cover ends 18 Nov", detail: "Dr. Vikram Iyer can open Dr. Sana Qureshi's patients while she is on leave. Extend it or let it lapse.", due: "2026-11-18T18:00:00+05:30" },
+  { id: "ar-branch", staffId: "s-ishaan", title: "Moved to HSR Layout", detail: "Access to the old branch is not removed automatically. Confirm what Ishaan Gupta can still open.", due: "2026-11-20T18:00:00+05:30", needs: "branches" },
 ];
 
-/** Patient home: "What I should do today" (meals / practice / logs) for Kabir, from his shared care plan. */
-export const PATIENT_TODAY: { id: string; label: string; detail: string; kind: "meal" | "practice" | "log"; recordedBy?: string }[] = [
-  { id: "class", label: "Cardiac rehab yoga · 07:30", detail: "Marked present by Kavya Nair", kind: "practice", recordedBy: "s-kavya" },
-  { id: "breakfast", label: "Breakfast from plan v4", detail: "Heart-healthy vegetarian · oil budget 3 tsp today", kind: "meal" },
-  { id: "breathing", label: "Paced breathing 4-6 · 10 min", detail: "From your movement plan", kind: "practice" },
-  { id: "lunch", label: "Lunch with 30 g fibre in mind", detail: "Millet swaps added in plan v4", kind: "meal" },
-  { id: "snack", label: "Evening snack: roasted chana", detail: "Swap agreed in plan v3", kind: "meal" },
-  { id: "dinner", label: "Dinner by 19:30", detail: "Office day — dinner alternatives in plan v4", kind: "meal" },
-  { id: "bp", label: "Log today's blood pressure", detail: "Part of your 7-day home log, due 19 Nov", kind: "log" },
+/** Patient home: today's meals and practice from Kabir's shared care plan (plan v4, cardiac rehab). */
+export const PATIENT_TODAY: { id: string; label: string; detail: string; kind: "meal" | "practice"; at: string; recordedBy?: string }[] = [
+  { id: "class", label: "Cardiac rehab yoga", detail: "Marked present by Kavya Nair", kind: "practice", at: "07:30", recordedBy: "s-kavya" },
+  { id: "breakfast", label: "Breakfast", detail: "Heart-healthy vegetarian · oil budget 3 tsp today", kind: "meal", at: "08:30" },
+  { id: "breathing", label: "Paced breathing 4-6 · 10 min", detail: "From your movement plan", kind: "practice", at: "10:00" },
+  { id: "lunch", label: "Lunch", detail: "Millet swap from plan v4 · 30 g fibre across the day", kind: "meal", at: "13:00" },
+  { id: "snack", label: "Evening snack", detail: "Roasted chana", kind: "meal", at: "17:00" },
+  { id: "dinner", label: "Dinner by 19:30", detail: "Office-day alternatives in plan v4", kind: "meal", at: "19:30" },
 ];
 
 /** Patient home: how to prepare for the next appointment. */

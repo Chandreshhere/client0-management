@@ -8,17 +8,17 @@ import { STAFF, staffById } from "@/data/staff";
 import { patientById } from "@/data/patients";
 import { cn } from "@/lib/cn";
 import { formatDate, formatTime, pluralize } from "@/lib/format";
-import { Avatar } from "@/components/ui/avatar";
+import { Avatar, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, SheetContent } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { usePlan, useRole } from "@/components/shell/role-context";
-import { OrganImage } from "@/components/viz/organ";
 import { InfoNote } from "@/features/settings/ui";
+import { serviceText } from "@/features/schedule/access";
 import { daysPhrase, whenInline } from "@/features/settings/time";
-import { COVER_DOCTORS, LEAVE, cancelledToday, careTeamOf, caseloadByOrgan, patientOrgan, reviewsWaitingFor, seedCover, waitlistMentioning, type CoverChoice } from "./data";
+import { COVER_DOCTORS, LEAVE, cancelledToday, careTeamOf, reviewsWaitingFor, seedCover, waitlistMentioning, type CoverChoice } from "./data";
 import { reassignReview, restoreCover, saveCover, useTeamState } from "./store";
 
 /**
@@ -51,11 +51,12 @@ export function LeaveFocal({ canManage, onReview }: { canManage: boolean; onRevi
     );
   }
   const patients = careTeamOf(away.id);
-  const groups = caseloadByOrgan(patients);
   const coverDoc = staffById(leave.coverId);
   const waiting = reviewsWaitingFor(away.id);
-  const asks = waitlistMentioning(away.id);
-  const moved = cancelledToday(away.id);
+  // Waitlist requests and cancelled visits exist only with appointments (Clinic+).
+  const asks = has("waitlist") ? waitlistMentioning(away.id) : [];
+  const moved = has("calendar") ? cancelledToday(away.id) : [];
+  const active = patients.filter((p) => p.status !== "completed").length;
   const split = COVER_DOCTORS.map((d) => ({ d, n: Object.values(cover).filter((c) => c === d.id).length })).filter((x) => x.n > 0);
   const waitN = Object.values(cover).filter((c) => c === "wait").length;
   const noneN = Object.values(cover).filter((c) => c === "none").length;
@@ -77,21 +78,14 @@ export function LeaveFocal({ canManage, onReview }: { canManage: boolean; onRevi
         <Avatar src={away.avatar} name={away.name} size="lg" className="ring-2 ring-white/40" />
       </div>
 
-      <div className="rounded-inner bg-surface p-4 text-ink">
-        <div className="flex items-baseline justify-between gap-3">
-          <h3 className="text-sm text-ink">Caseload by body system</h3>
-          <span className="text-xs text-muted">{pluralize(patients.length, "patient")} on her list</span>
+      <div className="flex items-center justify-between gap-4 rounded-inner bg-surface p-4 text-ink">
+        <div className="min-w-0">
+          <h3 className="text-sm text-ink">{pluralize(patients.length, "patient")} on her list</h3>
+          <p className="mt-0.5 text-xs text-muted">
+            {active} need cover · clinical details stay with the care team
+          </p>
         </div>
-        <ul className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
-          {groups.map((g) => (
-            <li key={g.organ} className="flex flex-col items-center gap-1 rounded-[12px] bg-sunken px-1 pb-2 pt-1 text-center" title={`${g.system}: ${g.patients.map((p) => p.name).join(", ")}`}>
-              <OrganImage kind={g.organ} className="size-12" />
-              <span className="text-[11px] leading-tight text-ink-2">{g.label}</span>
-              <span className="text-xs text-ink tabular">{g.patients.length}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-[11px] text-muted">Organ = each patient&apos;s primary body system from their record. Diagnoses and notes stay with the care team.</p>
+        <AvatarStack people={patients.map((p) => ({ name: p.name, avatar: p.avatar }))} max={6} size="sm" />
       </div>
 
       <div className="rounded-inner bg-surface p-4 text-ink">
@@ -158,9 +152,9 @@ export function LeaveFocal({ canManage, onReview }: { canManage: boolean; onRevi
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-ink">
-                  {formatTime(a.start)} {a.service} · {patientById(a.patientId)?.name}
+                  {formatTime(a.start)} {serviceText(a.service, false)} · {patientById(a.patientId)?.name}
                 </p>
-                <p className="text-xs text-muted">Cancelled today{a.notes ? ` — ${a.notes}` : ""}</p>
+                <p className="text-xs text-muted">Cancelled today</p>
               </div>
             </li>
           ))}
@@ -188,6 +182,7 @@ export function LeaveFocal({ canManage, onReview }: { canManage: boolean; onRevi
 }
 
 export function ReassignSheet({ open, onOpenChange, canManage }: { open: boolean; onOpenChange: (v: boolean) => void; canManage: boolean }) {
+  const { has } = usePlan();
   const { toast } = useToast();
   const { user } = useRole();
   const { away, leave, cover, coverAt, sessionCover } = useLeave();
@@ -274,21 +269,20 @@ export function ReassignSheet({ open, onOpenChange, canManage }: { open: boolean
           ) : null}
           <ul className="flex flex-col gap-2">
             {patients.map((p) => {
-              const o = patientOrgan(p);
               const choice = draft[p.id] ?? "wait";
               return (
                 <li key={p.id} className={cn("grid grid-cols-[48px_minmax(0,1fr)] items-center gap-3 rounded-inner p-3", p.status === "needs-attention" ? "bg-warning-soft/60" : "bg-sunken/60")}>
-                  <span className="flex size-12 items-center justify-center rounded-[12px] bg-surface">{o ? <OrganImage kind={o.organ} className="size-10" alt="" /> : null}</span>
+                  <Avatar src={p.avatar} name={p.name} size="lg" />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link href={`/patients/${p.id}`} className="truncate text-sm text-ink underline-offset-2 hover:underline">
                         {p.name}
                       </Link>
                       {p.status === "needs-attention" ? <StatusBadge tone="warning">Needs attention</StatusBadge> : null}
-                      {p.status === "completed" ? <StatusBadge tone="neutral">Programme complete</StatusBadge> : null}
+                      {p.status === "completed" ? <StatusBadge tone="neutral">{has("programmes") ? "Programme complete" : "Care complete"}</StatusBadge> : null}
                     </div>
                     <p className="truncate text-xs text-muted">
-                      {o?.system ?? "No body system recorded"} · {p.nextAppointment ? `next ${whenInline(p.nextAppointment)}` : "nothing booked"}
+                      {p.nextAppointment ? `${has("calendar") ? "Next visit" : "Follow-up"} ${whenInline(p.nextAppointment)}` : has("calendar") ? "Nothing booked" : "No follow-up set"}
                     </p>
                   </div>
                   <div className="col-span-2">

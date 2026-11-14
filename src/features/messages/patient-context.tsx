@@ -4,33 +4,31 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { ArrowUpRight, CalendarBlank, ChatsCircle, ListChecks, ShieldCheck, ArrowsLeftRight } from "@phosphor-icons/react";
 import type { Patient, Role } from "@/data/types";
-import { ORGAN_LABEL } from "@/data/anatomy";
-import { getRecord, type PatientRecord } from "@/data/record";
-import { latestMeasurements, measureHistory, systemShares } from "@/data/insights";
+import { getRecord } from "@/data/record";
+import { latestMeasurements, measureHistory } from "@/data/insights";
 import { WEEK_APPOINTMENTS, DISCIPLINE_LABEL } from "@/data/appointments";
 import { clinicNumber, patientById } from "@/data/patients";
 import { staffById } from "@/data/staff";
-import { REFERRAL_STAGE_LABEL } from "@/data/care";
 import { TODAY, formatDate, formatTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { Sparkline } from "@/components/charts/bar-chart";
-import { OrganImage } from "@/components/viz/organ";
 import { personById } from "@/features/tasks/people";
 import { useTasks } from "@/features/tasks/store";
 import { dueLabel } from "@/features/tasks/task-meta";
 import { byTime, dayName } from "@/features/tasks/time";
 import { useReferrals } from "@/features/referrals/store";
-import { referralState, waitText } from "@/features/referrals/meta";
+import { DISCIPLINE_WORD, assignmentInfo } from "@/features/referrals/meta";
+import { useRole } from "@/components/shell/role-context";
 import type { ThreadView } from "./store";
 
 /**
  * Patient context beside a conversation, built from the patient's record (getRecord) and the
- * shared fixtures: the organ of their primary body system, their conditions, the latest reading
+ * shared fixtures: their conditions (doctor and nutritionist only), the latest reading
  * for that system with its own trend, the next appointment, and what is open for them.
  * Mirrors the record's access model: front desk and admin see the logistics, not the clinical summary.
  */
-const CLINICAL_ROLES: Role[] = ["doctor", "nutritionist", "yoga", "coordinator"];
+const CLINICAL_ROLES: Role[] = ["doctor", "nutritionist"];
 
 const STATUS_TONE: Record<string, string> = {
   Active: "bg-danger-soft text-danger",
@@ -72,6 +70,7 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
   const record = useMemo(() => getRecord(patient.id), [patient.id]);
   const tasks = useTasks();
   const referrals = useReferrals();
+  const viewerId = useRole().user.id;
   const clinical = CLINICAL_ROLES.includes(role);
   const primary = record?.systems[0];
   const conditions = record?.conditions ?? [];
@@ -79,8 +78,9 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
   const latest = record && primary ? latestMeasurements(record, primary.id)[0] : undefined;
   const history = record && latest ? measureHistory(record, latest.label) : [];
   const next = nextVisit(patient);
-  const openTasks = tasks.filter((t) => t.patientId === patient.id && t.status !== "done").sort((a, b) => byTime(a.due, b.due));
-  const openRefs = referrals.filter((r) => r.patientId === patient.id && referralState(r).pending);
+  // Task titles can carry clinical content: other roles see operational items and their own only.
+  const openTasks = tasks.filter((t) => t.patientId === patient.id && t.status !== "done" && (clinical || t.discipline === "operations" || t.ownerId === viewerId || t.createdBy === viewerId)).sort((a, b) => byTime(a.due, b.due));
+  const openRefs = referrals.filter((r) => r.patientId === patient.id && assignmentInfo(r).status !== "seen");
   const team = (["doctor", "nutritionist", "yoga", "coordinator"] as const).map((k) => patient.careTeam[k]).filter((id): id is string => !!id);
 
   return (
@@ -105,25 +105,14 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
 
       {clinical ? (
         <>
-          {/* primary body system: organ derived from recorded conditions */}
-          <section aria-labelledby="ctx-system" className="rounded-inner bg-surface p-4">
-            <h3 id="ctx-system" className="text-[11px] text-muted">
-              Primary body system · from recorded conditions
+          {/* conditions on the record (doctor and nutritionist only — rule 3) */}
+          <section aria-labelledby="ctx-conditions" className="rounded-inner bg-surface p-4">
+            <h3 id="ctx-conditions" className="text-[11px] text-muted">
+              Conditions on the record
             </h3>
-            {primary ? (
+            {ordered.length ? (
               <>
-                <div className="mt-2 flex items-center gap-3">
-                  <span className="relative flex size-[88px] shrink-0 items-center justify-center rounded-full bg-[radial-gradient(circle_at_50%_45%,var(--color-surface)_0%,var(--color-canvas)_70%)] shadow-[inset_0_0_0_1px_var(--color-line)]">
-                    <OrganImage kind={primary.organ} alt={`${ORGAN_LABEL[primary.organ]} — ${primary.name} system`} className="size-[112%] max-w-none [animation:organ-float_7s_ease-in-out_infinite]" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-lg font-light leading-tight tracking-[-0.01em] text-ink">{primary.name}</p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      {ORGAN_LABEL[primary.organ]} · {conditions.filter((c) => c.systemId === primary.id).length} of {conditions.length} {conditions.length === 1 ? "condition" : "conditions"}
-                    </p>
-                  </div>
-                </div>
-                <ul className="mt-3 flex flex-col gap-1.5" aria-label="Conditions">
+                <ul className="mt-2 flex flex-col gap-1.5" aria-label="Conditions">
                   {ordered.slice(0, 4).map((c) => (
                     <li key={c.id} className="flex items-center gap-2 text-xs">
                       <span className="min-w-0 flex-1 truncate text-ink-2" title={c.name}>
@@ -134,10 +123,9 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
                   ))}
                 </ul>
                 {ordered.length > 4 ? <p className="mt-1.5 text-[11px] text-muted">+{ordered.length - 4} more on the record</p> : null}
-                {record ? <SystemShares record={record} /> : null}
               </>
             ) : (
-              <p className="mt-2 text-xs text-muted">No conditions recorded yet — nothing to summarise.</p>
+              <p className="mt-2 text-xs text-muted">No conditions recorded yet.</p>
             )}
           </section>
 
@@ -173,7 +161,13 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
       ) : (
         <div className="flex items-start gap-3 rounded-inner bg-surface p-4">
           <ShieldCheck size={18} className="mt-px shrink-0 text-success" aria-hidden="true" />
-          <p className="text-xs leading-relaxed text-muted">Clinical summary hidden for your role — logistics only. The care team sees conditions and readings here.</p>
+          <p className="text-xs leading-relaxed text-muted">
+            {role === "yoga"
+              ? "Instructors see precautions, not diagnoses — this patient's precautions are on their session and in the Yoga section of the record."
+              : role === "coordinator"
+                ? "Clinical detail shows only where the doctor has granted it. Status of assignments, follow-ups and attendance is below."
+                : "Clinical summary hidden for your role — logistics only."}
+          </p>
         </div>
       )}
 
@@ -207,7 +201,7 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
         <h3 id="ctx-open" className="text-[11px] text-muted">
           Open for this patient
         </h3>
-        {openTasks.length === 0 && openRefs.length === 0 ? <p className="mt-2 text-xs text-muted">No open tasks or referrals.</p> : null}
+        {openTasks.length === 0 && openRefs.length === 0 ? <p className="mt-2 text-xs text-muted">No open tasks or assignments.</p> : null}
         <ul className="mt-2 flex flex-col gap-2">
           {openTasks.slice(0, 3).map((t) => {
             const due = dueLabel(t);
@@ -224,15 +218,14 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
             );
           })}
           {openRefs.map((r) => {
-            const st = referralState(r);
+            const info = assignmentInfo(r);
             return (
               <li key={r.id} className="flex items-start gap-2 text-xs">
                 <ArrowsLeftRight size={16} className="mt-px shrink-0 text-muted" aria-hidden="true" />
                 <span className="min-w-0">
-                  <span className="block text-ink-2">Referral → {DISCIPLINE_LABEL[r.toDiscipline]}</span>
-                  <span className={cn("block text-[11px]", st.overdue ? "text-danger" : st.stalled ? "text-warning" : "text-muted")}>
-                    Waiting to be {st.pending ? REFERRAL_STAGE_LABEL[st.pending].toLowerCase() : "moved on"}
-                    {staffById(st.waitingOn ?? undefined) ? ` by ${staffById(st.waitingOn ?? undefined)!.name}` : ""} · {waitText(st.waitingDays)}
+                  <span className="block text-ink-2">Assignment → {DISCIPLINE_WORD[r.toDiscipline]}</span>
+                  <span className={cn("block text-[11px]", info.status === "back" ? "text-warning" : "text-muted")}>
+                    {info.status === "back" ? `Not seen in 48 h — back with ${staffById(r.fromId)?.name ?? "the doctor"}` : `Not opened yet by ${staffById(r.toId)?.name ?? "the recipient"}`}
                   </span>
                 </span>
               </li>
@@ -249,7 +242,7 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
             ) : null}
             {openRefs.length ? (
               <Link href="/referrals" className="text-primary-ink underline-offset-2 hover:underline">
-                Referrals
+                Assignments
               </Link>
             ) : null}
           </div>
@@ -258,42 +251,6 @@ function ContextBody({ patient, role, className }: { patient: Patient; role: Rol
 
       <PeopleInset title="Care team" ids={team} />
     </aside>
-  );
-}
-
-/**
- * Where this patient's care activity went over the last 12 months, per body system on the record
- * (ref 2's body-condition % cards, condensed). Only shown when there is more than one system.
- */
-function SystemShares({ record }: { record: PatientRecord }) {
-  const shares = systemShares(record);
-  const total = shares[0]?.total ?? 0;
-  if (shares.length < 2 || total === 0) return null;
-  return (
-    <div className="mt-4 border-t border-line pt-3">
-      <p className="text-[11px] text-muted">
-        Share of care activity · last 12 months · {total} {total === 1 ? "event" : "events"}
-      </p>
-      <ul className="mt-2 flex flex-col gap-2">
-        {shares.map((s) => (
-          <li key={s.id} className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2 text-xs">
-            <OrganImage kind={s.organ} alt={ORGAN_LABEL[s.organ]} className="size-6" />
-            <span className="min-w-0">
-              <span className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-ink-2">{s.name}</span>
-                <span className="shrink-0 text-[11px] text-muted tabular">
-                  {s.events} of {total}
-                </span>
-              </span>
-              <span className="mt-1 block h-1 overflow-hidden rounded-full bg-sunken" aria-hidden="true">
-                <span className="block h-full rounded-full bg-ink-2" style={{ width: `${s.percent}%` }} />
-              </span>
-            </span>
-            <span className="w-9 text-right text-ink tabular">{s.percent}%</span>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 

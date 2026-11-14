@@ -8,7 +8,8 @@ import { Dialog, ModalContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
-import { LockBadge, priceLine } from "@/components/shell/plan-switcher";
+import { LockBadge } from "@/components/shell/plan-switcher";
+import { planById, priceLabel } from "@/data/plans";
 import { usePlan } from "@/components/shell/role-context";
 import { formatDate, TODAY } from "@/lib/format";
 import { localId } from "../store";
@@ -16,7 +17,7 @@ import type { LocalReferral, NextReview, ReferralTarget } from "./use-drafts";
 
 const TODAY_DATE = "2026-11-13";
 const addDays = (n: number) => new Date(TODAY.getTime() + n * 86_400_000).toISOString().slice(0, 10);
-const DISCIPLINE_NAME: Record<ReferralTarget, string> = { nutrition: "Nutrition", movement: "Movement (yoga)", medical: "Medical" };
+const DISCIPLINE_NAME: Record<ReferralTarget, string> = { nutrition: "Nutrition", movement: "Yoga", medical: "Medical" };
 
 /* ------------------------------------------------------------------ referral */
 
@@ -35,16 +36,18 @@ export function ReferralDialog({
   suggestedReason: string;
   onCreate: (r: LocalReferral) => void;
 }) {
+  // Spec F5: assignments go to nutrition or yoga — the patient's own team first, then anyone else in that discipline.
+  const onTeam = (id: string) => id === patient.careTeam.nutritionist || id === patient.careTeam.yoga;
   const targets = [
     ...(patient.careTeam.nutritionist ? [{ to: "nutrition" as const, toId: patient.careTeam.nutritionist, team: true }] : []),
     ...(patient.careTeam.yoga ? [{ to: "movement" as const, toId: patient.careTeam.yoga, team: true }] : []),
-    ...STAFF.filter((s) => s.role === "doctor" && s.id !== authorId).map((s) => ({ to: "medical" as const, toId: s.id, team: false })),
+    ...STAFF.filter((s) => (s.role === "nutritionist" || s.role === "yoga") && !onTeam(s.id) && s.id !== authorId).map((s) => ({ to: s.role === "nutritionist" ? ("nutrition" as const) : ("movement" as const), toId: s.id, team: false })),
   ];
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [target, setTarget] = useState(`${targets[0]?.to}|${targets[0]?.toId}`);
   const [reason, setReason] = useState("");
   const [priority, setPriority] = useState<LocalReferral["priority"]>("normal");
-  const [dueBy, setDueBy] = useState(addDays(7));
+  const dueBy = addDays(2);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,7 +59,7 @@ export function ReferralDialog({
 
   const submit = () => {
     if (!reason.trim()) {
-      setError("Say what you'd like the receiving clinician to do.");
+      setError("Add the goals — what you'd like them to work on.");
       return;
     }
     const [to, toId] = target.split("|") as [ReferralTarget, string];
@@ -67,8 +70,8 @@ export function ReferralDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <ModalContent
-        title="Create referral"
-        description="Starts at “Requested”. It's tracked through accepted → booked → completed → acknowledged."
+        title="Assign to nutrition or yoga"
+        description="Assigned → seen: it shows as seen once they open it. Not seen within 48 hours, it comes back to you."
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           reasonRef.current?.focus();
@@ -79,13 +82,13 @@ export function ReferralDialog({
               Cancel
             </Button>
             <Button variant="dark" leading={<PaperPlaneTilt />} onClick={submit}>
-              Create referral
+              Assign
             </Button>
           </>
         }
       >
         <div className="flex flex-col gap-4">
-          <Field label="Refer to">
+          <Field label="Assign to">
             {({ id }) => (
               <Select
                 id={id}
@@ -98,7 +101,7 @@ export function ReferralDialog({
               />
             )}
           </Field>
-          <Field label="Reason and request" error={error ?? undefined} hint="Prefilled from your assessment — edit freely.">
+          <Field label="Goals, guidance or precautions" error={error ?? undefined} hint="Prefilled from your assessment — edit freely. For yoga, write precautions, not diagnoses.">
             {(p) => (
               <Textarea
                 ref={reasonRef}
@@ -107,7 +110,7 @@ export function ReferralDialog({
                   setReason(e.target.value);
                   setError(null);
                 }}
-                placeholder="e.g. Review plan v4 against today's lipid results; target LDL < 70."
+                placeholder="e.g. Heart-healthy vegetarian plan; LDL-C below 70 mg/dL. For yoga: HR ceiling 110 bpm; no inversions."
                 {...p}
               />
             )}
@@ -129,9 +132,10 @@ export function ReferralDialog({
                 ]}
               />
             </div>
-            <Field label="Respond by">
-              {(p) => <Input type="date" value={dueBy} min={addDays(1)} onChange={(e) => setDueBy(e.target.value)} {...p} />}
-            </Field>
+            <div className="flex flex-col gap-2">
+              <span className="text-sm text-ink">If not seen</span>
+              <p className="text-xs text-muted">Not opened by {formatDate(`${dueBy}T12:00:00+05:30`, { weekday: "short", day: "numeric", month: "short" })} (48 hours), it comes back to your pending list.</p>
+            </div>
           </div>
         </div>
       </ModalContent>
@@ -292,7 +296,7 @@ export function InstructionsDialog({
             {!portal ? (
               <span className="mr-auto flex items-center gap-1.5 text-xs text-muted">
                 <LockBadge />
-                Patient portal is on the Clinic plan ({priceLine("clinic")})
+                Releasing to the patient app is on the Pro plan ({priceLabel(planById("pro"))})
               </span>
             ) : null}
             <Button variant="ghost" onClick={() => onOpenChange(false)}>

@@ -17,10 +17,8 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Tip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import { usePlan, useRole } from "@/components/shell/role-context";
-import { LockBadge } from "@/components/shell/plan-switcher";
+import { planById } from "@/data/plans";
 import { InfoNote, ROLE_LABEL, ReadOnlyBanner, SaveState, type SaveStatus } from "./ui";
-import { OrganImage } from "@/components/viz/organ";
-import { caseloadByOrgan } from "@/features/team/data";
 import { DayTrack, DayTrackScale } from "./viz";
 import { NOW_ISO, NOW_MIN, hhmm } from "./time";
 import { BRANCH_ADDRESS, CLINIC_FIXED, roomBookingsToday, settingsAccess, type ClinicProfile } from "./data";
@@ -72,11 +70,15 @@ function useSaver() {
 
 function GeneralWorkspace() {
   const { role } = useRole();
-  const { plan } = usePlan();
+  const { plan, has } = usePlan();
   const access = settingsAccess(role, plan);
   return (
     <div className="flex flex-col gap-6 lg:gap-8">
-      <PageHeader eyebrow="Settings" title="General" description="Your own profile, the clinic's details and its branches. Changes are saved in this browser session and written to the audit log — nothing leaves this browser." />
+      <PageHeader
+        eyebrow="Settings"
+        title="General"
+        description={`Your own profile, the clinic's details and its ${has("branches") ? "branches" : "location"}. Changes are saved in this browser session and written to the activity log — nothing leaves this browser.`}
+      />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <ProfileCard />
         <ClinicCard canEdit={access.canEditClinic} ownerLabel={access.ownerLabel} />
@@ -90,6 +92,7 @@ function GeneralWorkspace() {
 
 function ProfileCard() {
   const { user } = useRole();
+  const { has } = usePlan();
   const s = useSettingsState();
   const staff = staffById(user.id);
   const base: ProfilePrefs = useMemo(() => s.profiles[user.id] ?? { displayName: user.name, title: user.title, digest: true, reviewReminders: true, messageAlerts: false }, [s.profiles, user]);
@@ -149,7 +152,7 @@ function ProfileCard() {
             [
               ["digest", "Morning summary", "What needs you today, at 08:00"],
               ["reviewReminders", "Review reminders", "Reports and notes waiting on you"],
-              ["messageAlerts", "Message alerts", "Each new patient or care-team message"],
+              ...(has("messages") ? ([["messageAlerts", "Message alerts", "Each new patient or care-team message"]] as const) : []),
             ] as const
           ).map(([k, label, hint]) => (
             <label key={k} className="flex items-center justify-between gap-4 rounded-[14px] bg-sunken px-4 py-3">
@@ -191,6 +194,11 @@ const CLINIC_FIELDS: { key: keyof ClinicProfile; label: string }[] = [
 function ClinicCard({ canEdit, ownerLabel }: { canEdit: boolean; ownerLabel: string }) {
   const { toast } = useToast();
   const { user } = useRole();
+  const { has } = usePlan();
+  const billing = has("billing");
+  const calendar = has("calendar");
+  // Where the clinic's details are printed, on this plan.
+  const shownOn = ["prescriptions", "visit summaries", "record exports", ...(billing ? ["invoices", "receipts"] : []), ...(has("portal") ? ["the patient app"] : [])];
   const saved = useClinic();
   const [form, setForm] = useState<ClinicProfile>(saved);
   const [errors, setErrors] = useState<ClinicErrors>({});
@@ -208,7 +216,7 @@ function ClinicCard({ canEdit, ownerLabel }: { canEdit: boolean; ownerLabel: str
     const e: ClinicErrors = {};
     if (form.name.trim().length < 3) e.name = "Enter the clinic's name.";
     if (!form.shortName.trim()) e.shortName = "Enter a short name.";
-    else if (form.shortName.trim().length > 12) e.shortName = "Keep it to 12 characters — it ends every text message.";
+    else if (form.shortName.trim().length > 12) e.shortName = "Keep it to 12 characters.";
     if (!/^\+?[0-9][0-9 ]{8,15}$/.test(form.phone.trim())) e.phone = "Use digits and spaces, e.g. +91 80 4000 2626.";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) e.email = "That doesn't look like an email address.";
     if (form.receiptNote.trim().length > 200) e.receiptNote = "Keep the receipt note under 200 characters.";
@@ -217,10 +225,19 @@ function ClinicCard({ canEdit, ownerLabel }: { canEdit: boolean; ownerLabel: str
 
   const fixed = (
     <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-inner bg-sunken p-4 text-sm">
-      <div>
-        <dt className="text-xs text-muted">Invoice numbers</dt>
-        <dd className="mt-0.5 font-mono text-[13px] text-ink">{CLINIC_FIXED.invoicePrefix}0001…</dd>
-      </div>
+      {billing ? (
+        <div>
+          <dt className="text-xs text-muted">Invoice numbers</dt>
+          <dd className="mt-0.5 font-mono text-[13px] text-ink">{CLINIC_FIXED.invoicePrefix}0001…</dd>
+        </div>
+      ) : (
+        <div>
+          <dt className="text-xs text-muted">Working hours</dt>
+          <dd className="mt-0.5 text-ink tabular">
+            {hhmm(CLINIC_FIXED.hours.start)}–{hhmm(CLINIC_FIXED.hours.end)}
+          </dd>
+        </div>
+      )}
       <div>
         <dt className="text-xs text-muted">Week</dt>
         <dd className="mt-0.5 text-ink">{CLINIC_FIXED.week}</dd>
@@ -247,7 +264,7 @@ function ClinicCard({ canEdit, ownerLabel }: { canEdit: boolean; ownerLabel: str
             <h2 id="clinic-title" className="text-lg font-normal tracking-[-0.01em] text-ink">
               Clinic profile
             </h2>
-            <p className="truncate text-xs text-muted">Shown on invoices, receipts, messages and the patient portal</p>
+            <p className="text-xs text-muted">Letterhead on {shownOn.slice(0, -1).join(", ")} and {shownOn.at(-1)}</p>
           </div>
         </div>
         {canEdit ? <SaveState status={dirty && saver.status.kind !== "saving" ? { kind: "dirty" } : saver.status} /> : null}
@@ -274,11 +291,11 @@ function ClinicCard({ canEdit, ownerLabel }: { canEdit: boolean; ownerLabel: str
             <Field label="Clinic name" error={errors.name}>
               {(a) => <Input {...a} value={form.name} onChange={(e) => set("name", e.target.value)} />}
             </Field>
-            <Field label="Short name" error={errors.shortName} hint={errors.shortName ? undefined : `${form.shortName.trim().length}/12 · signs texts`}>
+            <Field label="Short name" error={errors.shortName} hint={errors.shortName ? undefined : `${form.shortName.trim().length}/12 · where space is short`}>
               {(a) => <Input {...a} value={form.shortName} onChange={(e) => set("shortName", e.target.value)} />}
             </Field>
           </div>
-          <Field label="Legal name" hint="Printed on invoices and receipts">
+          <Field label="Legal name" hint={billing ? "Printed on invoices and receipts" : "Printed on the letterhead"}>
             {(a) => <Input {...a} value={form.legal} onChange={(e) => set("legal", e.target.value)} />}
           </Field>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -289,20 +306,25 @@ function ClinicCard({ canEdit, ownerLabel }: { canEdit: boolean; ownerLabel: str
               {(a) => <Input {...a} type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />}
             </Field>
           </div>
-          <Field label="Default appointment length" hint="New bookings start with this length; services can override it">
-            {(a) => (
-              <Select
-                id={a.id}
-                ariaLabel="Default appointment length"
-                value={form.slotMinutes}
-                onValueChange={(v) => set("slotMinutes", v)}
-                options={["15", "20", "30", "45", "60"].map((m) => ({ value: m, label: `${m} minutes` }))}
-              />
-            )}
-          </Field>
-          <Field label="Receipt note" error={errors.receiptNote} hint={errors.receiptNote ? undefined : `${form.receiptNote.trim().length}/200`}>
-            {(a) => <Textarea {...a} value={form.receiptNote} onChange={(e) => set("receiptNote", e.target.value)} className="min-h-20" />}
-          </Field>
+          {calendar ? (
+            <Field label="Default appointment length" hint="New bookings start with this length; services can override it">
+              {(a) => (
+                <Select
+                  id={a.id}
+                  ariaLabel="Default appointment length"
+                  value={form.slotMinutes}
+                  onValueChange={(v) => set("slotMinutes", v)}
+                  options={["15", "20", "30", "45", "60"].map((m) => ({ value: m, label: `${m} minutes` }))}
+                />
+              )}
+            </Field>
+          ) : null}
+          {billing ? (
+            <Field label="Receipt note" error={errors.receiptNote} hint={errors.receiptNote ? undefined : `${form.receiptNote.trim().length}/200`}>
+              {(a) => <Textarea {...a} value={form.receiptNote} onChange={(e) => set("receiptNote", e.target.value)} className="min-h-20" />}
+            </Field>
+          ) : null}
+          <Letterhead clinic={form} />
           {fixed}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" disabled={!dirty} onClick={() => { setForm(saved); setErrors({}); }}>
@@ -323,10 +345,10 @@ function ClinicCard({ canEdit, ownerLabel }: { canEdit: boolean; ownerLabel: str
                 ["Legal name", saved.legal],
                 ["Phone", saved.phone],
                 ["Email", saved.email],
-                ["Default appointment", `${saved.slotMinutes} minutes`],
+                ...(calendar ? [["Default appointment", `${saved.slotMinutes} minutes`] as const] : []),
                 // Shown read-only too (the edit form has them): the card no longer ends far above the profile card.
                 ["Opening hours", `${hhmm(CLINIC_FIXED.hours.start)}–${hhmm(CLINIC_FIXED.hours.end)}`],
-                ["Receipt note", saved.receiptNote],
+                ...(billing ? [["Receipt note", saved.receiptNote] as const] : []),
               ] as const
             ).map(([k, v]) => (
               <div key={k}>
@@ -335,6 +357,7 @@ function ClinicCard({ canEdit, ownerLabel }: { canEdit: boolean; ownerLabel: str
               </div>
             ))}
           </dl>
+          <Letterhead clinic={saved} />
           {fixed}
           <InfoNote icon={<Lock />} className="mt-auto">
             Clinic details are changed by {ownerLabel}.
@@ -347,59 +370,73 @@ function ClinicCard({ canEdit, ownerLabel }: { canEdit: boolean; ownerLabel: str
 
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Branches (Pro: multi-branch) or the one clinic location (Core, Clinic). Below Pro the clinic has
+ * a single location — no other branch is shown, locked or otherwise.
+ */
 function BranchesSection({ canEdit }: { canEdit: boolean }) {
   const { has } = usePlan();
   const branches = useRooms();
   const multi = has("branches");
+  const calendar = has("calendar");
   const shown = multi ? branches : branches.slice(0, 1);
-  const hidden = multi ? [] : branches.slice(1);
   return (
     <section aria-labelledby="branches-title" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="branches-title" className="text-lg font-normal tracking-[-0.01em] text-ink">
-            Branches & rooms
+            {multi ? "Branches & rooms" : "Clinic location & rooms"}
           </h2>
-          <p className="mt-1 text-sm text-muted">Each room shows today&apos;s bookings from the diary · white = opening hours · charcoal = booked · grey = already happened · line = now</p>
+          <p className="mt-1 text-sm text-muted">
+            {calendar ? "Each room shows today's bookings from the calendar · white = opening hours · charcoal = booked · grey = already happened · line = now" : "The rooms where consultations and sessions happen."}
+          </p>
         </div>
       </div>
-      {!canEdit ? <ReadOnlyBanner>Rooms and branches are managed by administrators. You can see how each room is used today.</ReadOnlyBanner> : null}
+      {!canEdit ? <ReadOnlyBanner>Rooms{multi ? " and branches" : ""} are managed by administrators.</ReadOnlyBanner> : null}
       {/* Branches differ in room count: each card keeps its own height (no stretched grey group), and the
           shorter one rides along (sticky) while the longer one scrolls. */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
+      <div className={cn("grid grid-cols-1 gap-4", multi && "xl:grid-cols-2 xl:items-start")}>
         {shown.map((b) => (
-          <BranchCard key={b.id} branch={b} canEdit={canEdit} />
-        ))}
-        {hidden.map((b) => (
-          <Group key={b.id} className="flex flex-col justify-center">
-            <Inset className="flex flex-col items-start gap-3 p-6">
-              <span className="flex items-center gap-2 text-sm text-ink">
-                <LockBadge />
-                {b.name} · {b.city}
-              </span>
-              <p className="text-sm text-muted">Multi-branch management is on the Clinic plan. This branch&apos;s rooms and staff stay hidden on your current plan.</p>
-              <Button asChild size="sm" variant="secondary">
-                <Link href="/pricing">Compare plans</Link>
-              </Button>
-            </Inset>
-          </Group>
+          <BranchCard key={b.id} branch={b} canEdit={canEdit} multi={multi} calendar={calendar} />
         ))}
       </div>
     </section>
   );
 }
 
-function BranchCard({ branch, canEdit }: { branch: ReturnType<typeof useRooms>[number]; canEdit: boolean }) {
+/** Letterhead preview: what prints at the top of prescriptions, visit summaries and exports. */
+function Letterhead({ clinic }: { clinic: ClinicProfile }) {
+  const branch = useRooms()[0];
+  return (
+    <div className="rounded-inner bg-sunken p-4">
+      <p className="text-xs text-muted">Letterhead</p>
+      <div className="mt-2 flex items-center gap-3 rounded-[12px] bg-surface p-4">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-charcoal text-sm text-white" aria-hidden="true">
+          {(clinic.shortName || clinic.name).trim().charAt(0).toUpperCase()}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm text-ink">{clinic.name}</p>
+          <p className="truncate text-xs text-muted">
+            {BRANCH_ADDRESS[branch?.id ?? ""] ?? branch?.city} · {clinic.phone}
+          </p>
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-muted">Logo upload and print layout are set up during onboarding.</p>
+    </div>
+  );
+}
+
+function BranchCard({ branch, canEdit, multi, calendar }: { branch: ReturnType<typeof useRooms>[number]; canEdit: boolean; multi: boolean; calendar: boolean }) {
   const { toast } = useToast();
   const { user } = useRole();
   const [room, setRoom] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const staff = STAFF.filter((s) => s.branch === branch.id).length;
-  const registered = PATIENTS.filter((p) => p.branch === branch.id);
-  const patients = registered.length;
-  const mix = caseloadByOrgan(registered);
-  const unrecorded = patients - mix.reduce((s, g) => s + g.patients.length, 0);
-  const rows = branch.rooms.map((r) => ({ room: r, bookings: roomBookingsToday(r), added: branch.added.includes(r) }));
+  // One location below Pro: everyone on the plan works there and every patient is registered there.
+  const { plan } = usePlan();
+  const planRoles = planById(plan).roles;
+  const staff = multi ? STAFF.filter((s) => s.branch === branch.id).length : STAFF.filter((s) => planRoles.includes(s.role)).length;
+  const patients = multi ? PATIENTS.filter((p) => p.branch === branch.id).length : PATIENTS.length;
+  const rows = branch.rooms.map((r) => ({ room: r, bookings: calendar ? roomBookingsToday(r) : [], added: branch.added.includes(r) }));
   const minutes = rows.reduce((s, r) => s + r.bookings.reduce((m, b) => m + b.minutes, 0), 0);
   const count = rows.reduce((s, r) => s + r.bookings.length, 0);
   const open = CLINIC_FIXED.hours.end - CLINIC_FIXED.hours.start;
@@ -413,11 +450,11 @@ function BranchCard({ branch, canEdit }: { branch: ReturnType<typeof useRooms>[n
     addRoom(branch.id as BranchId, name, user.id);
     setRoom("");
     setError(null);
-    toast({ tone: "success", title: `Added “${name}”`, description: "Saved in this browser session. It can be booked once the diary reads rooms from settings — not in this prototype." });
+    toast({ tone: "success", title: `Added “${name}”`, description: "Saved in this browser session and written to the activity log." });
   }
 
   return (
-    <Group className="flex flex-col xl:sticky xl:top-20">
+    <Group className={cn("flex flex-col", multi && "xl:sticky xl:top-20")}>
       <GroupHeader
         icon={<MapPin />}
         title={`${branch.name} · ${branch.city}`}
@@ -425,36 +462,13 @@ function BranchCard({ branch, canEdit }: { branch: ReturnType<typeof useRooms>[n
         action={<span className="hidden text-xs text-muted sm:inline">{pluralize(staff, "staff member")} · {pluralize(patients, "patient")}</span>}
       />
       <div className="flex flex-col gap-2">
-        <Inset className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-sm text-ink">
-            {pluralize(count, "booking")} today
-            <span className="text-muted"> · {Math.floor(minutes / 60)}h {String(minutes % 60).padStart(2, "0")}m across {pluralize(rows.length, "room")}</span>
-          </p>
-          <p className="text-xs text-muted">{pct}% of opening hours booked</p>
-        </Inset>
-        {patients ? (
-          <Inset className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-sm text-ink">
-                {pluralize(patients, "patient")} registered here
-                <span className="text-muted"> · by primary body system</span>
-              </p>
-              {unrecorded ? <p className="text-xs text-muted">{unrecorded} with no condition recorded yet</p> : null}
-            </div>
-            <ul className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1" aria-label={`${branch.name} patients by primary body system`}>
-              {mix.map((g) => (
-                <li key={g.organ} className="shrink-0">
-                  <Tip label={`${g.system} · ${g.patients.map((p) => p.name).join(", ")}`}>
-                    <span tabIndex={0} className="flex w-[76px] flex-col items-center gap-0.5 rounded-[12px] bg-sunken px-1 pb-2 pt-1 text-center outline-none focus-visible:outline-2 focus-visible:outline-primary">
-                      <OrganImage kind={g.organ} className="size-11" />
-                      <span className="w-full truncate text-[11px] leading-tight text-ink-2">{g.label}</span>
-                      <span className="text-xs text-ink tabular">{g.patients.length}</span>
-                    </span>
-                  </Tip>
-                </li>
-              ))}
-            </ul>
-            <p className="text-[11px] text-muted">Organ = each patient&apos;s primary body system from their recorded conditions — the mix this branch&apos;s rooms and services serve.</p>
+        {calendar ? (
+          <Inset className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm text-ink">
+              {pluralize(count, "booking")} today
+              <span className="text-muted"> · {Math.floor(minutes / 60)}h {String(minutes % 60).padStart(2, "0")}m across {pluralize(rows.length, "room")}</span>
+            </p>
+            <p className="text-xs text-muted">{pct}% of opening hours booked</p>
           </Inset>
         ) : null}
         <ul className="flex flex-col gap-2">
@@ -470,7 +484,7 @@ function BranchCard({ branch, canEdit }: { branch: ReturnType<typeof useRooms>[n
                       {r.added ? <span className="shrink-0 text-xs text-muted">· added this session</span> : null}
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
-                      <span className="text-xs text-muted tabular">{r.bookings.length ? `${pluralize(r.bookings.length, "booking")} · ${bookedMin} min` : "Free today"}</span>
+                      {calendar ? <span className="text-xs text-muted tabular">{r.bookings.length ? `${pluralize(r.bookings.length, "booking")} · ${bookedMin} min` : "Free today"}</span> : null}
                       {canEdit ? (
                         r.bookings.length ? (
                           <Tip label={`${pluralize(r.bookings.length, "booking")} today use ${r.room} — move them first`}>
@@ -497,6 +511,7 @@ function BranchCard({ branch, canEdit }: { branch: ReturnType<typeof useRooms>[n
                       ) : null}
                     </span>
                   </div>
+                  {calendar ? (
                   <DayTrack
                     window={CLINIC_FIXED.hours}
                     blocks={r.bookings.map((b) => ({ start: b.start, end: b.end, label: `${b.service} ${b.minutes} min`, tone: b.end <= NOW_MIN || b.status === "completed" || b.status === "no-show" ? ("done" as const) : ("booked" as const) }))}
@@ -504,14 +519,17 @@ function BranchCard({ branch, canEdit }: { branch: ReturnType<typeof useRooms>[n
                     label={`${r.room} today: ${r.bookings.length ? r.bookings.map((b) => `${hhmm(b.start)} ${b.service}`).join(", ") : "no bookings"}`}
                     height="h-2.5"
                   />
+                  ) : null}
                 </Inset>
               </li>
             );
           })}
         </ul>
-        <Inset className="pb-2 pt-1">
-          <DayTrackScale />
-        </Inset>
+        {calendar ? (
+          <Inset className="pb-2 pt-1">
+            <DayTrackScale />
+          </Inset>
+        ) : null}
         {canEdit ? (
           <form
             className={cn("flex flex-col gap-2 rounded-inner bg-surface p-4")}
@@ -521,7 +539,7 @@ function BranchCard({ branch, canEdit }: { branch: ReturnType<typeof useRooms>[n
               add();
             }}
           >
-            <Field label={`Add a room at ${branch.name}`} error={error ?? undefined}>
+            <Field label={multi ? `Add a room at ${branch.name}` : "Add a room"} error={error ?? undefined}>
               {(a) => (
                 <div className="flex gap-2">
                   <Input {...a} value={room} onChange={(e) => { setRoom(e.target.value); setError(null); }} placeholder="e.g. Consult 4" />

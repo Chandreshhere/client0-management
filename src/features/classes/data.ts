@@ -1,8 +1,9 @@
 import type { AttendanceState, YogaClass } from "@/data/types";
 
 /**
- * Classes workspace fixtures (synthetic). The shared CLASSES list covers Mon 9 and Fri 13 – Sat 14;
- * these earlier sessions fill Mon–Thu so the week view and the attendance rate are complete.
+ * Sessions workspace fixtures (synthetic). The shared CLASSES list covers Mon 9 and Fri 13 – Sat 14;
+ * these sessions fill Mon–Thu (and Kavya's Saturday class) so the week view and attendance are complete.
+ * Precautions only — never diagnoses (spec rule 3, fix 3).
  */
 
 const D = (day: number, hhmm: string) => `2026-11-${String(day).padStart(2, "0")}T${hhmm}:00+05:30`;
@@ -20,11 +21,11 @@ export const EARLIER_SESSIONS: YogaClass[] = [
   {
     id: "c-back-09", title: "Evening Back Care", kind: "group", instructorId: "s-arjun", room: "Yoga Deck", start: D(9, "17:30"), durationMin: 60, capacity: 12,
     focus: "Core stability, hip mobility, neutral spine",
-    enrolled: [p("p-fatima", "present", "current", "Avoid loaded flexion"), p("p-lakshmi-n", "late", "current", "Knee OA — chair-supported standing poses"), p("p-meenakshi", "present", "current", "Wrist-friendly variations")],
+    enrolled: [p("p-fatima", "present", "current", "Avoid loaded flexion"), p("p-lakshmi-n", "late", "current", "Chair-supported standing poses"), p("p-meenakshi", "present", "current", "Wrist-friendly variations")],
     waitlist: [],
   },
   {
-    id: "c-pcos-10", title: "PCOS Strength & Flow", kind: "group", instructorId: "s-lakshmi", room: "Yoga Hall", start: D(10, "09:00"), durationMin: 60, capacity: 10,
+    id: "c-pcos-10", title: "Strength & Flow", kind: "group", instructorId: "s-lakshmi", room: "Yoga Hall", start: D(10, "09:00"), durationMin: 60, capacity: 10,
     focus: "Strength-biased flow, 2× weekly programme",
     enrolled: [p("p-aditi", "present"), p("p-neelam", "absent")],
     waitlist: [],
@@ -32,7 +33,7 @@ export const EARLIER_SESSIONS: YogaClass[] = [
   {
     id: "c-mobility-10", title: "Gentle Mobility 60+", kind: "group", instructorId: "s-arjun", room: "Yoga Deck", start: D(10, "10:00"), durationMin: 45, capacity: 10,
     focus: "Fall prevention, chair-supported balance",
-    enrolled: [p("p-lakshmi-n", "present", "current", "Knee OA — chair-supported standing poses"), p("p-rekha", "present", "current", "SpO₂ floor 90% during practice"), p("p-sunita", "present")],
+    enrolled: [p("p-lakshmi-n", "present", "current", "Chair-supported standing poses"), p("p-rekha", "present", "current", "SpO₂ floor 90% during practice"), p("p-sunita", "present")],
     waitlist: [],
   },
   {
@@ -44,7 +45,7 @@ export const EARLIER_SESSIONS: YogaClass[] = [
   {
     id: "c-sunrise-11", title: "Sunrise Cardiac Rehab Flow", kind: "group", instructorId: "s-kavya", room: "Yoga Hall", start: D(11, "07:30"), durationMin: 60, capacity: 8,
     focus: "Low-intensity flow · keep HR below 110 bpm · no inversions",
-    enrolled: [p("p-kabir", "present", "current", "HR ceiling 110 bpm; avoid breath retention"), p("p-vivek", "present"), p("p-arun", "present", "current", "Post-MI: seated variations only until review"), p("p-karthik", "present"), p("p-gaurav", "absent", "current", "OSA — avoid supine breath-holds")],
+    enrolled: [p("p-kabir", "present", "current", "HR ceiling 110 bpm; avoid breath retention"), p("p-vivek", "present"), p("p-arun", "present", "current", "Seated variations only until review"), p("p-karthik", "present"), p("p-gaurav", "absent", "current", "No supine breath-holds")],
     waitlist: [],
   },
   {
@@ -67,13 +68,32 @@ export const EARLIER_SESSIONS: YogaClass[] = [
   },
 ];
 
+/**
+ * Kavya Nair's Saturday class. Dr. Ananya Rao changed Arun Kumar's precaution on 13 Nov after
+ * Kavya's flag about light-headedness, so Kavya must acknowledge it before she can start (F7/F8).
+ */
+export const LATER_SESSIONS: YogaClass[] = [
+  {
+    id: "c-sunrise-14", title: "Sunrise Cardiac Rehab Flow", kind: "group", instructorId: "s-kavya", room: "Yoga Hall", start: D(14, "07:30"), durationMin: 60, capacity: 8,
+    focus: "Low-intensity flow · keep HR below 110 bpm · no inversions",
+    enrolled: [
+      p("p-kabir", "pending", "current", "HR ceiling 110 bpm; avoid breath retention"),
+      p("p-vivek", "pending", "current", "BP check before class if headache"),
+      p("p-arun", "pending", "changed", "Seated work only; no standing balance until review"),
+      p("p-karthik", "pending"),
+      p("p-gaurav", "pending", "current", "No supine breath-holds"),
+    ],
+    waitlist: [],
+  },
+];
+
 /** Reasons recorded with the synthetic attendance (keyed classId:patientId). */
 export const BASE_REASONS: Record<string, string> = {
   "c-sunrise-13:p-arun": "No call or message",
   "c-sunrise-13:p-karthik": "Arrived 07:45 — traffic",
   "c-sunrise-09:p-arun": "Unwell — told front desk next day",
   "c-back-13:p-deepak": "Programme completed — cancelled remaining class",
-  "c-breath-09:p-mohit": "Asthma flare — messaged at 11:10",
+  "c-breath-09:p-mohit": "Unwell — messaged at 11:10",
   "c-breath-09:p-zoya": "10 minutes late",
   "c-breath-09:p-ananya-s": "Travelling — cancelled 8 Nov",
   "c-back-09:p-lakshmi-n": "Caregiver delayed",
@@ -138,7 +158,7 @@ export const SESSION_PLANS: Record<string, SessionPlan> = {
     modifications: ["No supine poses after 20 weeks"],
     props: ["Bolsters", "Blocks", "Wedge cushion"],
   },
-  "PCOS Strength & Flow": {
+  "Strength & Flow": {
     objectives: ["Strength-biased flow", "Consistency: 2× weekly"],
     steps: steps("pc", [["Warm-up", 8], ["Strength flow", 25], ["Core", 12], ["Cool-down", 10], ["Relaxation", 5]]),
     modifications: ["Hydration break mid-class"],
@@ -175,7 +195,11 @@ export const COVERING: Record<string, string> = { "s-sana": "s-vikram" };
 export const CLEARANCES: Record<string, Clearance> = {
   "p-kabir": { by: "s-ananya", at: "2026-11-06T11:05:00+05:30", validUntil: "2026-12-04" },
   "p-vivek": { by: "s-ananya", at: "2026-11-04T09:45:00+05:30", validUntil: "2027-02-04" },
-  "p-arun": { by: "s-ananya", at: "2026-10-30T12:20:00+05:30", validUntil: "2026-11-27" },
+  "p-arun": {
+    by: "s-ananya", at: "2026-11-13T09:20:00+05:30", validUntil: "2026-11-27",
+    previous: { text: "Seated variations only until review", at: "2026-10-30T12:20:00+05:30", by: "s-ananya" },
+    reason: "Interim change after Kavya Nair's flag (light-headed standing up in class on 11 Nov); full review at his 15:00 visit today.",
+  },
   "p-karthik": { by: "s-ananya", at: "2026-11-02T08:30:00+05:30", validUntil: "2027-02-02" },
   "p-gaurav": { by: "s-vikram", at: "2026-11-11T07:00:00+05:30", validUntil: "2027-02-11" },
   "p-aditi": { by: "s-vikram", at: "2026-11-03T09:00:00+05:30", validUntil: "2027-02-03" },
@@ -197,27 +221,34 @@ export const CLEARANCES: Record<string, Clearance> = {
   "p-tanvi": { by: "s-vikram", at: "2026-11-12T10:00:00+05:30", validUntil: "2027-02-12" },
 };
 
-export type Participation = "full" | "modified" | "observed" | "absent";
-export const PARTICIPATION_LABEL: Record<Participation, string> = { full: "Full", modified: "Modified", observed: "Observed only", absent: "Did not attend" };
-export const TOLERANCE_OPTIONS = ["Comfortable", "Mild fatigue", "Mild discomfort", "Breathless — paused", "Light-headed — stopped", "Pain — stopped"];
+/**
+ * Progress note (F7): mobility, pain, breathing and home-practice adherence, written by the
+ * instructor after a session. Visible to the patient's care team; it lands on the timeline.
+ */
+export type Mobility = "better" | "same" | "worse";
+export type Adherence = "good" | "partly" | "poor";
+export const MOBILITY_LABEL: Record<Mobility, string> = { better: "Better", same: "Same", worse: "Worse" };
+export const ADHERENCE_LABEL: Record<Adherence, string> = { good: "Good", partly: "Partly", poor: "Poor" };
 
-export interface Observation {
+export interface ProgressNote {
   id: string;
   patientId: string;
   classTitle: string;
   at: string;
   by: string;
-  participation: Participation;
-  tolerance: string;
-  text: string;
-  goal: string;
-  concern: boolean;
+  mobility: Mobility;
+  /** 0–10, or null when not asked */
+  pain: number | null;
+  breathing: string;
+  /** home practice since the last session */
+  adherence: Adherence;
+  note: string;
 }
 
-export const OBSERVATIONS: Observation[] = [
-  { id: "ob-kabir-11", patientId: "p-kabir", classTitle: "Sunrise Cardiac Rehab Flow", at: D(11, "08:35"), by: "s-kavya", participation: "full", tolerance: "Comfortable", text: "HR peaked at 104 bpm in the standing flow and recovered within 2 minutes. Asked to swap Saturday's class.", goal: "Tree pose at the wall, 30 s each side", concern: false },
-  { id: "ob-arun-11", patientId: "p-arun", classTitle: "Sunrise Cardiac Rehab Flow", at: D(11, "08:40"), by: "s-kavya", participation: "modified", tolerance: "Light-headed — stopped", text: "Light-headed standing up from a seated forward fold. Rested 5 minutes seated and it settled. Escalated for clinical review.", goal: "", concern: true },
-  { id: "ob-rekha-10", patientId: "p-rekha", classTitle: "Breathwork · 1:1", at: D(10, "17:50"), by: "s-lakshmi", participation: "modified", tolerance: "Breathless — paused", text: "SpO₂ dipped to 89% in paced-walking prep; back to 94% within 90 s of pursed-lip breathing. Reported to Dr. Sana Qureshi.", goal: "Pursed-lip breathing on every stair climb", concern: true },
-  { id: "ob-mohit-11", patientId: "p-mohit", classTitle: "Breath & Balance", at: D(11, "12:50"), by: "s-lakshmi", participation: "full", tolerance: "Comfortable", text: "Used his inhaler before class as advised; no wheeze.", goal: "", concern: false },
-  { id: "ob-fatima-12", patientId: "p-fatima", classTitle: "Evening Back Care", at: D(12, "18:35"), by: "s-arjun", participation: "modified", tolerance: "Mild discomfort", text: "Mild low-back discomfort in bridge; reduced the range and it settled.", goal: "Bridge with block, 3 × 8", concern: false },
+export const PROGRESS_NOTES: ProgressNote[] = [
+  { id: "pn-kabir-11", patientId: "p-kabir", classTitle: "Sunrise Cardiac Rehab Flow", at: D(11, "08:35"), by: "s-kavya", mobility: "better", pain: 0, breathing: "Comfortable; paced 4-6 throughout", adherence: "good", note: "HR peaked at 104 bpm in the standing flow and recovered within 2 minutes. Tree pose at the wall, 30 s each side." },
+  { id: "pn-arun-11", patientId: "p-arun", classTitle: "Sunrise Cardiac Rehab Flow", at: D(11, "08:40"), by: "s-kavya", mobility: "same", pain: null, breathing: "Short of breath after standing up", adherence: "partly", note: "Light-headed standing up from a seated forward fold. Rested 5 minutes seated and it settled. Flagged to Dr. Ananya Rao." },
+  { id: "pn-rekha-10", patientId: "p-rekha", classTitle: "Breathwork · 1:1", at: D(10, "17:50"), by: "s-lakshmi", mobility: "same", pain: null, breathing: "SpO₂ dipped to 89% in paced-walking prep; 94% after 90 s of pursed-lip breathing", adherence: "good", note: "Reported to Dr. Sana Qureshi. Goal: pursed-lip breathing on every stair climb." },
+  { id: "pn-mohit-11", patientId: "p-mohit", classTitle: "Breath & Balance", at: D(11, "12:50"), by: "s-lakshmi", mobility: "same", pain: 0, breathing: "No wheeze; used his inhaler before class as advised", adherence: "good", note: "" },
+  { id: "pn-fatima-12", patientId: "p-fatima", classTitle: "Evening Back Care", at: D(12, "18:35"), by: "s-arjun", mobility: "better", pain: 3, breathing: "Comfortable", adherence: "partly", note: "Mild low-back discomfort in bridge; reduced the range and it settled. Bridge with block, 3 × 8." },
 ];

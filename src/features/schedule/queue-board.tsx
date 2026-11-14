@@ -14,6 +14,7 @@ import {
   HourglassMedium,
   Megaphone,
   MonitorPlay,
+  PaperPlaneTilt,
   Receipt,
   SignIn,
   SpeakerHigh,
@@ -40,6 +41,9 @@ import { EmptyState, Kbd, PageHeader, Stat } from "@/components/ui/misc";
 import { StatusBadge } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { useRole } from "@/components/shell/role-context";
+import { AddOnBadge } from "@/components/shell/plan-switcher";
+import { canMoveVisit, scheduleAccess, serviceText } from "./access";
+import { CheckoutModal, PaymentLine } from "./checkout-modal";
 import { NOW_ISO, NOW_MIN, PRACTITIONERS, TODAY_KEY } from "./data";
 import { dateOf, hhmm, minOf, waitLabel, type Booking } from "./engine";
 import { WALK_IN_MIN, availabilityNow } from "./insights";
@@ -66,8 +70,17 @@ const NEXT_LABEL: Record<Stage, string> = {
   arrived: "To waiting",
   waiting: "Send in",
   "in-session": "To checkout",
-  checkout: "Done",
+  checkout: "Checkout",
   completed: "",
+};
+
+/** Who owns each move (spec F11): the desk moves arrivals and runs checkout; the practitioner calls their patient in and sends them to checkout. */
+const OWNER: Record<Stage, "desk" | "practitioner" | null> = {
+  arrived: "desk",
+  waiting: "practitioner",
+  "in-session": "practitioner",
+  checkout: "desk",
+  completed: null,
 };
 
 const isStage = (s: AppointmentStatus): s is Stage => (FLOW as readonly string[]).includes(s);
@@ -80,12 +93,21 @@ const waitTone = (min: number) => (min >= WAIT_ESCALATE ? "danger" : min >= WAIT
 
 export function QueueView() {
   const { role } = useRole();
-  if (role === "patient") return <StaffOnly title="Front-desk queue" />;
+  if (role === "patient") return <StaffOnly title="Check-in" />;
   return <QueueBoard />;
 }
 
 function QueueBoard() {
   const { bookings, events, patchBooking, restoreBooking, checkIn, person, queueDisplay, setQueueDisplay, callingId, setCallingId } = useSchedule();
+  const { role, user } = useRole();
+  const access = scheduleAccess(role);
+  /** may this role move this visit forward from its current stage? */
+  const canStep = (b: Booking, stage: Stage) => {
+    const owner = OWNER[stage];
+    if (!owner) return false;
+    return owner === "desk" ? access.runsDesk : canMoveVisit(access, user.id, b.staffId);
+  };
+  const [checkoutId, setCheckoutId] = useState<string | null>(null);
   const { toast } = useToast();
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [walkInSession, setWalkInSession] = useState(0);
@@ -203,7 +225,7 @@ function QueueBoard() {
     if (to === "no-show") patch.cancelReason = "Left without being seen";
     if (to === "cancelled") patch.cancelReason = "Cancelled at the front desk";
     const busyWith = to === "in-session" ? today.find((x) => x.id !== b.id && x.staffId === b.staffId && x.status === "in-session") : undefined;
-    const prev = patchBooking(b.id, patch);
+    const prev = patchBooking(b.id, patch, to === "no-show" ? "Left without being seen" : to === "cancelled" ? "Cancelled at the front desk" : undefined);
     if (callingId === b.id && to !== "arrived" && to !== "waiting") setCallingId(null);
     if (opts.focus) pendingFocus.current = b.id;
     const label = to === "completed" ? "Done" : COLUMNS.find((c) => c.status === to)?.label ?? APPOINTMENT_STATUS_LABEL[to];
@@ -212,13 +234,13 @@ function QueueBoard() {
     if (busyWith) {
       toast({ title: `${staffById(b.staffId)?.name} is still with ${tokenOr(busyWith)}`, description: `${tokenOr(b)} was sent in anyway — move ${tokenOr(busyWith)} on when they finish.`, tone: "warning", action: undo });
     } else if (to === "checkout") {
-      toast({ title: `${tokenOr(b)} at checkout`, description: "No payment is taken or recorded in this prototype.", action: undo });
+      toast({ title: `${tokenOr(b)} at checkout`, description: "Reception records the payment and books the next visit.", action: undo });
     } else if (to === "completed") {
       toast({ title: `${tokenOr(b)} done`, description: "Visit closed in this browser session. Book the follow-up before they leave.", tone: "success", action: undo });
     } else if (to === "no-show") {
-      toast({ title: `${tokenOr(b)} left without being seen`, description: "Recorded locally — no follow-up was created.", tone: "warning", action: undo });
+      toast({ title: `${tokenOr(b)} left without being seen`, description: "Kept in the visit history and the activity log.", tone: "warning", action: undo });
     } else if (to === "cancelled") {
-      toast({ title: `${tokenOr(b)} cancelled at the desk`, description: "Recorded locally — no message was sent.", tone: "warning", action: undo });
+      toast({ title: `${tokenOr(b)} cancelled at the desk`, description: "Kept in the visit history and the activity log.", tone: "warning", action: undo });
     } else if (!opts.quiet && to === "in-session") {
       toast({ title: `${tokenOr(b)} sent in`, description: `To ${staffById(b.staffId)?.name} · ${b.room}. Status updated in this browser session.`, tone: "success", action: undo });
     }
@@ -228,6 +250,13 @@ function QueueBoard() {
     if (!isStage(b.status)) return;
     const j = FLOW.indexOf(b.status) + dir;
     if (j < 0 || j >= FLOW.length) return;
+    // Checkout isn't a plain move: it records the payment and the next visit, then closes.
+    if (dir === 1 && b.status === "checkout") {
+      if (access.runsDesk) setCheckoutId(b.id);
+      return;
+    }
+    if (dir === 1 && !canStep(b, b.status)) return;
+    if (dir === -1 && !access.runsDesk) return;
     moveTo(b, FLOW[j], { focus, quiet: focus });
   };
 
@@ -253,7 +282,7 @@ function QueueBoard() {
     announce(`${token} checked in.`);
     toast({
       title: `${displayName(person(b.patientId)?.name ?? "Patient", queueDisplay)} checked in · ${token}`,
-      description: "Added to Arrived. Recorded in this browser session — no arrival alert was sent.",
+      description: "Added to Arrived.",
       tone: "success",
       action: { label: "Undo", onClick: () => restoreBooking(prev) },
     });
@@ -274,8 +303,8 @@ function QueueBoard() {
     <div className="flex flex-col gap-6">
       <PageHeader
         eyebrow="Front desk · Friday 13 November · 09:40"
-        title="Queue"
-        description="Tokens are issued at check-in; wait times run from arrival."
+        title="Check-in"
+        description="Arrived → waiting → with practitioner → checkout → done. Tokens are issued at check-in; waits run from arrival."
         actions={
           <>
             <label className="inline-flex h-10 cursor-pointer items-center gap-3 rounded-full bg-surface pl-4 pr-2 text-sm text-ink shadow-[inset_0_0_0_1px_var(--color-line)]">
@@ -283,19 +312,23 @@ function QueueBoard() {
               <span>Queue display</span>
               <Switch checked={queueDisplay} onCheckedChange={setQueueDisplay} aria-label="Queue display: show tokens only" />
             </label>
-            <Button
-              variant="dark"
-              leading={<UserPlus />}
-              onClick={() => {
-                setWalkInSession((n) => n + 1);
-                setWalkInOpen(true);
-              }}
-            >
-              Walk-in
-            </Button>
-            <Button variant="primary" leading={<Megaphone />} onClick={callNext}>
-              Call next
-            </Button>
+            {access.runsDesk ? (
+              <>
+                <Button
+                  variant="dark"
+                  leading={<UserPlus />}
+                  onClick={() => {
+                    setWalkInSession((n) => n + 1);
+                    setWalkInOpen(true);
+                  }}
+                >
+                  Walk-in
+                </Button>
+                <Button variant="primary" leading={<Megaphone />} onClick={callNext}>
+                  Call next
+                </Button>
+              </>
+            ) : null}
           </>
         }
       />
@@ -466,6 +499,12 @@ function QueueBoard() {
                       calling={calling?.id === b.id}
                       name={nameFor(b)}
                       hideDetails={queueDisplay}
+                      reason={access.clinical ? b.reason : undefined}
+                      clinical={access.clinical}
+                      canForward={canStep(b, col.status)}
+                      canBack={access.runsDesk}
+                      canBook={access.canBook}
+                      runsDesk={access.runsDesk}
                       onStep={(dir) => step(b, dir)}
                       onKey={(e) => onCardKey(e, b)}
                       onMove={(to) => moveTo(b, to)}
@@ -491,7 +530,7 @@ function QueueBoard() {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <h2 className="text-lg font-normal tracking-[-0.01em] text-ink">Expected today</h2>
-                <p className="mt-1 text-sm text-muted">Booked and not yet arrived · check in to issue the next token.</p>
+                <p className="mt-1 text-sm text-muted">{access.runsDesk ? "Booked and not yet arrived · check in to issue the next token." : "Booked and not yet arrived · Reception checks patients in."}</p>
               </div>
               {/* top-aligned with the title row (the old items-end left it floating between the two lines) */}
               <Button asChild size="sm" variant="ghost" trailing={<ArrowUpRight />} className="-mt-0.5 shrink-0">
@@ -516,7 +555,7 @@ function QueueBoard() {
                         {/* the text sits in its own min-w-0 span: an ellipsis never applies to a flex container's bare text */}
                         <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
                           <DisciplineDot discipline={b.discipline} />
-                          <span className="min-w-0 truncate">{queueDisplay ? b.room : `${b.service} · ${b.room}`}</span>
+                          <span className="min-w-0 truncate">{queueDisplay ? b.room : `${serviceText(b.service, access.clinical)} · ${b.room}`}</span>
                         </span>
                       </span>
                       <span className="hidden items-center gap-2 text-xs text-muted md:flex">
@@ -524,9 +563,11 @@ function QueueBoard() {
                         {staff?.name}
                       </span>
                       <IntakeBadge complete={b.formsComplete} className="hidden sm:inline-flex" />
-                      <Button size="sm" variant="secondary" leading={<SignIn />} onClick={() => doCheckIn(b)}>
-                        Check in
-                      </Button>
+                      {access.runsDesk ? (
+                        <Button size="sm" variant="secondary" leading={<SignIn />} onClick={() => doCheckIn(b)}>
+                          Check in
+                        </Button>
+                      ) : null}
                     </motion.li>
                   );
                 })}
@@ -549,11 +590,13 @@ function QueueBoard() {
                       <span className="block truncate text-xs text-muted">{b.cancelReason ?? b.notes ?? staffById(b.staffId)?.name}</span>
                     </span>
                     <ApptStatus status={b.status} />
-                    <IconButton asChild size="sm" variant="soft" label={`Rebook ${queueDisplay ? tokenOr(b) : nameFor(b)}`}>
-                      <Link href={`/schedule?new=1&patient=${b.patientId}&staff=${b.staffId}`}>
-                        <CalendarPlus />
-                      </Link>
-                    </IconButton>
+                    {access.canBook ? (
+                      <IconButton asChild size="sm" variant="soft" label={`Rebook ${queueDisplay ? tokenOr(b) : nameFor(b)}`}>
+                        <Link href={`/schedule?new=1&patient=${b.patientId}&staff=${b.staffId}`}>
+                          <CalendarPlus />
+                        </Link>
+                      </IconButton>
+                    ) : null}
                   </motion.li>
                 ))}
               </ul>
@@ -570,6 +613,8 @@ function QueueBoard() {
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
+
+      <CheckoutModal bookingId={checkoutId} onClose={() => setCheckoutId(null)} />
 
       <WalkInModal
         open={walkInOpen}
@@ -590,6 +635,12 @@ function QueueCard({
   calling,
   name,
   hideDetails,
+  reason,
+  clinical,
+  canForward,
+  canBack,
+  canBook,
+  runsDesk,
   onStep,
   onKey,
   onMove,
@@ -601,6 +652,13 @@ function QueueCard({
   calling: boolean;
   name: string;
   hideDetails: boolean;
+  /** walk-in reason — passed for practitioners only */
+  reason?: string;
+  clinical?: boolean;
+  canForward: boolean;
+  canBack: boolean;
+  canBook: boolean;
+  runsDesk: boolean;
   onStep: (dir: 1 | -1) => void;
   onKey: (e: KeyboardEvent<HTMLElement>) => void;
   onMove: (to: AppointmentStatus) => void;
@@ -647,7 +705,8 @@ function QueueCard({
       {calling ? <StatusBadge tone="dark" pulse className="self-start">Calling now</StatusBadge> : null}
       <div className="min-w-0">
         <p className={cn("truncate text-sm font-medium", hideDetails ? "text-muted" : "text-ink")}>{name}</p>
-        {!hideDetails ? <p className="truncate text-xs text-muted">{b.service}</p> : null}
+        {!hideDetails ? <p className="truncate text-xs text-muted">{serviceText(b.service, !!clinical)}</p> : null}
+        {!hideDetails && reason ? <p className="mt-1 line-clamp-2 text-xs text-ink-2">{reason}</p> : null}
       </div>
       <div className="flex min-w-0 items-center gap-2 text-xs text-muted">
         <Avatar src={staff?.avatar} name={staff?.name ?? ""} size="xs" />
@@ -655,16 +714,23 @@ function QueueCard({
           {staff?.name} · {b.room}
         </span>
       </div>
-      {!hideDetails && stage !== "completed" ? <IntakeBadge complete={b.formsComplete} className="self-start" /> : null}
+      {!hideDetails && stage !== "completed" && stage !== "checkout" ? <IntakeBadge complete={b.formsComplete} className="self-start" /> : null}
+      {!hideDetails && (stage === "checkout" || b.payment) && b.kind !== "class" ? <PaymentLine booking={b} /> : null}
       <div className="flex items-center gap-2">
         {stage === "completed" ? (
-          <Button asChild size="sm" variant="secondary" leading={<CalendarPlus />} className="flex-1">
-            <Link href={`/schedule?new=1&patient=${b.patientId}&staff=${b.staffId}`}>Book follow-up</Link>
-          </Button>
-        ) : (
-          <Button size="sm" variant={stage === "waiting" ? "dark" : "secondary"} trailing={<ArrowRight />} className="flex-1" onClick={() => onStep(1)}>
+          canBook ? (
+            <Button asChild size="sm" variant="secondary" leading={<CalendarPlus />} className="flex-1">
+              <Link href={`/schedule?new=1&patient=${b.patientId}&staff=${b.staffId}`}>Book follow-up</Link>
+            </Button>
+          ) : (
+            <span className="flex-1" />
+          )
+        ) : canForward ? (
+          <Button size="sm" variant={stage === "waiting" || stage === "checkout" ? "dark" : "secondary"} trailing={<ArrowRight />} className="flex-1" onClick={() => onStep(1)}>
             {NEXT_LABEL[stage]}
           </Button>
+        ) : (
+          <span className="flex-1 text-xs text-muted">{stage === "checkout" ? "At the desk" : stage === "arrived" ? "Checked in" : "With their practitioner"}</span>
         )}
         <Dropdown>
           <DropdownTrigger asChild>
@@ -673,27 +739,32 @@ function QueueCard({
             </IconButton>
           </DropdownTrigger>
           <DropdownContent className="w-[240px]">
-            {idx > 0 ? (
+            {idx > 0 && canBack ? (
               <DropdownItem icon={<ArrowCounterClockwise />} onSelect={() => onStep(-1)}>
                 Move back
               </DropdownItem>
             ) : null}
-            {stage === "arrived" || stage === "waiting" ? (
+            {runsDesk && (stage === "arrived" || stage === "waiting") ? (
               <DropdownItem icon={<Megaphone />} onSelect={onCall}>
                 Call this token
               </DropdownItem>
             ) : null}
-            {b.formsComplete === false ? (
-              <DropdownItem icon={<ClipboardText />} onSelect={onIntake}>
-                Mark intake complete
-              </DropdownItem>
+            {b.formsComplete === false && runsDesk ? (
+              <>
+                <DropdownItem icon={<ClipboardText />} onSelect={onIntake} description="Filled in on paper at the desk">
+                  Mark intake complete
+                </DropdownItem>
+                <DropdownItem disabled icon={<PaperPlaneTilt />} description={<span className="inline-flex items-center gap-2">WhatsApp / SMS <AddOnBadge addOn="messaging" /></span>}>
+                  Send form link
+                </DropdownItem>
+              </>
             ) : null}
             {!b.patientId.startsWith("local-") ? (
               <DropdownItem asChild icon={<ArrowUpRight />}>
                 <Link href={`/patients/${b.patientId}`}>Open patient record</Link>
               </DropdownItem>
             ) : null}
-            {stage === "arrived" || stage === "waiting" ? (
+            {runsDesk && (stage === "arrived" || stage === "waiting") ? (
               <>
                 <DropdownSeparator />
                 <DropdownItem icon={<UserMinus />} tone="danger" onSelect={() => onMove("no-show")}>

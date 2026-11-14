@@ -15,9 +15,7 @@ import { Textarea } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/misc";
 import { Tip } from "@/components/ui/tooltip";
 import { Dropdown, DropdownContent, DropdownItem, DropdownTrigger } from "@/components/ui/dropdown";
-import { OrganImage } from "@/components/viz/organ";
 import { personById } from "@/features/tasks/people";
-import { patientOrgan } from "@/features/tasks/organ-glyph";
 import { dayKey, dayName } from "@/features/tasks/time";
 import { RESPONSE_COPY, type ChatMessage } from "./data";
 import type { ThreadView } from "./store";
@@ -79,7 +77,6 @@ export function Conversation({
   const patient = patientById(thread.patientId);
   const people = thread.participants.map((id) => personById(id)).filter((p) => !!p);
   const others = people.filter((p) => p.id !== viewerId);
-  const organ = patientOrgan(thread.patientId);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -119,7 +116,7 @@ export function Conversation({
               aria-label={`Show context for ${patient?.name ?? "this patient"}`}
               className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface text-ink shadow-[inset_0_0_0_1px_var(--color-line)] transition-[box-shadow,transform] duration-200 hover:shadow-[inset_0_0_0_1px_var(--color-line-strong)] active:scale-95 xl:hidden"
             >
-              {organ ? <OrganImage kind={organ.organ} className="size-[124%] max-w-none" /> : <IdentificationCard size={18} />}
+              <IdentificationCard size={18} />
             </button>
           </Tip>
         ) : null}

@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { IconButton } from "@/components/ui/icon-button";
 import { StatusBadge } from "@/components/ui/status";
 import { formatINR, pluralize } from "@/lib/format";
-import { SPECIALITIES, formatDays, planCosts, seatLimit, specialityLabel, type Errors } from "../model";
+import { SPECIALITIES, formatDays, planCosts, specialityLabel, teamCounts, type Errors } from "../model";
 import { Facts, type StepProps } from "../controls";
 
 function ReviewCard({
@@ -45,8 +45,8 @@ function ReviewCard({
 }
 
 export function ReviewStep({ data, goTo, stepErrors }: StepProps & { stepErrors: Errors[] }) {
-  const { plan, monthly, setup, firstYear } = planCosts(data);
-  const perUser = plan.pricing.kind === "per-user";
+  const { plan, billing, practitioners, staffSeats, extraSeats, monthly, yearly, onboarding, firstYear } = planCosts(data);
+  const counts = teamCounts(data);
   const edit = (step: number) => goTo(step, { fromReview: true });
   const issues = (i: number) => Object.keys(stepErrors[i] ?? {}).length;
 
@@ -80,17 +80,19 @@ export function ReviewStep({ data, goTo, stepErrors }: StepProps & { stepErrors:
       <ReviewCard title="Plan" icon={<Package />} step={1} issues={issues(1)} onEdit={edit}>
         <Facts
           rows={[
-            { label: "Plan", value: `${plan.name} · ${perUser ? pluralize(data.plan.users, "user") : "1 practitioner workspace"}` },
-            { label: "Monthly", value: monthly === null ? <span className="text-warning">Adjust users</span> : <span className="tabular">{formatINR(monthly)}</span> },
-            { label: "Setup", value: <span className="tabular">{formatINR(setup)} one-time</span> },
+            { label: "Plan", value: `${plan.name} · ${billing === "annual" ? "billed annually" : "billed monthly"}` },
+            { label: "Team", value: `${pluralize(practitioners, "practitioner")} · ${pluralize(staffSeats, "admin / reception seat")}${extraSeats ? ` (${extraSeats} paid)` : ""}` },
+            { label: "Monthly", value: <span className="tabular">{formatINR(monthly)}</span> },
+            { label: "Yearly", value: <span className="tabular">{formatINR(yearly)}</span> },
+            { label: "Onboarding", value: <span className="tabular">{formatINR(onboarding)} one-time</span> },
           ]}
         />
         <div className="mt-4 flex items-end justify-between gap-4 rounded-inner bg-canvas p-4">
           <span className="text-sm text-ink">
             First-year total
-            <span className="block text-xs text-muted">Estimate · nothing is charged</span>
+            <span className="block text-xs text-muted">Before GST · estimate, nothing is charged</span>
           </span>
-          <span className="text-[26px] font-light leading-none tracking-[-0.01em] tabular text-ink">{firstYear === null ? "—" : formatINR(firstYear)}</span>
+          <span className="text-[26px] font-light leading-none tracking-[-0.01em] tabular text-ink">{formatINR(firstYear)}</span>
         </div>
       </ReviewCard>
 
@@ -123,12 +125,12 @@ export function ReviewStep({ data, goTo, stepErrors }: StepProps & { stepErrors:
           {data.invites.map((inv) => (
             <li key={inv.id} className="flex items-baseline justify-between gap-3">
               <span className="min-w-0 truncate text-ink">{inv.name.trim() || <span className="text-muted">Unnamed teammate</span>}</span>
-              <span className="shrink-0 text-xs text-muted">{inv.role ? DEMO_USER[inv.role].label : "No workspace"}</span>
+              <span className="shrink-0 text-xs text-muted">{inv.role ? DEMO_USER[inv.role].label : "No role"}</span>
             </li>
           ))}
         </ul>
         <p className="mt-4 text-xs text-muted">
-          {perUser ? `${1 + data.invites.length} of ${seatLimit(data)} seats assigned · no invitations are sent` : "Starter is a 1 practitioner workspace"}
+          {`${counts.practitioners} of ${practitioners} practitioners · ${counts.staff} of ${staffSeats} admin / reception seats · no invitations are sent`}
         </p>
       </ReviewCard>
 

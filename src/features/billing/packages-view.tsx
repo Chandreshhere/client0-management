@@ -8,7 +8,7 @@ import type { Role } from "@/data/types";
 import { patientById } from "@/data/patients";
 import { cn } from "@/lib/cn";
 import { formatDate, pluralize } from "@/lib/format";
-import { Avatar, AvatarStack } from "@/components/ui/avatar";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dropdown, DropdownContent, DropdownItem, DropdownTrigger } from "@/components/ui/dropdown";
@@ -16,16 +16,15 @@ import { IconButton } from "@/components/ui/icon-button";
 import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { Segmented } from "@/components/ui/segmented";
 import { StatusBadge } from "@/components/ui/status";
-import { Tip } from "@/components/ui/tooltip";
-import { OrganImage } from "@/components/viz/organ";
 import { useToast } from "@/components/ui/toast";
+import { staffById } from "@/data/staff";
 import { useRole } from "@/components/shell/role-context";
 import { DisciplineTag, ReadOnlyBanner } from "@/features/settings/ui";
 import { addDays, daysPhrase, daysUntil } from "@/features/settings/time";
-import { PROGRAMMES, billingLabel, enrolledIn, programmeForName } from "./data";
+import { PROGRAMMES, billingLabel, programmeForName } from "./data";
 import { CreditMeter } from "./credit-meter";
 import { CreditsFocal, ExpiryRunway } from "./package-overview";
-import { healthOf, pace, programmeOrgans, runways, type Health } from "./package-insights";
+import { alertRecipients, healthOf, pace, runways, type Health } from "./package-insights";
 import { money } from "./meta";
 import { SellPackageModal } from "./sell-package";
 import { extendPackage, usePackages } from "./store";
@@ -102,7 +101,7 @@ export function PackagesView() {
       <PageHeader
         eyebrow="Billing"
         title="Packages"
-        description="Programme packages and session credits. A credit is used when a session is marked attended — nothing on this page takes a payment."
+        description="Session packages and their credits. One credit is used each time attendance is marked. Alerts go to Reception and the patient's instructor at 2 credits left and 14 days before expiry."
         actions={
           canSell ? (
             <Button variant="primary" leading={<Plus />} onClick={() => openSell(null)}>
@@ -112,7 +111,7 @@ export function PackagesView() {
         }
       />
 
-      {!canSell ? <ReadOnlyBanner>Package balances are visible to the care team. The front desk and administrators sell and change packages.</ReadOnlyBanner> : null}
+      {!canSell ? <ReadOnlyBanner>Package balances are visible to the care team. Reception and administrators sell and change packages.</ReadOnlyBanner> : null}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <CreditsFocal packages={packages} onFocusPackage={focusPackage} onShowAttention={() => showAttention()} />
@@ -143,7 +142,7 @@ export function PackagesView() {
 
         {shown.length === 0 ? (
           <Card>
-            <EmptyState icon={<Package />} title="Nothing needs attention" description="No package is expiring within 30 days, running low on credits or behind its planned pace." action={<Button variant="secondary" onClick={() => setFilter("all")}>Show all packages</Button>} />
+            <EmptyState icon={<Package />} title="Nothing needs attention" description="No package expires within 14 days, has 2 or fewer credits left, or is behind its planned pace." action={<Button variant="secondary" onClick={() => setFilter("all")}>Show all packages</Button>} />
           </Card>
         ) : (
           <ul className="flex flex-col rounded-card bg-surface p-2">
@@ -189,6 +188,11 @@ export function PackagesView() {
                     <span className="flex flex-col items-start gap-1 md:items-end">
                       <StatusBadge tone={h.tone}>{h.label}</StatusBadge>
                       {h.note ? <span className="text-xs text-muted md:text-right">{h.note}</span> : null}
+                      {h.key === "low" || h.key === "expiring" ? (
+                        <span className="text-xs text-muted md:text-right">
+                          Alert: {alertRecipients(p).map((r) => (r === "Reception" ? r : staffById(r)?.name.split(" ")[0] ?? r)).join(", ")}
+                        </span>
+                      ) : null}
                       {atRisk.has(p.key) ? (
                         <span className="text-xs text-danger md:text-right">
                           Needs {pace(atRisk.get(p.key)?.needed ?? 0)} · plan {pace(atRisk.get(p.key)?.planned ?? 0)}
@@ -237,53 +241,30 @@ export function PackagesView() {
             })}
           </ul>
         )}
-        <p className="text-xs text-muted">Packages from the shared registry plus any sold in this browser session. Credits are used from session attendance, not from this page.</p>
+        <p className="text-xs text-muted">Packages from the shared registry plus any sold in this browser session. Credits are used when attendance is marked, not from this page.</p>
       </section>
 
       <section aria-labelledby="catalogue-title" className="flex flex-col gap-4">
         <div>
           <h2 id="catalogue-title" className="text-lg font-normal tracking-[-0.01em] text-ink">
-            Programme catalogue
+            Package catalogue
           </h2>
-          <p className="mt-1 text-sm text-muted">
-            Programmes combine consultations, nutrition follow-ups and yoga with set review points. Enrolled counts everyone on a programme ({pluralize(PROGRAMMES.reduce((n, p) => n + enrolledIn(p).length, 0), "patient")}); the session packages above are only the {pluralize(active.length, "prepaid package")}. Organ = the primary body system of the patients enrolled, from their records.
-          </p>
+          <p className="mt-1 text-sm text-muted">What each package includes, how long it&apos;s valid and its price.</p>
         </div>
         <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {PROGRAMMES.map((prog) => {
-            const enrolled = enrolledIn(prog);
-            const organs = programmeOrgans(prog);
+            const sold = active.filter((r) => programmeForName(r.p.name)?.id === prog.id).length;
             return (
               <li key={prog.id} className="flex flex-col rounded-card bg-surface p-6">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="text-lg font-normal leading-tight tracking-[-0.01em] text-ink">{prog.match}</h3>
-                    <span className="mt-2 inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-xs text-muted shadow-[inset_0_0_0_1px_var(--color-line-strong)]">
-                      {prog.credits} credits
-                    </span>
-                  </div>
-                  {organs.length ? (
-                    // One organ: the 72px badge. Two: smaller badges side by side (not stacked over each
-                    // other), so a long title like "Weight Management" keeps to one line.
-                    <ul className="-my-2 -mr-2 flex shrink-0 gap-2" aria-label={`Enrolled patients' primary body systems: ${organs.map((o) => `${o.label} (${o.patients.length})`).join(", ")}`}>
-                      {organs.slice(0, 2).map((o) => (
-                        <li key={o.organ}>
-                          <Tip label={`${o.label} · ${o.patients.map((p) => p.name).join(", ")}`}>
-                            <span tabIndex={0} className={cn("flex items-center justify-center rounded-full bg-sunken/70 outline-none ring-4 ring-surface focus-visible:ring-primary", organs.length > 1 ? "size-12" : "size-[72px]")}>
-                              <OrganImage kind={o.organ} className={organs.length > 1 ? "size-10" : "size-14"} />
-                            </span>
-                          </Tip>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
+                  <h3 className="min-w-0 text-lg font-normal leading-tight tracking-[-0.01em] text-ink">{prog.match}</h3>
+                  <span className="inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-xs text-muted shadow-[inset_0_0_0_1px_var(--color-line-strong)]">{prog.credits} credits</span>
                 </div>
                 <p className="mt-4 text-[26px] font-light leading-none tracking-[-0.02em] text-ink tabular">{money(prog.price)}</p>
                 <p className="mt-1 text-xs text-muted">
                   {[prog.weeks ? `${prog.weeks} weeks` : null, prog.weeks ? billingLabel(prog).replace(/^P/, "p") : billingLabel(prog), `valid ${Math.round(prog.validityDays / 7)} weeks`].filter(Boolean).join(" · ")}
                 </p>
-                {/* the "includes" box takes any spare row height, so a programme with fewer items
-                    keeps its footer level with its neighbours without an empty gap above it */}
+                {/* the "includes" box takes any spare row height, so cards in a row keep their footers level */}
                 <ul className="mt-4 flex flex-1 flex-col gap-1.5 rounded-inner bg-sunken p-3">
                   {prog.includes.map((inc) => (
                     <li key={inc.label} className="flex items-center justify-between gap-3">
@@ -292,12 +273,8 @@ export function PackagesView() {
                     </li>
                   ))}
                 </ul>
-                <p className="mt-3 text-xs text-muted">Reviews: {prog.reviewPoints.join(" · ")}</p>
                 <div className="mt-auto flex items-center justify-between gap-3 pt-4">
-                  <span className="flex min-w-0 items-center gap-2 text-xs text-muted">
-                    {enrolled.length ? <AvatarStack people={enrolled.map((e) => ({ name: e.name, avatar: e.avatar }))} max={3} size="xs" /> : null}
-                    {enrolled.length ? pluralize(enrolled.length, "patient") + " enrolled" : "No one enrolled"}
-                  </span>
+                  <span className="text-xs text-muted">{sold ? pluralize(sold, "active package") : "None active"}</span>
                   {canSell ? (
                     <Button size="sm" variant="secondary" onClick={() => openSell(prog.id)} trailing={<ArrowUpRight />}>
                       Sell

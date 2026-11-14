@@ -1,117 +1,122 @@
 import type { Discipline, Invoice, InvoiceStatus } from "@/data/types";
-import { INVOICES, INVOICE_STATUS_LABEL } from "@/data/records";
+import { INVOICES } from "@/data/records";
 import { PACKAGES } from "@/data/programs";
-import { PATIENTS } from "@/data/patients";
 import type { Tone } from "@/components/ui/status";
 
 /**
- * Billing fixtures that the shared data layer doesn't carry: per-invoice payment history and the
- * programme catalogue behind the session-credit packages. Everything here is synthetic and
- * derived to agree with `INVOICES` and `PACKAGES` (amounts, methods and dates match).
+ * Billing fixtures that the shared data layer doesn't carry: who recorded each payment, which
+ * practitioner an invoice is collected for, and the package catalogue behind the session credits.
+ * Everything here is synthetic and agrees with `INVOICES` and `PACKAGES` (amounts, methods, dates).
  */
 
 export type PayMethod = NonNullable<Invoice["method"]>;
 
-/** Methods a person can record by hand (package credit is applied from the package itself). */
-export const RECORDABLE_METHODS: Exclude<PayMethod, "Package credit">[] = ["UPI", "Card", "Cash", "Bank transfer"];
-export const ALL_METHODS: PayMethod[] = ["UPI", "Card", "Cash", "Bank transfer", "Package credit"];
-
 /**
- * How a money movement is known to have happened. Only `gateway` and `bank` are external
- * confirmations; `desk` is cash counted by staff; `manual` is anything recorded in this demo
- * session (no gateway is connected); `pending` is an attempt with no confirmation.
+ * Methods reception records by hand (spec: cash, UPI, card). Package credit is applied from the
+ * package itself; bank transfer only appears on refunds. Online payments and confirmed UPI are the
+ * payment-gateway add-on — nothing here is confirmed by a gateway.
  */
-export type Confirmation = "gateway" | "bank" | "desk" | "package" | "manual" | "pending";
+export const RECORDABLE_METHODS: ("Cash" | "UPI" | "Card")[] = ["Cash", "UPI", "Card"];
+export const ALL_METHODS: PayMethod[] = ["Cash", "UPI", "Card", "Bank transfer", "Package credit"];
+
+/** How a money movement entered Carelane: recorded by a person at the desk, or a package credit. */
+export type Confirmation = "recorded" | "package";
 
 export interface PaymentEvent {
   id: string;
   invoiceId: string;
   at: string;
-  /** rupees; negative for refunds; the unconfirmed attempt carries the amount that was requested */
+  /** rupees; negative for refunds */
   amount: number;
   method: PayMethod;
-  kind: "payment" | "refund" | "credit" | "attempt" | "check";
+  kind: "payment" | "refund" | "credit";
   confirmation: Confirmation;
   byId: string | null;
-  byLabel?: string;
   reference?: string;
   note?: string;
   local?: boolean;
 }
 
 /**
- * Enrichment for the shared payment attempts (`INVOICES[].payments`): who/what recorded each one
- * and its reference. Amounts, methods, times and confirmation come from the shared data.
+ * Who recorded each shared payment and the reference they typed in (terminal slip, UPI app).
+ * Amounts, methods and times come from the shared data. The one unconfirmed UPI attempt in the
+ * shared data (INV-2611-0412) is not a payment: without the payment-gateway add-on nothing confirms
+ * it, so the invoice is simply due until reception records a payment.
  */
-const META: Record<string, Pick<PaymentEvent, "byId"> & Partial<Pick<PaymentEvent, "byLabel" | "reference" | "note">>> = {
-  "INV-2611-0412": { byId: null, byLabel: "Payment gateway", reference: "UPI collect 6271 0412 8830", note: "Collect request sent to the patient's UPI app. The gateway's confirmation callback never arrived." },
-  "INV-2611-0405": { byId: null, byLabel: "Card terminal", reference: "AUTH 820193 · ••4417" },
+const META: Record<string, Pick<PaymentEvent, "byId"> & Partial<Pick<PaymentEvent, "reference" | "note">>> = {
+  "INV-2611-0405": { byId: "s-sneha", reference: "AUTH 820193 · ••4417" },
   "INV-2611-0398": { byId: "s-sneha", note: "Part payment at the desk." },
-  "INV-2611-0391": { byId: null, byLabel: "Payment gateway", reference: "UTR 330412 775901" },
-  "INV-2611-0366": { byId: null, byLabel: "Payment gateway", reference: "UTR 331410 220846" },
-  "INV-2611-0359": { byId: null, byLabel: "Card terminal", reference: "AUTH 771045 · ••0932" },
-  "INV-2611-0351": { byId: null, byLabel: "Payment gateway", reference: "UTR 331712 908113" },
+  "INV-2611-0391": { byId: "s-sneha", reference: "UTR 330412 775901" },
+  "INV-2611-0366": { byId: "s-sneha", reference: "UTR 331410 220846" },
+  "INV-2611-0359": { byId: "s-sneha", reference: "AUTH 771045 · ••0932" },
+  "INV-2611-0351": { byId: "s-ishaan", reference: "UTR 331712 908113" },
   "INV-2611-0344": { byId: "s-sneha" },
-  "INV-2611-0337": { byId: null, byLabel: "Payment gateway", reference: "UTR 331006 451290" },
+  "INV-2611-0337": { byId: "s-sneha", reference: "UTR 331006 451290" },
   "INV-2611-0372": { byId: "s-neha", reference: "NEFT PRNA0910RF16", note: "Refund for 2 unused Back Care sessions." },
 };
 
-function confirmationOf(p: { amount: number; method: PayMethod; confirmed: boolean }): Confirmation {
-  if (!p.confirmed) return "pending";
-  if (p.method === "Cash") return "desk";
-  if (p.method === "Bank transfer") return "bank";
-  if (p.method === "Package credit") return "package";
-  return "gateway";
-}
+/** Practitioner each invoice is collected for (the patient's clinician for the billed service). */
+export const INVOICE_PRACTITIONER: Record<string, string> = {
+  i1: "s-ananya",
+  i2: "s-ananya",
+  i3: "s-ananya",
+  i4: "s-vikram",
+  i5: "s-vikram",
+  i6: "s-ananya",
+  i7: "s-sana",
+  i8: "s-sana",
+  i9: "s-arjun",
+  i10: "s-vikram",
+  i11: "s-lakshmi",
+  i12: "s-vikram",
+  i13: "s-sana",
+  i14: "s-ananya",
+};
 
+/** Only payments someone recorded count; an unconfirmed attempt is dropped (the invoice stays due). */
 const SHARED_PAYMENTS: PaymentEvent[] = INVOICES.flatMap((inv) =>
-  (inv.payments ?? []).map((p, i): PaymentEvent => ({
-    id: `pe-${inv.id}-${i}`,
-    invoiceId: inv.id,
-    at: p.at,
-    amount: p.amount,
-    method: p.method,
-    kind: !p.confirmed ? "attempt" : p.amount < 0 ? "refund" : "payment",
-    confirmation: confirmationOf(p),
-    byId: META[inv.number]?.byId ?? null,
-    byLabel: META[inv.number]?.byLabel,
-    reference: META[inv.number]?.reference,
-    note: META[inv.number]?.note,
-  })),
+  (inv.payments ?? [])
+    .filter((p) => p.confirmed)
+    .map((p, i): PaymentEvent => ({
+      id: `pe-${inv.id}-${i}`,
+      invoiceId: inv.id,
+      at: p.at,
+      amount: p.amount,
+      method: p.method,
+      kind: p.amount < 0 ? "refund" : "payment",
+      confirmation: p.method === "Package credit" ? "package" : "recorded",
+      byId: META[inv.number]?.byId ?? null,
+      reference: META[inv.number]?.reference,
+      note: META[inv.number]?.note,
+    })),
 );
 
-/** History = shared payment attempts + two non-monetary entries this page adds. */
+/** History = recorded shared payments + Kabir's package credit (₹0, not a payment). */
 export const SEED_PAYMENTS: PaymentEvent[] = [
   ...SHARED_PAYMENTS,
-  // The 08:05 reconciliation check from the activity history (no money moved).
-  { id: "pe-i2-check", invoiceId: "i2", at: "2026-11-13T08:05:00+05:30", amount: 3200, method: "UPI", kind: "check", confirmation: "pending", byId: null, byLabel: "Reconciliation check", reference: "UPI collect 6271 0412 8830", note: "Still no confirmation from the gateway — invoice left unpaid." },
-  // Kabir's programme-covered review (₹0, a package credit rather than a payment).
-  { id: "pe-i3-credit", invoiceId: "i3", at: "2026-11-06T11:12:00+05:30", amount: 0, method: "Package credit", kind: "credit", confirmation: "package", byId: "s-sneha", note: "Covered by the Heart Health programme — no charge." },
+  { id: "pe-i3-credit", invoiceId: "i3", at: "2026-11-06T11:12:00+05:30", amount: 0, method: "Package credit", kind: "credit", confirmation: "package", byId: "s-sneha", note: "Covered by the Heart Health package — no charge." },
 ];
 
-/** Short badge text; the full sentence for manual entries lives in the event's note. */
 export const CONFIRMATION_LABEL: Record<Confirmation, string> = {
-  gateway: "Confirmed by gateway",
-  bank: "Confirmed by bank",
-  desk: "Counted at the desk",
+  recorded: "Recorded",
   package: "Package credit",
-  manual: "Recorded manually",
-  pending: "Not confirmed",
 };
 
 export const CONFIRMATION_TONE: Record<Confirmation, Tone> = {
-  gateway: "success",
-  bank: "success",
-  desk: "success",
+  recorded: "success",
   package: "neutral",
-  manual: "info",
-  pending: "danger",
 };
 
-/** Display status: the shared invoice states plus "recorded" (settled by a manual entry this session). */
-export type DisplayStatus = InvoiceStatus | "recorded";
+/** Invoice states shown in billing. "Paid" only once payments covering the total are recorded. */
+export type DisplayStatus = Exclude<InvoiceStatus, "failed">;
 
-export const STATUS_LABEL: Record<DisplayStatus, string> = { ...INVOICE_STATUS_LABEL, recorded: "Recorded manually" };
+export const STATUS_LABEL: Record<DisplayStatus, string> = {
+  paid: "Paid",
+  "partially-paid": "Partly paid",
+  due: "Due",
+  overdue: "Overdue",
+  refunded: "Refunded",
+};
 
 export const STATUS_TONE: Record<DisplayStatus, Tone> = {
   paid: "success",
@@ -119,11 +124,9 @@ export const STATUS_TONE: Record<DisplayStatus, Tone> = {
   due: "warning",
   overdue: "danger",
   refunded: "neutral",
-  failed: "danger",
-  recorded: "info",
 };
 
-export const OPEN_STATUSES: DisplayStatus[] = ["due", "overdue", "partially-paid", "failed"];
+export const OPEN_STATUSES: DisplayStatus[] = ["due", "overdue", "partially-paid"];
 
 // ---------------------------------------------------------------------------------------------
 // Programmes & packages
@@ -144,7 +147,7 @@ export interface Programme {
   reviewPoints: string[];
 }
 
-/** Programme catalogue (synthetic). Prices agree with the invoices that reference them. */
+/** Package catalogue (synthetic; named after the clinic's programmes). Prices agree with the invoices that reference them. */
 export const PROGRAMMES: Programme[] = [
   {
     id: "heart-health", name: "Heart Health · 12 weeks", match: "Heart Health", weeks: 12, price: 42000, billing: "upfront",
@@ -180,9 +183,6 @@ export const PROGRAMMES: Programme[] = [
 
 export const programmeById = (id: string) => PROGRAMMES.find((p) => p.id === id);
 export const programmeForName = (name: string) => PROGRAMMES.find((p) => name.startsWith(p.match));
-
-/** Patients enrolled in a programme, read from the shared registry (`Patient.program`). */
-export const enrolledIn = (p: Programme) => PATIENTS.filter((pt) => pt.program?.startsWith(p.match));
 
 export const billingLabel = (p: Programme) =>
   p.billing === "monthly" ? `${p.weeks ? Math.round(p.weeks / 4) : ""} monthly instalments` : p.billing === "per-block" ? "Paid per block" : "Paid upfront";

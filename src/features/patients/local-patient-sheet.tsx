@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CalendarBlank, IdentificationCard, MapPin, Phone, ShieldCheck, Translate, Users } from "@phosphor-icons/react";
+import { CalendarBlank, FirstAid, IdentificationCard, MapPin, Phone, ShieldCheck, Stethoscope, Translate, Users } from "@phosphor-icons/react";
 import type { Appointment } from "@/data/types";
 import { staffById } from "@/data/staff";
 import { formatDate, formatTime } from "@/lib/format";
@@ -10,7 +10,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, SheetContent } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/ui/status";
-import { branchLabel, clinicNoOf, dayWord, formatAbha, type RegistryPatient } from "./data";
+import { branchLabel, clinicNoOf, dayWord, formatAbha, type RegistryLens, type RegistryPatient } from "./data";
 import { AllergyLine, PatientStatusBadge } from "./registry-bits";
 
 /** Record view for a patient registered in this browser session (no server page exists for them). */
@@ -18,12 +18,16 @@ export function LocalPatientSheet({
   patient,
   visit,
   pool,
+  lens,
+  onReview,
   onOpenChange,
   onDiscard,
 }: {
   patient: RegistryPatient | null;
   visit: Appointment | null;
   pool: RegistryPatient[];
+  lens: RegistryLens;
+  onReview: (id: string) => void;
   onOpenChange: (open: boolean) => void;
   onDiscard: (id: string) => void;
 }) {
@@ -31,6 +35,7 @@ export function LocalPatientSheet({
   useEffect(() => setConfirming(false), [patient?.id]);
   const local = patient?.local;
   const staff = visit ? staffById(visit.staffId) : undefined;
+  const doctor = patient ? staffById(patient.careTeam.doctor) : undefined;
   const dupes = local ? local.duplicateOf.map((id) => pool.find((p) => p.id === id)).filter((p): p is RegistryPatient => !!p) : [];
 
   return (
@@ -52,9 +57,11 @@ export function LocalPatientSheet({
                   <Button variant="ghost" className="mr-auto text-danger hover:bg-danger-soft" onClick={() => setConfirming(true)}>
                     Discard registration
                   </Button>
-                  <Button asChild variant="dark">
-                    <Link href={`/schedule?new=1&patient=${patient.id}`}>Book appointment</Link>
-                  </Button>
+                  {lens.canBook ? (
+                    <Button asChild variant="dark">
+                      <Link href={`/schedule?new=1&patient=${patient.id}`}>Book appointment</Link>
+                    </Button>
+                  ) : null}
                 </>
               )}
             </>
@@ -63,7 +70,7 @@ export function LocalPatientSheet({
           <div className="flex items-center gap-4">
             <Avatar src={patient.avatar} name={patient.name} size="xl" />
             <div className="flex flex-wrap gap-2">
-              <PatientStatusBadge status={patient.status} />
+              {lens.clinical ? <PatientStatusBadge status={patient.status} /> : null}
               <StatusBadge tone="warning">Intake pending</StatusBadge>
               {dupes.length ? <StatusBadge tone="info">Duplicate review pending</StatusBadge> : null}
             </div>
@@ -89,8 +96,22 @@ export function LocalPatientSheet({
             <Item icon={<Phone size={18} />} term="Mobile (masked)">
               {patient.phone}
             </Item>
-            <Item icon={<MapPin size={18} />} term="Area · branch">
-              {patient.area} · {branchLabel(patient.branch)}
+            <Item icon={<MapPin size={18} />} term={lens.branches ? "Address · branch" : "Address"}>
+              {local.address ?? patient.area}
+              {lens.branches ? <span className="block text-xs text-muted">{branchLabel(patient.branch)}</span> : null}
+            </Item>
+            <Item icon={<FirstAid size={18} />} term="Emergency contact">
+              {local.emergency ? (
+                <>
+                  {local.emergency.name}
+                  <span className="block font-mono text-xs text-muted">{local.emergency.phone}</span>
+                </>
+              ) : (
+                "Not recorded"
+              )}
+            </Item>
+            <Item icon={<Stethoscope size={18} />} term="Primary doctor">
+              {doctor?.name ?? "Not assigned"}
             </Item>
             <Item icon={<Translate size={18} />} term="Language">
               {local.language}
@@ -98,30 +119,34 @@ export function LocalPatientSheet({
             </Item>
           </dl>
 
-          <section className="mt-6">
-            <h3 className="text-xs text-muted">Primary concern</h3>
-            <p className="mt-1 text-sm text-ink">{patient.primaryConcern}</p>
-            <AllergyLine allergies={patient.allergies} className="mt-2" />
-          </section>
+          {lens.clinical ? (
+            <section className="mt-6">
+              <h3 className="text-xs text-muted">Reason for visit</h3>
+              <p className="mt-1 text-sm text-ink">{patient.primaryConcern || "Not recorded yet"}</p>
+              <AllergyLine allergies={patient.allergies} className="mt-2" />
+            </section>
+          ) : null}
 
-          <section className="mt-6">
-            <h3 className="text-xs text-muted">First visit</h3>
-            {visit ? (
-              <div className="mt-2 flex items-center gap-3 rounded-inner bg-canvas p-4">
-                {staff ? <Avatar src={staff.avatar} name={staff.name} size="md" /> : null}
-                <div className="min-w-0">
-                  <p className="text-sm text-ink">
-                    {dayWord(visit.start)} · <span className="font-mono text-xs">{formatTime(visit.start)}</span> · {visit.service}
-                  </p>
-                  <p className="truncate text-xs text-muted">
-                    {staff?.name ?? "Practitioner"} · {visit.room} · held in this session, no SMS sent
-                  </p>
+          {lens.diary ? (
+            <section className="mt-6">
+              <h3 className="text-xs text-muted">First visit</h3>
+              {visit ? (
+                <div className="mt-2 flex items-center gap-3 rounded-inner bg-canvas p-4">
+                  {staff ? <Avatar src={staff.avatar} name={staff.name} size="md" /> : null}
+                  <div className="min-w-0">
+                    <p className="text-sm text-ink">
+                      {dayWord(visit.start)} · <span className="font-mono text-xs">{formatTime(visit.start)}</span> · {visit.service}
+                    </p>
+                    <p className="truncate text-xs text-muted">
+                      {staff?.name ?? "Practitioner"} · {visit.room} · held in this session
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <p className="mt-1 text-sm text-muted">Not booked yet.</p>
-            )}
-          </section>
+              ) : (
+                <p className="mt-1 text-sm text-muted">Not booked yet.</p>
+              )}
+            </section>
+          ) : null}
 
           {dupes.length ? (
             <section className="mt-6">
@@ -144,12 +169,19 @@ export function LocalPatientSheet({
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 text-xs text-muted">Records are never merged automatically — an authorised reviewer decides.</p>
+              {lens.canMerge ? (
+                <Button size="sm" variant="secondary" className="mt-2" onClick={() => onReview(patient.id)}>
+                  Review possible duplicate
+                </Button>
+              ) : (
+                <p className="mt-2 text-xs text-muted">Records are never merged automatically — the admin reviews them.</p>
+              )}
             </section>
           ) : null}
 
           <p className="mt-6 text-xs text-muted">
-            Registered by {local.registeredBy} · consent recorded {formatDate(local.consentAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })}
+            Registered by {local.registeredBy} · DPDP consent recorded by {local.consentBy ?? local.registeredBy},{" "}
+            {formatDate(local.consentAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })}
           </p>
         </SheetContent>
       ) : null}

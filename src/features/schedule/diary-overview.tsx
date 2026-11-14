@@ -68,7 +68,8 @@ export function DiaryOverview({
   describe: (ev: DiaryEvent) => string;
   onJump: (min: number) => void;
   onOpenDay: (date: string) => void;
-  onBook: (staffId: string, date: string, start: number, serviceId?: string) => void;
+  /** omitted for roles that can't book */
+  onBook?: (staffId: string, date: string, start: number, serviceId?: string) => void;
 }) {
   const [measure, setMeasure] = useState<LoadMeasure>("patients");
   const [folded, setFolded] = useFolded();
@@ -208,7 +209,7 @@ export function DiaryOverview({
               ) : null}
             </div>
             {items.length ? (
-              <CapacityChart items={items} single={view === "day"} date={view === "day" ? date : undefined} onBook={view === "day" ? (it) => it.next !== null && onBook(it.util.staff.id, date, it.next, it.service?.id) : undefined} />
+              <CapacityChart items={items} single={view === "day"} date={view === "day" ? date : undefined} onBook={view === "day" && onBook ? (it) => it.next !== null && onBook(it.util.staff.id, date, it.next, it.service?.id) : undefined} />
             ) : (
               <p className="flex min-h-[160px] items-center justify-center rounded-inner bg-sunken px-4 text-center text-sm text-muted">
                 {pool.length ? "No one in this selection works on this day." : "No practitioners match the filters."}
@@ -235,7 +236,7 @@ export function DiaryOverview({
                   </span>
                 ) : null}
               </div>
-              {view === "day" && date >= TODAY_KEY && items.length ? <p>Click a column to book that practitioner&apos;s next free slot for their shortest service.</p> : null}
+              {view === "day" && date >= TODAY_KEY && items.length && onBook ? <p>Click a column to book that practitioner&apos;s next free slot for their shortest service.</p> : null}
               {away.length ? (
                 <p>
                   Not working {periodLabel}:{" "}

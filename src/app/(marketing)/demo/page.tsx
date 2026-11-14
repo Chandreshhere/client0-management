@@ -1,19 +1,22 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import type { CSSProperties } from "react";
-import { BRANCHES, CLINIC, STAFF } from "@/data/staff";
+import { PLANS, isPlanId } from "@/data/plans";
+import { CLINIC, ROLE_ORDER, STAFF } from "@/data/staff";
 import { PATIENTS } from "@/data/patients";
+import type { Role } from "@/data/types";
+import { COOKIE_PLAN, COOKIE_ROLE } from "@/lib/cookies";
 import { cn } from "@/lib/cn";
 import { TODAY, formatDayLabel, formatTime } from "@/lib/format";
 import { ArrowLink } from "@/features/marketing/cta";
 import { JsonLd, breadcrumbLd } from "@/features/marketing/json-ld";
 import { GUTTER } from "@/features/marketing/section";
 import s from "@/features/marketing/motion.module.css";
-import { DemoChooser } from "@/features/pricing/demo-chooser";
+import { DemoChooser, type DemoLogin } from "@/features/pricing/demo-chooser";
 import { DemoPatients } from "@/features/pricing/demo-patients";
 
-const TITLE = "Live demo of Carelane clinic software — choose a plan";
-const DESCRIPTION =
-  "Explore Carelane with synthetic data: pick the Starter, Team or Clinic plan and enter as a doctor, nutritionist, yoga instructor, front desk, care coordinator, admin or patient. No sign-up.";
+const TITLE = "Live demo of Carelane clinic software — one login per plan and role";
+const DESCRIPTION = `Explore Carelane with synthetic data and no sign-up. Each demo login is one real setup — one plan (${PLANS.map((p) => p.name).join(", ")}) and one role: doctor, nutritionist, yoga instructor, admin, reception, care coordinator or patient.`;
 
 export const metadata: Metadata = {
   title: { absolute: `${TITLE} · Carelane` },
@@ -29,11 +32,26 @@ const iso = TODAY.toISOString();
 const FACTS = [
   `${CLINIC.name} (fictional)`,
   `${PATIENTS.length} synthetic patients`,
-  `${STAFF.length} staff across ${BRANCHES.length} branches`,
+  `${STAFF.length} synthetic staff`,
   `Clock fixed at ${formatDayLabel(iso)}, ${formatTime(iso)} IST`,
 ];
 
-export default function DemoPage() {
+const isRole = (v: string | undefined): v is Role => !!v && (ROLE_ORDER as string[]).includes(v);
+const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+
+export default async function DemoPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await searchParams;
+  const planParam = first(params.plan);
+  const roleParam = first(params.role);
+  const highlightPlan = isPlanId(planParam) ? planParam : undefined;
+  const highlightRole = isRole(roleParam) ? roleParam : undefined;
+
+  // Mark the visitor's current demo login, but only when both cookies were set by a demo login.
+  const jar = await cookies();
+  const cPlan = jar.get(COOKIE_PLAN)?.value;
+  const cRole = jar.get(COOKIE_ROLE)?.value;
+  const current: DemoLogin | undefined = isPlanId(cPlan) && isRole(cRole) && PLANS.find((p) => p.id === cPlan)?.roles.includes(cRole) ? { plan: cPlan, role: cRole } : undefined;
+
   return (
     <>
       <section aria-labelledby="demo-title" className={cn("pb-16 pt-8 md:pb-24 md:pt-12", GUTTER)}>
@@ -44,13 +62,16 @@ export default function DemoPage() {
                 Live demo · no sign-up
               </span>
               <h1 id="demo-title" className={cn("mt-6 max-w-[18ch] text-balance text-[40px] font-light leading-[1.02] tracking-[-0.035em] text-ink sm:text-[52px] xl:text-[64px]", s.enter)} style={i(1)}>
-                Choose a plan, then step into the clinic as anyone in it.
+                Pick a demo login: one plan, one role.
               </h1>
             </div>
             <div className={cn("lg:col-span-5 lg:pb-2", s.enter)} style={i(2)}>
-              <p className="max-w-[48ch] text-base leading-relaxed text-muted">
-                The demo unlocks exactly what each plan includes. Everything runs on synthetic data, and nothing you do leaves your browser session. You can switch plan or role
-                from inside the demo at any time.
+              <p className="max-w-[48ch] text-base leading-relaxed text-ink-2">
+                Each demo is one real setup — one plan, one role. You see exactly what that plan includes and what that role works on, nothing more.
+              </p>
+              <p className="mt-3 max-w-[48ch] text-sm leading-relaxed text-muted">
+                To switch, come back here and pick another login — inside the demo, use <span className="text-ink-2">Switch demo login</span> in the account menu, the sidebar
+                or ⌘K. Everything runs on synthetic data and stays in your browser.
               </p>
               <ArrowLink href="/pricing" className="mt-6">
                 Compare plans in detail
@@ -59,7 +80,7 @@ export default function DemoPage() {
           </div>
 
           <div className={cn("mt-12 md:mt-16", s.enter)} style={i(3)}>
-            <DemoChooser />
+            <DemoChooser highlightPlan={highlightPlan} highlightRole={highlightRole} current={current} />
           </div>
 
           <ul className="mt-6 flex flex-wrap gap-2" aria-label="About the demo data">
@@ -76,7 +97,7 @@ export default function DemoPage() {
                 Or start from a patient&apos;s record.
               </h2>
               <p className="max-w-[52ch] text-base leading-relaxed text-muted lg:col-span-5 lg:pb-2">
-                Each record opens as the doctor on the Clinic plan. The organ on each card comes from that patient&apos;s own conditions — the same rules every record in the
+                Each record opens with the Clinic plan&apos;s doctor login. The organ on each card comes from that patient&apos;s own conditions — the same rules every record in the
                 demo uses.
               </p>
             </div>

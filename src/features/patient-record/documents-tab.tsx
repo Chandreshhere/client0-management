@@ -25,6 +25,9 @@ import { DOC_STATUS_TONE, DocumentPreview, dueText, useEffectiveStatus } from ".
 import { UploadDialog } from "./upload-dialog";
 import { baseDocuments, readableDates, recordOf } from "./record-model";
 import { MonthBars, monthBuckets } from "./month-bars";
+import { clinicalAccess } from "./access";
+import { useRole } from "@/components/shell/role-context";
+import { AddOnNotice } from "@/components/shell/plan-switcher";
 
 const TYPE_ICON: Record<DocType, ReactNode> = {
   "Lab report": <Flask />,
@@ -67,8 +70,17 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
   const uploads = useRecord((s) => s.uploads);
   const statusOf = useEffectiveStatus();
   const record = recordOf(patientId);
+  const { role } = useRole();
+  // Admin and Reception see documents by file name and type only (spec "Documents by plan").
+  const namesOnly = clinicalAccess(role, patientId) === "none";
 
-  const docs = useMemo<RecordDocument[]>(() => [...uploads.filter((d) => d.patientId === patientId), ...baseDocuments(patientId)], [uploads, patientId]);
+  const docs = useMemo<RecordDocument[]>(
+    () =>
+      [...uploads.filter((d) => d.patientId === patientId), ...baseDocuments(patientId)].map((d) =>
+        namesOnly ? { ...d, summary: undefined, title: d.sensitivity === "restricted" ? "Restricted document" : d.title } : d,
+      ),
+    [uploads, patientId, namesOnly],
+  );
 
   const [query, setQuery] = useState("");
   const [types, setTypes] = useState<DocType[]>([]);
@@ -132,11 +144,15 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
   return (
     <RecordFrame
       patient={patient}
-      title="Documents"
-      description="Reports, letters and forms on this record. The report date (when the test happened) is kept apart from the upload date (when it reached Carelane)."
+      title={namesOnly ? "Documents" : "Reports"}
+      description={
+        namesOnly
+          ? "Every document on this record by file name and type, with the date issued, the date uploaded and its review status. Contents are shown to the care team only."
+          : "Every uploaded document with the date it was issued, the date it was uploaded and its review status. An older report uploaded today is never shown as a new result."
+      }
       actions={
         <Button variant="primary" leading={<UploadSimple />} onClick={() => setUploading(true)}>
-          Upload document
+          {namesOnly ? "Upload document" : "Upload report"}
         </Button>
       }
     >
@@ -172,7 +188,7 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
                   Reports by month
                 </h2>
                 <p className="text-xs text-muted">
-                  By report date · {buckets[1].long} – {buckets[buckets.length - 1].long}, older reports under “Earlier” · <span className="inline-block size-1.5 translate-y-[-1px] rounded-full bg-warning align-middle" aria-hidden="true" /> awaiting review
+                  By date issued · {buckets[1].long} – {buckets[buckets.length - 1].long}, older reports under “Earlier” · <span className="inline-block size-1.5 translate-y-[-1px] rounded-full bg-warning align-middle" aria-hidden="true" /> awaiting review
                 </p>
               </div>
               {selectedBucket ? (
@@ -212,9 +228,9 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
                 value={sort}
                 onValueChange={(v) => setSort(v as SortKey)}
                 options={[
-                  { value: "report-desc", label: "Report date · newest" },
+                  { value: "report-desc", label: "Date issued · newest" },
                   { value: "upload-desc", label: "Uploaded · newest" },
-                  { value: "report-asc", label: "Report date · oldest" },
+                  { value: "report-asc", label: "Date issued · oldest" },
                 ]}
               />
             </div>
@@ -238,7 +254,7 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
               <DocTable docs={shown} statusOf={statusOf} onOpen={setOpenId} freshId={freshId} />
               <DocCards docs={shown} statusOf={statusOf} onOpen={setOpenId} freshId={freshId} />
               <p className="text-xs text-muted">
-                Showing {shown.length} of {docs.length} · “Uploaded” notes how long after the report date each document reached Carelane
+                Showing {shown.length} of {docs.length} · “Uploaded” notes how long after the date issued each document reached Carelane
                 {filtered ? (
                   <>
                     {" · "}
@@ -253,6 +269,7 @@ export function DocumentsTab({ patientId }: { patientId: string }) {
         </div>
       )}
 
+      <AddOnNotice addOn="labs">Reports from partner labs can arrive here automatically with the lab integration add-on. Without it, upload them yourself.</AddOnNotice>
       <DocumentPreview doc={openDoc} patient={patient} onOpenChange={(o) => !o && setOpenId(null)} />
       <UploadDialog
         open={uploading}
@@ -311,12 +328,12 @@ function DocTable({ docs, statusOf, onOpen, freshId }: RowProps) {
     <Card padded={false} className="hidden @[880px]:block">
       <div className="scrollbar-thin relative overflow-x-auto">
         <table className="w-full table-fixed border-separate border-spacing-0 text-sm">
-          <caption className="sr-only">Documents. Report date and uploaded date are separate columns.</caption>
+          <caption className="sr-only">Documents. Date issued and date uploaded are separate columns.</caption>
           <thead>
             <tr className="text-xs text-muted">
               <th scope="col" className="py-4 pl-6 pr-3 text-left font-normal">Document</th>
               <th scope="col" className="hidden w-[168px] px-3 py-4 text-left font-normal @[1280px]:table-cell">Type</th>
-              <th scope="col" className="w-[112px] px-3 py-4 text-left font-normal">Report date</th>
+              <th scope="col" className="w-[112px] px-3 py-4 text-left font-normal">Date issued</th>
               <th scope="col" className="w-[152px] px-3 py-4 text-left font-normal">Uploaded</th>
               <th scope="col" className="w-[144px] px-3 py-4 text-left font-normal">Source</th>
               <th scope="col" className="hidden w-[168px] px-3 py-4 text-left font-normal @[1100px]:table-cell">Reviewer</th>
@@ -412,7 +429,7 @@ function DocCards({ docs, statusOf, onOpen, freshId }: RowProps) {
               </span>
               <span className="grid grid-cols-2 gap-2 rounded-inner bg-canvas p-3 text-xs">
                 <span>
-                  <span className="block text-muted">Report date</span>
+                  <span className="block text-muted">Date issued</span>
                   <span className="block text-ink">{formatDate(d.reportDate)}</span>
                 </span>
                 <span>

@@ -2,17 +2,18 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
-import { Path } from "@phosphor-icons/react";
 import { Avatar } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
 import { spring } from "@/lib/motion";
-import { clinicNoOf, type RegistryPatient, type Row } from "./data";
-import { AllergyLine, CareTeamStack, FlagPills, NextVisitLine, PatientStatusBadge } from "./registry-bits";
-import { OrganGlyph } from "./organ-glyph";
+import { clinicNoOf, type RegistryLens, type RegistryPatient, type Row } from "./data";
+import { AllergyLine, CareTeamStack, ConcernCell, FlagPills, NextVisitLine, PatientStatusBadge, PrimaryDoctor, RegisteredLine } from "./registry-bits";
 import { RowActions } from "./row-actions";
 
-/** Card list — the registry on narrow screens, and the "Cards" view on wide ones. */
+/**
+ * Card list — the registry on narrow screens, and the "Cards" view on wide ones. Admin and
+ * Reception cards carry demographics only (phone, primary doctor, next appointment).
+ */
 export function RegistryCards({
   rows,
   selected,
@@ -20,7 +21,8 @@ export function RegistryCards({
   onOpen,
   onAssign,
   onOpenLocal,
-  showBalance,
+  onReview,
+  lens,
   highlight,
   className,
 }: {
@@ -30,10 +32,12 @@ export function RegistryCards({
   onOpen: (p: RegistryPatient) => void;
   onAssign: (id: string) => void;
   onOpenLocal: (id: string) => void;
-  showBalance: boolean;
+  onReview: (id: string) => void;
+  lens: RegistryLens;
   highlight: string | null;
   className?: string;
 }) {
+  const showBalance = lens.showBalance;
   return (
     <ul className={cn("grid grid-cols-1 gap-4 @[640px]:grid-cols-2 @[1040px]:grid-cols-3", className)}>
       {rows.map((r) => {
@@ -68,32 +72,52 @@ export function RegistryCards({
                     <span className="flex size-8 items-center justify-center">
                       <Checkbox aria-label={`Select ${p.name}`} checked={isSelected} onCheckedChange={() => onToggle(p.id)} />
                     </span>
-                    <RowActions patient={p} onAssign={onAssign} onOpenLocal={onOpenLocal} />
+                    <RowActions patient={p} flags={r.flags} lens={lens} onAssign={onAssign} onOpenLocal={onOpenLocal} onReview={onReview} />
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-start gap-3">
-                  <OrganGlyph patient={p} />
-                  <div className="min-w-0 flex-1">
-                    <button type="button" onClick={() => onOpen(p)} className="text-left text-sm leading-snug text-ink-2 hover:text-ink">
-                      {p.primaryConcern}
-                    </button>
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-muted">
-                      <Path size={14} aria-hidden="true" className="shrink-0" />
-                      <span className="truncate">{p.local ? "Registered in this session · no programme yet" : (p.program ?? "No programme")}</span>
-                    </p>
-                  </div>
-                </div>
-                <AllergyLine allergies={p.allergies} className="mt-1" />
+                {!lens.clinical ? (
+                  <>
+                    <dl className="mt-4 grid grid-cols-[72px_1fr] items-center gap-x-3 gap-y-2 text-xs">
+                      <dt className="text-muted">Mobile</dt>
+                      <dd className="min-w-0 truncate font-mono text-ink-2">{p.phone}</dd>
+                      <dt className="text-muted">Area</dt>
+                      <dd className="min-w-0 truncate text-ink-2">{p.area || "—"}</dd>
+                    </dl>
+                    <div className="mt-auto flex flex-wrap items-center gap-1 pt-4 empty:hidden">
+                      <FlagPills
+                        flags={r.flags.filter((f) => f !== "allergies")}
+                        patient={p}
+                        showBalance={showBalance}
+                        max={3}
+                        quietWhenEmpty
+                        onDuplicate={lens.canMerge ? () => onReview(p.id) : undefined}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <ConcernCell patient={p} lens={lens} onOpen={() => onOpen(p)} className="mt-4" />
+                    {lens.concern === "diagnosis" ? <AllergyLine allergies={p.allergies} className="mt-1" /> : null}
 
-                <div className="mt-auto flex flex-wrap items-center gap-1 pt-4">
-                  <PatientStatusBadge status={p.status} />
-                  <FlagPills flags={r.flags.filter((f) => f !== "allergies")} patient={p} showBalance={showBalance} max={3} quietWhenEmpty />
-                </div>
+                    <div className="mt-auto flex flex-wrap items-center gap-1 pt-4">
+                      <PatientStatusBadge status={p.status} />
+                      <FlagPills flags={r.flags.filter((f) => f !== "allergies" && f !== "duplicate")} patient={p} showBalance={showBalance} max={3} quietWhenEmpty />
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex items-center justify-between gap-3 px-2 pb-1 pt-3">
-                <CareTeamStack ids={r.team} onAssign={() => onAssign(p.id)} />
-                <NextVisitLine visit={r.next} last={r.last} className="text-right [&_p]:justify-end" />
+                {lens.clinical ? (
+                  <CareTeamStack ids={r.team} onAssign={lens.canAssignTeam ? () => onAssign(p.id) : undefined} />
+                ) : (
+                  <PrimaryDoctor id={p.careTeam.doctor} onAssign={lens.canAssignTeam ? () => onAssign(p.id) : undefined} />
+                )}
+                {!lens.clinical && !lens.diary ? (
+                  <RegisteredLine patient={p} className="text-right" />
+                ) : (
+                  <NextVisitLine visit={r.next} last={r.last} diary={lens.diary} className="text-right [&_p]:justify-end" />
+                )}
               </div>
             </article>
           </motion.li>

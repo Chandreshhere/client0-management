@@ -13,6 +13,8 @@ import {
   Siren,
 } from "@phosphor-icons/react";
 import type { Priority, Task, TaskStatus } from "@/data/types";
+import { staffById } from "@/data/staff";
+import { planById, type FeatureId, type PlanId } from "@/data/plans";
 import type { Tone } from "@/components/ui/status";
 import { TODAY, formatTime } from "@/lib/format";
 import { TODAY_KEY, addDays, byTime, dayDiff, dayKey, shortDay } from "./time";
@@ -70,8 +72,8 @@ export function dueLabel(t: Pick<Task, "status" | "due">): { text: string; tone:
 export type SourceKind = "escalation" | "referral" | "report" | "message" | "billing" | "intake" | "follow-up" | "plan" | "note" | "admin" | "manual";
 
 export const SOURCE_META: Record<SourceKind, { label: string; icon: Icon }> = {
-  escalation: { label: "Escalations", icon: Siren },
-  referral: { label: "Referrals", icon: ArrowsLeftRight },
+  escalation: { label: "Flags to doctor", icon: Siren },
+  referral: { label: "Assignments", icon: ArrowsLeftRight },
   report: { label: "Reports", icon: FileText },
   message: { label: "Messages", icon: ChatCircleText },
   billing: { label: "Billing", icon: Receipt },
@@ -84,7 +86,7 @@ export const SOURCE_META: Record<SourceKind, { label: string; icon: Icon }> = {
 };
 
 const SOURCE_RULES: [RegExp, SourceKind][] = [
-  [/escalat/i, "escalation"],
+  [/^flag from|escalat/i, "escalation"],
   [/referral/i, "referral"],
   [/message/i, "message"],
   [/lab|report|upload|document|scan/i, "report"],
@@ -101,3 +103,57 @@ export function sourceKind(source: string): SourceKind {
 }
 
 export const DUE_TIMES = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"];
+
+// ---------- plan awareness (spec rule 7: the demo shows only what the plan includes) ----------
+/** Fixtures that depend on a feature beyond Core, or on an add-on ("add-on" → never shown as working). */
+const TASK_NEEDS: Record<string, FeatureId | "add-on"> = {
+  t12: "self-report", // food-log photos come from the patient app
+  t13: "programmes", // cohort case discussion
+  t14: "programmes", // programme completion summary
+  t15: "add-on", // UPI gateway callback — the payment gateway is an add-on
+  t18: "release", // released to the patient app
+};
+
+/** Wording fixes for fixture sources (no lab integration in any plan; flags, not escalations). */
+const SOURCE_OVERRIDE: Record<string, string> = {
+  t1: "Report uploaded · 12 Nov",
+  t3: "Flag from Kavya Nair · same day",
+  t6: "Precaution changed · acknowledge before 17:00",
+};
+
+export const displaySource = (t: Pick<Task, "id" | "source">) => SOURCE_OVERRIDE[t.id] ?? t.source;
+
+/**
+ * Whether a task exists on this plan: its owner's role must be in the plan (no reception in Core,
+ * no coordinator below Pro) and anything it depends on must be included. Assignment fixtures are
+ * shown from the assignments themselves (assigned → seen), not as tasks.
+ */
+export function taskInPlan(t: Task, plan: PlanId, has: (f: FeatureId) => boolean): boolean {
+  if (sourceKind(t.source) === "referral") return false;
+  const need = TASK_NEEDS[t.id];
+  if (need === "add-on" || (need && !has(need))) return false;
+  const owner = staffById(t.ownerId);
+  return !owner || planById(plan).roles.includes(owner.role);
+}
+
+/** What a clinical item is, without its clinical content — for roles that route work (admin, coordinator). */
+const ROUTING_TITLE: Record<SourceKind, string> = {
+  escalation: "Flag to respond to",
+  referral: "Assignment",
+  report: "Report to review",
+  message: "Message to follow up",
+  billing: "Billing item",
+  intake: "Intake form",
+  "follow-up": "Follow-up call",
+  plan: "Nutrition plan to finish",
+  note: "Note to sign",
+  admin: "Admin item",
+  manual: "Clinical item",
+};
+
+export function routingTitle(t: Pick<Task, "id" | "source">) {
+  const src = displaySource(t);
+  if (/precaution/i.test(src)) return "Precaution to acknowledge";
+  if (/food log/i.test(src)) return "Food log to review";
+  return ROUTING_TITLE[sourceKind(src)];
+}

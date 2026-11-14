@@ -12,7 +12,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { StatusBadge } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { DemoNote } from "../ui";
-import { RELEASED_PAST, ME } from "../record";
+import { RELEASED_PAST } from "../record";
 import { TODAY_KEY, dayLabel, longDate, shortDate } from "../time";
 import { addRequest, withdrawRequest, type AccessRequest, type RequestKind } from "./store";
 
@@ -29,10 +29,10 @@ const RECORD_OPTIONS = RELEASED_PAST.filter((e) => e.state !== "self-reported")
   .sort((a, b) => b.date.localeCompare(a.date))
   .map((e) => ({ value: e.id, label: `${e.title} · ${e.date.slice(0, 4) === TODAY_KEY.slice(0, 4) ? shortDate(e.date) : longDate(`${e.date}T12:00:00+05:30`)}` }));
 
+/** Sending records to an ABHA account goes through ABDM — an add-on — so it isn't offered here. */
 const DELIVERY = [
-  { value: "portal", label: "Download here in the portal" },
+  { value: "portal", label: "Download here in the app" },
   { value: "reception", label: "Collect a printed copy at reception" },
-  { value: "abha", label: ME.abhaLinked ? "Send to my linked ABHA account" : "ABHA (not linked)" },
 ];
 
 type Errors = Partial<Record<"record" | "detail", string>>;

@@ -12,6 +12,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { StatusBadge, recordTone } from "@/components/ui/status";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { useRole } from "@/components/shell/role-context";
 import { authorAvatar, authorName } from "@/features/patient/event-meta";
 import { MODALITY, TECHNIQUE, recordHref, type StudyKind } from "./data";
 import { conditionOf, isFeaturedPatient, readableDates, recordOf, studyPeople, type Study } from "./record-model";
@@ -247,6 +248,7 @@ function Slider({ label, value, min, max, onChange }: { label: string; value: nu
 }
 
 function ReportPanel({ study, patientId }: { study: Study; patientId: string }) {
+  const { has } = useRole();
   const e = study.event;
   const kind = study.kind!;
   const record = recordOf(patientId);
@@ -259,7 +261,7 @@ function ReportPanel({ study, patientId }: { study: Study; patientId: string }) 
     <aside className="flex min-w-0 flex-col gap-4" aria-label="Report">
       <div className="flex flex-wrap gap-2">
         {e ? <StatusBadge tone={recordTone(e.state)}>{RECORD_STATE_LABEL[e.state]}</StatusBadge> : null}
-        {e ? <StatusBadge tone={e.released ? "info" : "neutral"} dot={false}>{e.released ? "Released to patient" : "Not released"}</StatusBadge> : null}
+        {e && has("release") ? <StatusBadge tone={e.released ? "info" : "neutral"} dot={false}>{e.released ? "Released to patient" : "Not released"}</StatusBadge> : null}
       </div>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-inner bg-canvas p-4 text-sm">

@@ -245,7 +245,7 @@ export type PrepItem = { id: string; label: string; detail?: string; done?: stri
 export function prepareFor(a: PortalAppt): PrepItem[] {
   if (a.id === "a-1100") {
     return [
-      { id: "form", label: "Pre-visit form", detail: "Completed on 12 Nov — nothing more to fill in", done: "Done" },
+      { id: "form", label: "Pre-visit form", detail: "Filled in here in the app on 12 Nov — nothing more to do", done: "Done" },
       { id: "bp", label: "Bring your home BP readings", detail: "The last 7 days — they stay labelled self-reported" },
       { id: "meds", label: "Bring the medicines you take now", detail: "Aspirin, atorvastatin, metoprolol and your inhaler" },
       { id: "symptoms", label: "Note any palpitations or chest discomfort since 6 Nov" },

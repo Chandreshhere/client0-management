@@ -6,7 +6,6 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { GoogleLogo, UserSwitch, WindowsLogo } from "@phosphor-icons/react";
 import type { Role } from "@/data/types";
 import { ROLE_ORDER } from "@/data/staff";
-import { COOKIE_ROLE, setCookie } from "@/lib/cookies";
 import { Button } from "@/components/ui/button";
 import { Group, Inset } from "@/components/ui/card";
 import { Checkbox, Field, Input } from "@/components/ui/input";
@@ -15,7 +14,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { useToast } from "@/components/ui/toast";
 import { PasswordInput } from "./password-input";
 import { DEMO_PASSWORD, demoIdentity } from "./demo-identity";
-import { emailError, joinList } from "./validation";
+import { emailError } from "./validation";
 import { AuthDivider, focusFirstInvalid } from "./form-bits";
 
 const REMEMBER_KEY = "cl_remember_email";
@@ -24,8 +23,9 @@ type Status = "idle" | "saving";
 
 /**
  * Sign-in. There is no backend: the form validates locally, optionally remembers the email in
- * this browser, sets the demo role cookie when a demo account was picked, then opens the plan
- * chooser — and says plainly that no account was checked.
+ * this browser, then opens the demo logins (/demo) — with the picked demo role highlighted and the
+ * plans that include it — and says plainly that no account was checked. Each demo login is one
+ * plan and one role, so the plan is chosen there.
  */
 export function LoginForm() {
   const router = useRouter();
@@ -93,14 +93,13 @@ export function LoginForm() {
     } catch {
       /* not critical: remembering is a convenience */
     }
-    if (demoRole) setCookie(COOKIE_ROLE, demoRole);
     timer.current = window.setTimeout(() => {
-      router.push("/demo");
+      router.push(demoRole ? `/demo?role=${demoRole}` : "/demo");
       toast({
         title: "Demo sign-in — no account was checked",
         description: demoRole
-          ? `Opening as ${demoIdentity(demoRole).label.toLowerCase()}. Choose a plan to continue.`
-          : "Any email works in this prototype. Choose a plan to continue.",
+          ? `${demoIdentity(demoRole).label} is ${demoIdentity(demoRole).availability}. Pick that plan's ${demoIdentity(demoRole).label.toLowerCase()} login to continue.`
+          : "Any email works in this prototype. Pick a demo login — one plan, one role — to continue.",
       });
     }, 700);
   };
@@ -180,7 +179,7 @@ export function LoginForm() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-ink">{identity.name}</p>
                   <p className="truncate text-xs text-muted">
-                    {identity.label} workspace · in {joinList(identity.plans)}
+                    {identity.label} login · {identity.availability}
                   </p>
                 </div>
               </>
@@ -191,7 +190,7 @@ export function LoginForm() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-ink">Demo accounts</p>
-                  <p className="truncate text-xs text-muted">Fills the form with a synthetic person</p>
+                  <p className="truncate text-xs text-muted">Pick a role to see which plans include it</p>
                 </div>
               </>
             )}

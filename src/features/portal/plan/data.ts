@@ -159,6 +159,8 @@ export interface TodayItem {
   detail?: string;
   /** done by someone else / elsewhere (clinic attendance, the patient's food log) */
   doneBy?: string;
+  /** meal slot, for logging the meal against the plan */
+  slotId?: string;
   tickable: boolean;
   href?: string;
 }
@@ -180,6 +182,7 @@ export const TODAY_ITEMS: TodayItem[] = [
     const log = todaysLogs.find((l) => l.slot === s.id);
     return {
       id: `meal-${s.id}`,
+      slotId: s.id,
       at: hm(slotTime(s)),
       time: slotTime(s),
       kind: "meal",

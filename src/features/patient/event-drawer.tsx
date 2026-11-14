@@ -14,6 +14,7 @@ import { StatusBadge, recordTone } from "@/components/ui/status";
 import { Avatar } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { useRole } from "@/components/shell/role-context";
 import { EVENT_ICON, authorAvatar, authorName } from "./event-meta";
 
 /**
@@ -24,6 +25,11 @@ export function EventDrawer({ events, eventId, onClose, onOpenEvent, patientId }
   const e = events.find((x) => x.id === eventId) ?? null;
   const { conditionById } = useRecord();
   const { toast } = useToast();
+  const { role, has } = useRole();
+  // Doctors review and amend; doctors and nutritionists release (Pro, F13); instructors never see diagnoses.
+  const canReview = role === "doctor";
+  const canRelease = has("release") && (role === "doctor" || role === "nutritionist");
+  const showDiagnosis = role === "doctor" || role === "nutritionist";
   const [reviewed, setReviewed] = useState<Set<string>>(new Set());
   const [released, setReleased] = useState<Set<string>>(new Set());
   const [addendumFor, setAddendumFor] = useState<string | null>(null);
@@ -33,17 +39,34 @@ export function EventDrawer({ events, eventId, onClose, onOpenEvent, patientId }
   const Icon = e ? EVENT_ICON[e.type] : null;
   const state = e && reviewed.has(e.id) ? "completed" : e?.state;
   const isReleased = e ? e.released || released.has(e.id) : false;
-  const sourceHref = e ? (e.type === "note" || e.type === "consult" ? `/patients/${patientId}/notes` : e.type === "lab" ? `/patients/${patientId}/labs` : e.type === "imaging" ? `/patients/${patientId}/imaging` : e.type === "vitals" ? `/patients/${patientId}/vitals` : `/patients/${patientId}/documents`) : "#";
+  const base = `/patients/${patientId}`;
+  const sourceHref = e
+    ? e.type === "note" || e.type === "consult"
+      ? `${base}/medical`
+      : e.type === "medication"
+        ? `${base}/medical/conditions`
+        : e.type === "lab"
+          ? `${base}/reports/labs`
+          : e.type === "imaging"
+            ? `${base}/reports/imaging`
+            : e.type === "vitals"
+              ? `${base}/medical/vitals`
+              : e.type === "nutrition"
+                ? `${base}/nutrition`
+                : e.type === "movement"
+                  ? `${base}/yoga`
+                  : `${base}/reports`
+    : "#";
 
   return (
     <Dialog open={!!e} onOpenChange={(o) => !o && onClose()}>
       {e && Icon ? (
         <SheetContent
           title={e.title}
-          description={`${EVENT_TYPE_LABEL[e.type]} · ${conditionById(e.conditionId)?.name}`}
+          description={showDiagnosis ? `${EVENT_TYPE_LABEL[e.type]} · ${conditionById(e.conditionId)?.name}` : EVENT_TYPE_LABEL[e.type]}
           footer={
             <>
-              {e.state === "awaiting-review" && !reviewed.has(e.id) ? (
+              {canReview && e.state === "awaiting-review" && !reviewed.has(e.id) ? (
                 <Button
                   variant="primary"
                   leading={<CheckCircle />}
@@ -55,7 +78,7 @@ export function EventDrawer({ events, eventId, onClose, onOpenEvent, patientId }
                   Mark reviewed
                 </Button>
               ) : null}
-              {!isReleased && e.state !== "scheduled" ? (
+              {canRelease && !isReleased && e.state !== "scheduled" ? (
                 <Button
                   variant="secondary"
                   leading={<Eye />}
@@ -67,7 +90,7 @@ export function EventDrawer({ events, eventId, onClose, onOpenEvent, patientId }
                   Release to patient
                 </Button>
               ) : null}
-              {e.state === "signed" ? (
+              {canReview && e.state === "signed" ? (
                 <Button variant="secondary" leading={<NotePencil />} onClick={() => setAddendumFor(e.id)}>
                   Add addendum
                 </Button>
@@ -86,10 +109,12 @@ export function EventDrawer({ events, eventId, onClose, onOpenEvent, patientId }
             </span>
             <div className="flex flex-wrap gap-2">
               <StatusBadge tone={recordTone(state!)}>{RECORD_STATE_LABEL[state!]}</StatusBadge>
-              <StatusBadge tone={isReleased ? "info" : "neutral"} dot={false}>
-                {isReleased ? <Eye size={12} aria-hidden="true" /> : <EyeSlash size={12} aria-hidden="true" />}
-                {isReleased ? "Released to patient" : "Not released"}
-              </StatusBadge>
+              {has("release") ? (
+                <StatusBadge tone={isReleased ? "info" : "neutral"} dot={false}>
+                  {isReleased ? <Eye size={12} aria-hidden="true" /> : <EyeSlash size={12} aria-hidden="true" />}
+                  {isReleased ? "Released to patient" : "Not released"}
+                </StatusBadge>
+              ) : null}
             </div>
           </div>
 
@@ -198,7 +223,7 @@ export function EventDrawer({ events, eventId, onClose, onOpenEvent, patientId }
             );
           })()}
 
-          {related.length ? (
+          {showDiagnosis && related.length ? (
             <section className="mt-8">
               <h3 className="text-xs text-muted">Also linked to {conditionById(e.conditionId)?.name}</h3>
               <ul className="mt-2 flex flex-col gap-1">

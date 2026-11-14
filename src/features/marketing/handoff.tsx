@@ -1,14 +1,26 @@
-import { minPlanFor } from "@/data/plans";
+import { ASSIGNMENT_RETURN_HOURS } from "@/data/care";
+import { minPlanFor, minPlanForRole } from "@/data/plans";
 import { cn } from "@/lib/cn";
-import { ReferralStepper } from "./referral-stepper";
+import { availabilityLabel } from "@/features/pricing/model";
+import { AssignmentTrack } from "./assignment-track";
 import { Section, SectionIntro } from "./section";
 import s from "./motion.module.css";
 
-/** Referral handoff section (doc §5B): the stepper plus three short notes on how stalls surface. */
+/** Assignment handoff section (spec F5): the two-state track plus three short notes on ownership. */
+const assignmentsOn = availabilityLabel(minPlanFor("referrals"));
 const NOTES = [
-  { title: "Every stage has an owner", body: "Each step records who moved it and when, so “referred” never silently means “done”." },
-  { title: "Stalls surface on their own", body: "A referral that isn't accepted or booked shows up as a notification and a task for the people who can unblock it." },
-  { title: `On ${minPlanFor("referrals").name} and above`, body: "Referrals need more than one discipline, so they arrive with the multi-role workspaces." },
+  {
+    title: "One owner until it's seen",
+    body: "Only the nutritionist or instructor it was assigned to has it in their pending list. Everyone else on the care team sees it on the patient's timeline.",
+  },
+  {
+    title: `Unseen after ${ASSIGNMENT_RETURN_HOURS} hours, it comes back`,
+    body: `An assignment nobody has opened goes back to the doctor's pending list. On ${minPlanForRole("coordinator").name}, the care coordinator sees it too.`,
+  },
+  {
+    title: assignmentsOn === "Every plan" ? "On every plan; booking lives in scheduling" : `On ${assignmentsOn}; booking lives in scheduling`,
+    body: `Assigning isn't booking. Appointments and classes are booked in the calendar, on ${availabilityLabel(minPlanFor("calendar"))} — never a step in the assignment.`,
+  },
 ];
 
 export function Handoff() {
@@ -16,12 +28,12 @@ export function Handoff() {
     <Section id="workflows" nav="workflows" labelledBy="workflows-title">
       <SectionIntro
         id="workflows-title"
-        eyebrow="Referral workflow"
-        title="“Referred to nutrition” — but did anyone accept, book or see the patient?"
-        lead="In Carelane a referral moves through five owned stages: Requested, Accepted, Booked, Completed and Acknowledged. Each stage keeps a person and a time, so the care team can see exactly where progress stopped."
+        eyebrow="Assignments"
+        title="“Assigned to nutrition” — but has anyone opened it?"
+        lead={`In Carelane the doctor assigns a patient to a nutritionist or a yoga instructor with goals and precautions. An assignment has two states: assigned, then seen — the moment the recipient opens it. If nobody opens it within ${ASSIGNMENT_RETURN_HOURS} hours, it goes back to the doctor.`}
       />
       <div className={cn("mt-12 md:mt-16", s.revealTall)}>
-        <ReferralStepper />
+        <AssignmentTrack />
       </div>
       <ul className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
         {NOTES.map((n) => (

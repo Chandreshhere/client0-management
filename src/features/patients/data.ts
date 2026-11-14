@@ -28,8 +28,13 @@ export interface LocalDetails {
   language: string;
   /** ABHA number as typed — voluntary, never verified here (no ABDM connection). */
   abha: string | null;
+  /** Full address as given at registration; `area` holds its last part (the locality). */
+  address?: string;
+  emergency?: { name: string; phone: string };
+  /** DPDP consent: when and by whom it was recorded. */
   consentAt: string;
-  /** Possible matches the registrar continued past. A reviewer checks them; nothing is merged. */
+  consentBy?: string;
+  /** Possible matches the registrar continued past. An admin reviews them; nothing is merged automatically. */
   duplicateOf: string[];
   registeredBy: string;
 }
@@ -67,7 +72,7 @@ export interface Row {
   team: string[];
 }
 
-export type Scope = "all" | "mine" | "attention" | "new";
+export type Scope = "all" | "mine" | "attention" | "new" | "duplicates";
 export type SortKey = "name" | "next" | "last" | "status";
 
 export interface Filters {
@@ -134,10 +139,64 @@ export type CareSlot = (typeof CARE_SLOTS)[number]["key"];
 
 export const staffWithRole = (role: Role) => STAFF.filter((s) => s.role === role);
 
-/** Roles that see balances in this demo (front desk, admin, and the doctor who runs billing on Starter). */
-export const BILLING_ROLES: Role[] = ["admin", "frontdesk", "doctor"];
+/** Roles that see balances (billing is the front desk's, Clinic plan and up). */
+export const BILLING_ROLES: Role[] = ["admin", "frontdesk"];
 /** Roles that sit on care teams — "My patients" means "on my care team" for them. */
 export const CARE_ROLES: Role[] = ["doctor", "nutritionist", "yoga", "coordinator"];
+/** Admin and Reception see demographics only: no diagnoses, concerns or conditions. */
+export const DEMOGRAPHIC_ROLES: Role[] = ["admin", "frontdesk"];
+/** Who can register a patient and edit demographics (spec: Doctor, Admin, Reception). */
+export const REGISTER_ROLES: Role[] = ["doctor", "admin", "frontdesk"];
+/** Who sets a patient's care team (spec: Doctor, Admin). */
+export const CARE_TEAM_ROLES: Role[] = ["doctor", "admin"];
+/** Who books appointments (Clinic plan and up). */
+export const BOOKING_ROLES: Role[] = ["doctor", "frontdesk", "admin", "coordinator"];
+
+/**
+ * What the registry shows a role on a plan. Admin and Reception get demographics and routing only;
+ * scheduling detail needs the calendar (Clinic+), balances need billing, programmes and branches
+ * are Pro. Nothing from a higher plan is shown.
+ */
+export interface RegistryLens {
+  clinical: boolean;
+  /**
+   * What the concern column shows: diagnoses (doctor, nutritionist — read-only for the
+   * nutritionist), the doctor's precautions (yoga instructors never see diagnoses), or nothing
+   * (coordinator: status only; Admin and Reception: demographics).
+   */
+  concern: "diagnosis" | "precautions" | "none";
+  /** The organ-led Browse layout — an optional doctor view. */
+  browse: boolean;
+  diary: boolean;
+  showBalance: boolean;
+  programmes: boolean;
+  branches: boolean;
+  canRegister: boolean;
+  canAssignTeam: boolean;
+  canMerge: boolean;
+  canBook: boolean;
+  canMessage: boolean;
+  coordinators: boolean;
+}
+
+export function registryLens(role: Role, has: (f: FeatureId) => boolean): RegistryLens {
+  const clinical = !DEMOGRAPHIC_ROLES.includes(role);
+  return {
+    clinical,
+    concern: role === "doctor" || role === "nutritionist" ? "diagnosis" : role === "yoga" ? "precautions" : "none",
+    browse: role === "doctor",
+    diary: has("calendar"),
+    showBalance: has("billing") && BILLING_ROLES.includes(role),
+    programmes: has("programmes"),
+    branches: has("branches"),
+    canRegister: REGISTER_ROLES.includes(role),
+    canAssignTeam: CARE_TEAM_ROLES.includes(role),
+    canMerge: role === "admin",
+    canBook: has("calendar") && BOOKING_ROLES.includes(role),
+    canMessage: has("messages") && CARE_ROLES.includes(role),
+    coordinators: has("coordinator"),
+  };
+}
 
 // ---------------------------------------------------------------- visits
 
@@ -229,38 +288,69 @@ export const FLAG_LABEL: Record<FlagId, string> = {
   allergies: "Allergies not recorded",
 };
 
-export function flagsFor(p: RegistryPatient, next: Visit | null): FlagId[] {
+export function flagsFor(p: RegistryPatient, next: Visit | null, diary = true): FlagId[] {
   const out: FlagId[] = [];
   if (p.tags.includes("Possible duplicate") || (p.local?.duplicateOf.length ?? 0) > 0) out.push("duplicate");
   if (!p.intakeComplete) out.push("intake");
-  if (!next && p.status !== "completed" && lastVisitAt(p) !== null) out.push("rebook");
+  // "Not rebooked" is a front-office signal — only plans with appointments raise it.
+  if (diary && !next && p.status !== "completed" && lastVisitAt(p) !== null) out.push("rebook");
   if (p.balanceDue > 0) out.push("balance");
   // null = not recorded. An empty list is a confirmed "no known allergies" and is not a flag.
   if (p.allergies === null) out.push("allergies");
   return out;
 }
 
-export function buildRows(patients: RegistryPatient[], sessionVisits: Appointment[]): Row[] {
+/**
+ * Registry rows. Without the diary (Core has no appointments) the next date is the follow-up date
+ * on the record, and nothing comes from today's check-in queue.
+ */
+export function buildRows(patients: RegistryPatient[], sessionVisits: Appointment[], opts: { diary: boolean; coordinators?: boolean } = { diary: true }): Row[] {
   return patients.map((patient) => {
-    const next = nextVisit(patient, sessionVisits);
-    return { patient, next, last: lastVisitAt(patient), flags: flagsFor(patient, next), team: careTeamIds(patient.careTeam) };
+    const next = opts.diary ? nextVisit(patient, sessionVisits) : followUpVisit(patient);
+    const last = opts.diary ? lastVisitAt(patient) : patient.lastVisit;
+    // Care coordinators are a Pro role; below Pro they aren't part of anyone's care team.
+    const team = careTeamIds(opts.coordinators === false ? { ...patient.careTeam, coordinator: undefined } : patient.careTeam);
+    return { patient, next, last, flags: flagsFor(patient, next, opts.diary), team };
   });
+}
+
+/** The next follow-up date on the record (Core: no booking, no queue). */
+export function followUpVisit(p: RegistryPatient): Visit | null {
+  const rec = p.nextAppointment;
+  return rec && Date.parse(rec) >= NOW ? recordVisit(`record-next-${p.id}`, rec, "booked") : null;
 }
 
 // ---------------------------------------------------------------- search, scope, filters, sort
 
-export function matchesQuery(p: RegistryPatient, q: string) {
+/**
+ * Search by clinic ID, phone or name (F1). Phones are stored masked ("+91 98•• ••• 214"), so a
+ * number matches on its visible digits: a full 10-digit mobile on its first two and last three,
+ * a shorter run on the start or end. Clinical roles can also search by concern or condition;
+ * Admin and Reception can't, so a search never reveals a diagnosis.
+ */
+export function matchesQuery(p: RegistryPatient, q: string, opts: { clinical?: boolean } = {}) {
   const s = q.trim().toLowerCase();
   if (!s) return true;
   const cn = clinicNoOf(p).toLowerCase();
   const digits = s.replace(/\D/g, "");
+  const textOnly = digits.length === 0;
   return (
     p.name.toLowerCase().includes(s) ||
     cn.includes(s) ||
     (digits.length >= 3 && cn.replace(/\D/g, "").includes(digits)) ||
-    p.primaryConcern.toLowerCase().includes(s) ||
-    p.conditions.some((c) => c.toLowerCase().includes(s))
+    matchesPhone(p.phone, digits) ||
+    (!!opts.clinical && textOnly && (p.primaryConcern.toLowerCase().includes(s) || p.conditions.some((c) => c.toLowerCase().includes(s))))
   );
+}
+
+export function matchesPhone(masked: string, typed: string) {
+  const parts = maskedParts(masked);
+  if (!parts) return false;
+  const full = phoneDigits(typed);
+  if (full.length === 10) return full.slice(0, 2) === parts[1] && full.slice(7) === parts[2];
+  // The last three digits, as people read them out ("ending 214").
+  const d = typed.replace(/\D/g, "");
+  return d.length === 3 && parts[2] === d;
 }
 
 export function inScope(row: Row, scope: Scope, ctx: { role: Role; userId: string }) {
@@ -272,10 +362,18 @@ export function inScope(row: Row, scope: Scope, ctx: { role: Role; userId: strin
         ? row.team.includes(ctx.userId)
         : TODAY_APPOINTMENTS.some((a) => a.patientId === row.patient.id) || (row.next !== null && isToday(row.next.start));
     case "attention":
-      return row.patient.status === "needs-attention" || row.flags.includes("duplicate");
+      return row.patient.status === "needs-attention";
+    case "duplicates":
+      return row.flags.includes("duplicate");
     case "new":
       return Date.parse(row.patient.registeredAt) >= WEEK_START;
   }
+}
+
+/** Search results with the user's own patients first (F1); the chosen sort holds within each group. */
+export function mineFirst(rows: Row[], userId: string) {
+  const mine = rows.filter((r) => r.team.includes(userId));
+  return mine.length ? [...mine, ...rows.filter((r) => !r.team.includes(userId))] : rows;
 }
 
 export function passesFilters(row: Row, f: Filters) {
@@ -507,3 +605,21 @@ export function freeSlots(staffId: string, durationMin: number, sessionVisits: A
 }
 
 export const branchLabel = (b: BranchId) => (b === "hsr" ? "HSR Layout" : "Indiranagar");
+
+/**
+ * The doctor's yoga precautions for a patient, as recorded on their class places — what an
+ * instructor sees instead of a diagnosis. `changed` = a precaution changed and awaits acknowledgement.
+ */
+export function precautionsFor(patientId: string): { text: string; changed: boolean } | null {
+  const all = [...new Set(CLASSES.flatMap((c) => c.enrolled.filter((e) => e.patientId === patientId && e.precaution).map((e) => e.precaution as string)))];
+  if (!all.length) return null;
+  const text = [...all].sort((a, b) => a.length - b.length)[0];
+  const changed = CLASSES.some((c) => c.enrolled.some((e) => e.patientId === patientId && e.clearance === "changed"));
+  return { text, changed };
+}
+
+/** Locality from a typed address: its last comma-separated part ("12, 3rd Cross, Domlur" → "Domlur"). */
+export const localityOf = (address: string) => address.split(",").map((s) => s.trim()).filter(Boolean).at(-1) ?? address.trim();
+
+/** The patient's primary doctor — the owner of their reports and the default for messages. */
+export const primaryDoctorOf = (p: { careTeam: Patient["careTeam"] }) => staffById(p.careTeam.doctor);

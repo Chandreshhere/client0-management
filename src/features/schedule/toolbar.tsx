@@ -1,6 +1,6 @@
 "use client";
 
-import { CaretDown, CaretLeft, CaretRight, Door, LockSimple, Stethoscope } from "@phosphor-icons/react";
+import { CaretDown, CaretLeft, CaretRight, Door, Stethoscope } from "@phosphor-icons/react";
 import type { Staff } from "@/data/types";
 import { BRANCHES } from "@/data/staff";
 import { DISCIPLINE_LABEL } from "@/data/appointments";
@@ -44,7 +44,7 @@ export function DateNav({ onStep, onToday, isToday, unit }: { onStep: (n: -1 | 1
 const triggerClass =
   "inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full bg-surface px-3 text-sm text-ink shadow-[inset_0_0_0_1px_var(--color-line)] transition-[box-shadow,background-color] hover:shadow-[inset_0_0_0_1px_var(--color-line-strong)] data-[state=open]:shadow-[inset_0_0_0_1.5px_var(--color-charcoal)] [&_svg]:size-4";
 
-/** Practitioner filter: checkbox list with avatars; staff outside the plan are shown locked. */
+/** Practitioner filter: checkbox list with avatars. */
 export function PractitionerFilter({
   all,
   allowedIds,
@@ -86,14 +86,12 @@ export function PractitionerFilter({
         {selfId && allowedIds.includes(selfId) ? <DropdownItem onSelect={() => onChange([selfId])}>Only me</DropdownItem> : null}
         <DropdownSeparator />
         <div className="max-h-[320px] overflow-y-auto overscroll-contain">
-          {all.map((s) => {
-            const locked = !allowedIds.includes(s.id);
-            const on = !locked && (selected === null || selected.includes(s.id));
+          {allowed.map((s) => {
+            const on = selected === null || selected.includes(s.id);
             return (
               <DropdownCheckboxItem
                 key={s.id}
                 checked={on}
-                disabled={locked}
                 onSelect={(e) => e.preventDefault()}
                 onCheckedChange={(v) => toggle(s.id, v === true)}
                 className="h-12"
@@ -106,17 +104,8 @@ export function PractitionerFilter({
                       {s.id === selfId ? <span className="text-muted"> · you</span> : null}
                     </span>
                     <span className="flex items-center gap-1.5 text-xs text-muted">
-                      {locked ? (
-                        <>
-                          <LockSimple aria-hidden="true" className="!size-3" />
-                          Team plan
-                        </>
-                      ) : (
-                        <>
-                          <DisciplineDot discipline={s.discipline} />
-                          {DISCIPLINE_LABEL[s.discipline]} · {s.room}
-                        </>
-                      )}
+                      <DisciplineDot discipline={s.discipline} />
+                      {DISCIPLINE_LABEL[s.discipline]} · {s.room}
                     </span>
                   </span>
                 </span>
@@ -133,8 +122,10 @@ export function PractitionerFilter({
   );
 }
 
-export function RoomFilter({ selected, onChange }: { selected: string[]; onChange: (next: string[]) => void }) {
+/** Rooms, grouped by branch when the plan has several branches (Pro); otherwise one clinic's list. */
+export function RoomFilter({ selected, onChange, multiBranch }: { selected: string[]; onChange: (next: string[]) => void; multiBranch: boolean }) {
   const all = BRANCHES.flatMap((b) => b.rooms);
+  const groups = multiBranch ? BRANCHES.map((b) => ({ id: b.id, name: b.name, rooms: b.rooms })) : [{ id: "clinic", name: "Rooms", rooms: all }];
   const label = selected.length === 0 ? "All rooms" : selected.length === 1 ? selected[0] : `${selected.length} rooms`;
   return (
     <Dropdown>
@@ -145,7 +136,7 @@ export function RoomFilter({ selected, onChange }: { selected: string[]; onChang
       </DropdownTrigger>
       <DropdownContent align="start" className="w-[260px]">
         <div className="max-h-[360px] overflow-y-auto overscroll-contain">
-          {BRANCHES.map((b, i) => (
+          {groups.map((b, i) => (
             <div key={b.id}>
               {i > 0 ? <DropdownSeparator /> : null}
               <DropdownLabel>{b.name}</DropdownLabel>

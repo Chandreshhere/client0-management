@@ -2,17 +2,18 @@
 
 import Link from "next/link";
 import { Fragment } from "react";
-import { ArrowUpRight, BowlFood, CalendarCheck, CheckCircle, Heartbeat, PersonSimpleTaiChi, Pill as PillIcon, Stethoscope } from "@phosphor-icons/react";
+import { ArrowUpRight, BowlFood, CalendarCheck, CaretDown, CheckCircle, Heartbeat, PersonSimpleTaiChi, Pill as PillIcon, Stethoscope } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/input";
+import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
 import { ProgressRing } from "@/components/ui/misc";
 import { StatusBadge } from "@/components/ui/status";
-import { DemoNote, Panel } from "../ui";
+import { DemoNote, Panel, SelfReportedBadge } from "../ui";
 import { NOW_LABEL, TODAY_KEY, istDay, istMinutes, nowIso, weekdayShort } from "../time";
 import { TODAY_IS_OFFICE, TODAY_ITEMS, type TodayItem, type TodayKind } from "./data";
-import { setTick, tickKey, type LoggedReading } from "./store";
+import { MEAL_MATCH_LABEL, clearMeal, logMeal, setTick, tickKey, type LoggedReading, type MealLog, type MealMatch } from "./store";
 
 const KIND_ICON: Record<TodayKind, typeof BowlFood> = {
   meal: BowlFood,
@@ -27,12 +28,15 @@ const NOW_MIN = istMinutes(nowIso());
 
 /**
  * Today's plan as one checklist on a time rail: meals at home-day (or office-day) times,
- * medicines, practice and logging, with today's visits as context. Ticks persist per day in this
- * browser session; items done elsewhere (class attendance, the patient's food log) are locked.
+ * medicines, practice and logging, with today's visits as context. Meals are logged against the
+ * plan (as planned / partly / skipped) and stay self-reported until the nutritionist reviews them.
+ * Everything persists per day in this browser session; items recorded elsewhere (class attendance,
+ * an earlier food log) are locked.
  */
-export function TodayPanel({ ticks, readings, onLogBp }: { ticks: Record<string, boolean>; readings: LoggedReading[]; onLogBp: () => void }) {
+export function TodayPanel({ ticks, meals, readings, onLogBp }: { ticks: Record<string, boolean>; meals: Record<string, MealLog>; readings: LoggedReading[]; onLogBp: () => void }) {
   const bpToday = readings.filter((r) => r.kind === "bp" && istDay(r.measuredAt) === TODAY_KEY).at(-1);
-  const isDone = (it: TodayItem) => !!it.doneBy || (it.kind === "log" ? !!bpToday : !!ticks[tickKey(it.id)]);
+  const mealLog = (it: TodayItem) => (it.slotId ? meals[tickKey(it.slotId)] : undefined);
+  const isDone = (it: TodayItem) => !!it.doneBy || (it.kind === "log" ? !!bpToday : it.kind === "meal" ? !!mealLog(it) : !!ticks[tickKey(it.id)]);
   const counted = TODAY_ITEMS.filter((i) => i.kind !== "visit");
   const done = counted.filter(isDone).length;
   const nowIndex = TODAY_ITEMS.findIndex((i) => i.at > NOW_MIN);
@@ -56,12 +60,12 @@ export function TodayPanel({ ticks, readings, onLogBp }: { ticks: Record<string,
         {TODAY_ITEMS.map((it, i) => (
           <Fragment key={it.id}>
             {i === nowIndex ? <NowLine /> : null}
-            <Row item={it} done={isDone(it)} bpToday={bpToday} onLogBp={onLogBp} />
+            <Row item={it} done={isDone(it)} meal={mealLog(it)} bpToday={bpToday} onLogBp={onLogBp} />
           </Fragment>
         ))}
         {nowIndex === -1 ? <NowLine /> : null}
       </ol>
-      <DemoNote className="px-2 pb-2">Ticks are saved in this browser session only. Items marked “Clinic” or “Logged by you” were recorded elsewhere.</DemoNote>
+      <DemoNote className="px-2 pb-2">Log each meal against your plan — your nutritionist sees it as self-reported until they review it. Saved in this browser session only; items marked “Clinic” or “Logged by you” were recorded earlier.</DemoNote>
     </Panel>
   );
 }
@@ -79,17 +83,18 @@ function NowLine() {
   );
 }
 
-function Row({ item, done, bpToday, onLogBp }: { item: TodayItem; done: boolean; bpToday?: LoggedReading; onLogBp: () => void }) {
+function Row({ item, done, meal, bpToday, onLogBp }: { item: TodayItem; done: boolean; meal?: MealLog; bpToday?: LoggedReading; onLogBp: () => void }) {
   const Icon = KIND_ICON[item.kind];
   const locked = !!item.doneBy;
   const visit = item.kind === "visit";
+  const mealRow = item.kind === "meal" && !locked && !!item.slotId;
   return (
     <li className={cn("relative grid grid-cols-[48px_16px_minmax(0,1fr)_auto] items-start gap-x-3 rounded-[12px] px-2 py-2", !visit && "hover:bg-canvas")}>
       <span className={cn("pt-0.5 text-xs tabular", visit ? "text-ink" : "text-muted")}>{item.time}</span>
       <span className="relative z-[1] flex justify-center pt-0.5">
         {visit ? (
           <span className="mt-1 size-2.5 rounded-full bg-charcoal shadow-[0_0_0_3px_var(--color-surface)]" aria-hidden="true" />
-        ) : item.kind === "log" ? (
+        ) : item.kind === "log" || mealRow ? (
           <span className={cn("flex size-4 items-center justify-center rounded-full shadow-[0_0_0_3px_var(--color-surface)]", done ? "bg-charcoal text-white" : "bg-surface shadow-[inset_0_0_0_1.5px_var(--color-line-strong),0_0_0_3px_var(--color-surface)]")} aria-hidden="true">
             {done ? <CheckCircle size={16} weight="fill" /> : null}
           </span>
@@ -104,21 +109,26 @@ function Row({ item, done, bpToday, onLogBp }: { item: TodayItem; done: boolean;
         )}
       </span>
       <span className="min-w-0">
-        <span className={cn("flex items-start gap-1.5 text-sm transition-colors duration-200 sm:items-center", done && !locked && item.kind !== "log" ? "text-muted line-through" : "text-ink")}>
+        <span className={cn("flex items-start gap-1.5 text-sm transition-colors duration-200 sm:items-center", done && !locked && item.kind !== "log" && !mealRow ? "text-muted line-through" : "text-ink")}>
           <Icon size={16} className="mt-0.5 shrink-0 text-muted sm:mt-0" aria-hidden="true" />
           <span className="min-w-0 sm:truncate">{item.label}</span>
         </span>
         <span className="block text-xs text-muted">
           {item.kind === "log" && bpToday
             ? `${bpToday.value}/${bpToday.value2} mmHg at ${formatTime(bpToday.measuredAt)} · self-reported`
-            : (item.doneBy ?? item.detail)}
+            : meal
+              ? `${MEAL_MATCH_LABEL[meal.match]} · logged ${formatTime(meal.at)}`
+              : (item.doneBy ?? item.detail)}
         </span>
+        {meal ? <SelfReportedBadge className="mt-1" /> : null}
       </span>
       <span className="flex items-center self-center">
         {visit && item.href ? (
           <Link href={item.href} className="inline-flex size-8 items-center justify-center rounded-full text-ink-2 hover:bg-sunken" aria-label={`Open ${item.label} in appointments`}>
             <ArrowUpRight size={16} />
           </Link>
+        ) : mealRow ? (
+          <MealLogMenu label={item.label} slotId={item.slotId!} current={meal?.match} />
         ) : item.kind === "log" && !done ? (
           <Button size="sm" variant="dark" onClick={onLogBp}>
             Log reading
@@ -130,5 +140,36 @@ function Row({ item, done, bpToday, onLogBp }: { item: TodayItem; done: boolean;
         ) : null}
       </span>
     </li>
+  );
+}
+
+const MATCHES: MealMatch[] = ["as-planned", "partly", "skipped"];
+
+/** One action per meal: log it against the plan, or change / remove today's entry. */
+function MealLogMenu({ label, slotId, current }: { label: string; slotId: string; current?: MealMatch }) {
+  return (
+    <Dropdown>
+      <DropdownTrigger asChild>
+        <Button size="sm" variant={current ? "ghost" : "secondary"} trailing={<CaretDown />} aria-label={current ? `Change what you logged for ${label}` : `Log ${label}`}>
+          {current ? "Change" : "Log"}
+        </Button>
+      </DropdownTrigger>
+      <DropdownContent className="w-[232px]">
+        <DropdownLabel>{label} · compared with your plan</DropdownLabel>
+        {MATCHES.map((m) => (
+          <DropdownItem key={m} onSelect={() => logMeal(slotId, m)} icon={current === m ? <CheckCircle weight="fill" /> : <span className="size-4" />}>
+            {MEAL_MATCH_LABEL[m]}
+          </DropdownItem>
+        ))}
+        {current ? (
+          <>
+            <DropdownSeparator />
+            <DropdownItem tone="danger" onSelect={() => clearMeal(slotId)}>
+              Remove today&apos;s entry
+            </DropdownItem>
+          </>
+        ) : null}
+      </DropdownContent>
+    </Dropdown>
   );
 }

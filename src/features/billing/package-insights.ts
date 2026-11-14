@@ -1,16 +1,20 @@
 import type { Patient } from "@/data/types";
 import { patientById } from "@/data/patients";
-import { ORGAN_LABEL, primaryOrgan, type OrganKind } from "@/data/anatomy";
 import { pluralize } from "@/lib/format";
 import type { Tone } from "@/components/ui/status";
 import { daysPhrase, daysUntil } from "@/features/settings/time";
-import { enrolledIn, programmeForName, type PackageRow, type Programme } from "./data";
+import { programmeForName, type PackageRow, type Programme } from "./data";
 import type { MeterTone } from "./credit-meter";
 
 /**
  * Package figures for /billing/packages, all derived from the shared PACKAGES (+ packages sold in
- * this browser session) and the programme catalogue in ./data.
+ * this browser session) and the package catalogue in ./data. Alerts follow the spec (F12): when
+ * 2 credits are left, and 14 days before expiry — to Reception and the patient's instructor.
  */
+
+/** Alert thresholds (spec F12). */
+export const LOW_CREDITS = 2;
+export const EXPIRY_ALERT_DAYS = 14;
 
 export type Health = { key: "expired" | "used-up" | "expiring" | "low" | "active"; label: string; tone: Tone; meter: MeterTone; note: string };
 
@@ -20,15 +24,21 @@ export function healthOf(p: PackageRow): Health {
   const days = daysUntil(p.expires);
   if (days < 0) return { key: "expired", label: "Expired", tone: "danger", meter: "danger", note: `${pluralize(left, "credit")} unused` };
   if (left <= 0) return { key: "used-up", label: "All used", tone: "neutral", meter: "muted", note: "Every credit has been used" };
-  if (days <= 30) return { key: "expiring", label: "Expires soon", tone: "warning", meter: "warning", note: `${pluralize(left, "credit")} to use ${daysPhrase(p.expires)}` };
-  if (isLow(p)) return { key: "low", label: "Running low", tone: "warning", meter: "warning", note: `Only ${left} left — offer a renewal` };
+  if (days <= EXPIRY_ALERT_DAYS) return { key: "expiring", label: "Expires soon", tone: "warning", meter: "warning", note: `${pluralize(left, "credit")} to use — expires ${daysPhrase(p.expires)}` };
+  if (isLow(p)) return { key: "low", label: "Running low", tone: "warning", meter: "warning", note: `${pluralize(left, "credit")} left — offer a renewal` };
   return { key: "active", label: "Active", tone: "success", meter: "neutral", note: "" };
 }
 
-/** ≤ 20% (min 2) credits left on a live package. */
+/** 2 or fewer credits left on a live package. */
 export const isLow = (p: PackageRow) => {
   const left = p.total - p.used;
-  return left > 0 && left <= Math.max(2, Math.round(p.total * 0.2)) && daysUntil(p.expires) >= 0;
+  return left > 0 && left <= LOW_CREDITS && daysUntil(p.expires) >= 0;
+};
+
+/** Who the package alert goes to: Reception and the patient's yoga instructor (in-app, not sent). */
+export const alertRecipients = (p: PackageRow) => {
+  const instructor = patientById(p.patientId)?.careTeam.yoga;
+  return instructor ? ["Reception", instructor] : ["Reception"];
 };
 
 export const isLive = (h: Health) => h.key !== "expired" && h.key !== "used-up";
@@ -73,17 +83,3 @@ export function runways(rows: PackageRow[]): Runway[] {
 }
 
 export const pace = (n: number) => `${n >= 10 ? Math.round(n) : n.toFixed(1)}/wk`;
-
-// ---------------------------------------------------------------------------------------------
-// Catalogue organs: enrolled patients' primary body systems
-// ---------------------------------------------------------------------------------------------
-
-export function programmeOrgans(prog: Programme): { organ: OrganKind; label: string; patients: Patient[] }[] {
-  const map = new Map<OrganKind, Patient[]>();
-  for (const p of enrolledIn(prog)) {
-    const o = primaryOrgan(p);
-    if (!o) continue;
-    map.set(o, [...(map.get(o) ?? []), p]);
-  }
-  return [...map.entries()].map(([organ, patients]) => ({ organ, label: ORGAN_LABEL[organ], patients })).sort((a, b) => b.patients.length - a.patients.length);
-}

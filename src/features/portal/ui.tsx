@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "motion/react";
 import { useId, type ComponentProps, type ReactNode } from "react";
-import { Eye, Info } from "@phosphor-icons/react";
+import { ChatCircleDots, Eye, Info } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { spring } from "@/lib/motion";
 import { TODAY, formatDayLabel } from "@/lib/format";
@@ -11,9 +12,11 @@ import { Button } from "@/components/ui/button";
 import { GroupHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/misc";
 import { StatusBadge } from "@/components/ui/status";
+import { Tip } from "@/components/ui/tooltip";
 import { useRole } from "@/components/shell/role-context";
 import { CLINIC, DEMO_USER, staffById } from "@/data/staff";
 import type { Discipline } from "@/data/types";
+import { MESSAGE_ROUTE } from "./record";
 
 /**
  * Portal building blocks. They only compose kit pieces so the patient's pages speak the
@@ -47,6 +50,23 @@ function StaffPreviewBanner() {
         Switch to patient view
       </Button>
     </div>
+  );
+}
+
+/**
+ * Secure message to the care team (F15). The tooltip says where it goes — the owner set for the
+ * patient (by default the primary doctor) — and the target reply time.
+ */
+export function MessageButton({ children = "Message my care team", className }: { children?: ReactNode; className?: string }) {
+  return (
+    <Tip label={MESSAGE_ROUTE}>
+      <Button asChild variant="secondary" className={className}>
+        <Link href="/messages?new=1">
+          <ChatCircleDots />
+          {children}
+        </Link>
+      </Button>
+    </Tip>
   );
 }
 

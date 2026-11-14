@@ -9,7 +9,8 @@ import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 import { useRole } from "@/components/shell/role-context";
-import { createTask } from "./store";
+import { planById } from "@/data/plans";
+import { createTask, type CareTask } from "./store";
 import { DUE_TIMES, PRIORITY_LABEL } from "./task-meta";
 import { patientOptions, staffOptions } from "./people";
 import { TODAY_KEY, isoAt, shortDay } from "./time";
@@ -17,8 +18,8 @@ import { TODAY_KEY, isoAt, shortDay } from "./time";
 const NO_PATIENT = "none";
 
 /** New task (?new=1 entry point and the page's "New task" button). Saved in this browser session. */
-export function NewTaskModal({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: (id: string) => void }) {
-  const { user, role } = useRole();
+export function NewTaskModal({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: (task: CareTask) => void }) {
+  const { user, role, plan } = useRole();
   const { toast } = useToast();
   const me = role !== "patient" ? user.id : "s-farhan";
   const [title, setTitle] = useState("");
@@ -68,7 +69,7 @@ export function NewTaskModal({ open, onOpenChange, onCreated }: { open: boolean;
       title: "Task created",
       description: `${owner?.id === user.id ? "Assigned to you" : `Assigned to ${owner?.name}`} · due ${shortDay(due)}, ${time}. Saved in this browser session — nobody was notified.`,
       tone: "success",
-      action: { label: "Open", onClick: () => onCreated(task.id) },
+      action: { label: "Open", onClick: () => onCreated(task) },
     });
   };
 
@@ -114,7 +115,7 @@ export function NewTaskModal({ open, onOpenChange, onCreated }: { open: boolean;
             {(p) => <Select {...p} value={patientId} onValueChange={setPatientId} options={[{ value: NO_PATIENT, label: "No patient — clinic task" }, ...patientOptions()]} />}
           </Field>
           <Field label="Owner">
-            {(p) => <Select {...p} value={ownerId} onValueChange={setOwnerId} options={staffOptions().map((o) => (o.value === user.id ? { ...o, label: `${o.label} (you)` } : o))} />}
+            {(p) => <Select {...p} value={ownerId} onValueChange={setOwnerId} options={staffOptions((s) => planById(plan).roles.includes(s.role)).map((o) => (o.value === user.id ? { ...o, label: `${o.label} (you)` } : o))} />}
           </Field>
           <Field label="Due date" error={errors.date}>
             {(p) => <Input {...p} type="date" value={date} min={TODAY_KEY} onChange={(e) => setDate(e.target.value)} />}

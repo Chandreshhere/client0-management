@@ -1,4 +1,5 @@
 import { REFERRALS } from "@/data/care";
+import type { AddOnId } from "@/data/plans";
 import { NUTRITION_PLANS } from "@/data/programs";
 import { createPortalStore, localId } from "../store";
 import { ME, PATIENT_ID } from "../record";
@@ -10,16 +11,21 @@ import { nowIso } from "../time";
  * session only ("Saved locally").
  */
 
+/**
+ * WhatsApp and SMS stay in the type (a clinic with the messaging add-on offers them) but are not
+ * offered here: this clinic hasn't added WhatsApp / SMS, so they appear as an add-on, never as a
+ * working channel.
+ */
 export type Channel = "portal" | "whatsapp" | "sms" | "email" | "call";
-export const CHANNEL_LABEL: Record<Channel, string> = { portal: "Portal", whatsapp: "WhatsApp", sms: "SMS", email: "Email", call: "Phone call" };
+export const CHANNEL_LABEL: Record<Channel, string> = { portal: "Patient app", whatsapp: "WhatsApp", sms: "SMS", email: "Email", call: "Phone call" };
 
 export type Topic = "reminders" | "results" | "plan" | "billing" | "news";
 export const TOPICS: { id: Topic; label: string; detail: string; allowed: Channel[] }[] = [
-  { id: "reminders", label: "Appointment reminders", detail: "Before each visit, class or 1:1 session", allowed: ["whatsapp", "sms", "email", "call"] },
-  { id: "results", label: "Results released", detail: "Only that something is ready — results stay in the portal", allowed: ["portal", "whatsapp", "sms", "email"] },
-  { id: "plan", label: "Plan updates", detail: "When your doctor, nutritionist or yoga instructor changes your plan", allowed: ["portal", "whatsapp", "email"] },
-  { id: "billing", label: "Invoices & receipts", detail: "After a visit with a charge", allowed: ["sms", "whatsapp", "email"] },
-  { id: "news", label: "Clinic news & workshops", detail: "Occasional, never more than twice a month", allowed: ["whatsapp", "email"] },
+  { id: "reminders", label: "Appointment reminders", detail: "Before each visit, class or 1:1 session", allowed: ["portal", "email", "call"] },
+  { id: "results", label: "Results released", detail: "Only that something is ready — results stay in the app", allowed: ["portal", "email"] },
+  { id: "plan", label: "Plan updates", detail: "When your doctor, nutritionist or yoga instructor changes your plan", allowed: ["portal", "email"] },
+  { id: "billing", label: "Invoices & receipts", detail: "After a visit with a charge", allowed: ["portal", "email"] },
+  { id: "news", label: "Clinic news & workshops", detail: "Occasional, never more than twice a month", allowed: ["email"] },
 ];
 
 export type Lead = "24h" | "3h" | "1h";
@@ -43,7 +49,7 @@ export interface Consent {
   /** when it was given or withdrawn; null = not recorded */
   at: string | null;
 }
-export const CONSENT_INFO: Record<ConsentId, { label: string; detail: string; source: string; locked?: string; withdrawWarning?: string }> = {
+export const CONSENT_INFO: Record<ConsentId, { label: string; detail: string; source: string; locked?: string; withdrawWarning?: string; addOn?: AddOnId; unavailable?: string }> = {
   care: { label: "Care and treatment at the clinic", detail: "Needed to book visits and keep your record", source: "Registration form", locked: "To end your care with the clinic, talk to the front desk." },
   team: {
     label: "Share my record with my care team",
@@ -51,8 +57,19 @@ export const CONSENT_INFO: Record<ConsentId, { label: string; detail: string; so
     source: "Heart Health programme enrolment",
     withdrawWarning: "Your nutritionist and yoga instructor would stop seeing your doctor's guidance and precautions — your programme can't run safely without it.",
   },
-  labs: { label: "Labs send results straight to my record", detail: "Partner labs (Anand Diagnostics, BreathWell Labs) upload reports for review", source: "Registration form", withdrawWarning: "You'd need to upload lab reports yourself." },
-  abha: { label: "Linked ABHA health ID", detail: "Lets you pull reports from other hospitals into your record", source: "ABHA link" },
+  labs: {
+    label: "Labs send results straight to my record",
+    detail: "Partner labs uploading reports automatically needs the clinic's lab-integrations add-on. Today the clinic, or you, upload lab reports.",
+    source: "Not set up",
+    addOn: "labs",
+    unavailable: "Not set up at your clinic",
+  },
+  abha: {
+    label: "ABHA number on my record",
+    detail: "Optional, and kept separate from your clinic number. Sharing records with other hospitals through ABDM is an add-on your clinic hasn't set up.",
+    source: "Registration form",
+    addOn: "abdm",
+  },
   research: { label: "Use my de-identified data for research", detail: "Optional — never affects your care", source: "Not asked yet" },
 };
 
@@ -70,7 +87,7 @@ export interface Prefs {
 }
 
 export const SEED_PREFS: Prefs = {
-  channels: { reminders: ["whatsapp", "sms"], results: ["portal", "whatsapp"], plan: ["portal"], billing: ["sms"], news: [] },
+  channels: { reminders: ["portal"], results: ["portal"], plan: ["portal"], billing: ["portal"], news: [] },
   email: "",
   lead: "24h",
   morningOf: true,
@@ -80,7 +97,7 @@ export const SEED_PREFS: Prefs = {
   consents: {
     care: { given: true, at: ME.registeredAt },
     team: { given: true, at: firstReferral?.requestedAt ?? ME.registeredAt },
-    labs: { given: true, at: ME.registeredAt },
+    labs: { given: false, at: null },
     abha: { given: ME.abhaLinked, at: null },
     research: { given: false, at: null },
   },
@@ -92,8 +109,8 @@ export const SEED_PREFS: Prefs = {
 
 export type Scope = "appointments" | "plan" | "records" | "billing";
 export const SCOPE_LABEL: Record<Scope, { label: string; detail: string }> = {
-  appointments: { label: "Appointments", detail: "Times, places and how to prepare" },
-  plan: { label: "My plan", detail: "Meals, movement and medicines" },
+  appointments: { label: "Appointments", detail: "See your visits and request changes for you" },
+  plan: { label: "My plan", detail: "See your plan; log meals and readings for you" },
   records: { label: "Records & results", detail: "Released summaries, labs and scans" },
   billing: { label: "Billing", detail: "Invoices and package balance" },
 };

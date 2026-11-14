@@ -2,22 +2,19 @@
 
 import { useMemo, useState } from "react";
 import type { Patient } from "@/data/types";
-import type { CareEvent, CareEventType } from "@/data/featured";
+import type { CareEvent } from "@/data/featured";
 import { EVENT_TYPE_LABEL, LINK_LABEL, RECORD_STATE_LABEL } from "@/data/featured";
 import type { PatientRecord } from "@/data/record";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { PageHeader } from "@/components/ui/misc";
 import { Segmented } from "@/components/ui/segmented";
-import { Avatar } from "@/components/ui/avatar";
 import { FlowMap, type FlowEdge, type FlowNode } from "@/components/viz/flow-map";
-import { ChipGroup } from "@/components/viz/cards";
 import { EVENT_ICON } from "./event-meta";
 import { EventDrawer } from "./event-drawer";
 import { RecordProvider, useRecord } from "./record-context";
 
 /**
- * Care journey (ref 5 "metro map"), built only from documented data:
+ * Care map (ref 5 "metro map"), built only from documented data:
  *  - lanes = who acted (medical, diagnostics, nutrition, movement, patient-reported),
  *  - x = the event date (months across the top),
  *  - connectors = documented links between events (ordered → result → reviewed in → led to …).
@@ -40,45 +37,33 @@ const laneOf = (e: CareEvent): Lane => {
   return "medical";
 };
 
-type Filter = "docs" | "labs" | "imaging" | "medications" | "visits" | "programmes";
-const FILTER_TYPES: Record<Filter, CareEventType[]> = {
-  docs: ["document", "note"],
-  labs: ["lab", "vitals"],
-  imaging: ["imaging"],
-  medications: ["medication"],
-  visits: ["consult"],
-  programmes: ["nutrition", "movement"],
-};
-
 const COL_W = 210;
 const LEFT = 176;
 const LANE_H = 150;
 const NODE_W = 196;
 const TOP = 56;
 
-export function JourneyView({ patient, record }: { patient: Patient; record: PatientRecord }) {
+/**
+ * The care map: lanes by who acted, months across, documented links between events. Shown as the
+ * Timeline's map view; `events` arrive already filtered (discipline, type, date) by the Timeline.
+ */
+export function CareMap({ patient, record, events }: { patient: Patient; record: PatientRecord; events: CareEvent[] }) {
   return (
     <RecordProvider record={record}>
-      <JourneyInner patient={patient} />
+      <CareMapInner patient={patient} events={events} />
     </RecordProvider>
   );
 }
 
-function JourneyInner({ patient }: { patient: Patient }) {
+function CareMapInner({ patient, events }: { patient: Patient; events: CareEvent[] }) {
   const { record, conditionById } = useRecord();
-  const [year, setYear] = useState(record.years[0] ?? 2026);
-  const [filters, setFilters] = useState<Filter[]>(["docs", "labs", "imaging", "medications", "visits", "programmes"]);
-  const [system, setSystem] = useState<string>("all");
+  const years = useMemo(() => Array.from(new Set(events.map((e) => Number(e.date.slice(0, 4))))).sort((a, b) => b - a).slice(0, 3), [events]);
+  const [pick, setYear] = useState<number | null>(null);
+  const year = pick !== null && years.includes(pick) ? pick : (years[0] ?? record.years[0] ?? 2026);
   const [open, setOpen] = useState<string | null>(null);
 
   const { nodes, edges, shown, linkCount, lastX } = useMemo(() => {
-    const allowed = new Set(filters.flatMap((f) => FILTER_TYPES[f]));
-    const evs = record.events
-      .filter((e) => e.date.startsWith(String(year)))
-      .filter((e) => allowed.has(e.type))
-      .filter((e) => (system === "all" ? true : e.systemId === system))
-      .sort((a, b) => a.date.localeCompare(b.date));
-
+    const evs = events.filter((e) => e.date.startsWith(String(year))).sort((a, b) => a.date.localeCompare(b.date));
     // lay out by date within each lane; stack into sub-rows when cards would overlap
     const lastRight: Record<string, number[]> = {};
     const nodes: FlowNode[] = evs.map((e) => {
@@ -141,55 +126,21 @@ function JourneyInner({ patient }: { patient: Patient }) {
     );
     const lastX = nodes.length ? Math.max(...nodes.map((n) => n.x)) : 0;
     return { nodes, edges, shown: evs.length, linkCount: edges.length, lastX };
-  }, [record.events, year, filters, system, conditionById]);
+  }, [events, year, conditionById]);
 
   const width = LEFT + 12 * COL_W + 80;
   const height = TOP + LANES.length * LANE_H + 40;
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        eyebrow={
-          <span className="flex items-center gap-2">
-            <Avatar src={patient.avatar} name={patient.name} size="xs" /> {patient.name} · {patient.age} years
-          </span>
-        }
-        title="Care journey"
-        description="Every card is a dated event in this record. Lines appear only where the record documents a link — a consult that ordered a test, a result reviewed at a visit, a referral that started a plan."
-        actions={
-          <Segmented ariaLabel="Year" variant="tray" value={String(year)} onChange={(v) => setYear(Number(v))} items={record.years.map((y) => ({ value: String(y), label: String(y) }))} />
-        }
-      />
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <ChipGroup
-          ariaLabel="Event types"
-          value={filters}
-          onChange={setFilters}
-          options={[
-            { value: "docs", label: "Docs" },
-            { value: "labs", label: "Labs & tests" },
-            { value: "imaging", label: "Imaging" },
-            { value: "medications", label: "Medications" },
-            { value: "visits", label: "Visits" },
-            { value: "programmes", label: "Nutrition & movement" },
-          ]}
-        />
-        <div className="scrollbar-none max-w-full overflow-x-auto">
-          <Segmented
-          size="sm"
-          variant="tray"
-          ariaLabel="Body system"
-          value={system}
-          onChange={setSystem}
-          items={[{ value: "all", label: "All systems" }, ...record.systems.map((s) => ({ value: s.id, label: s.name }))]}
-        />
-        </div>
+        <p className="text-xs text-muted" aria-live="polite">
+          {shown} events · {linkCount} documented links in {year}
+          {linkCount === 0 && shown > 0 ? " — no links recorded between the visible events." : ""}
+        </p>
+        {years.length > 1 ? <Segmented ariaLabel="Year" size="sm" variant="tray" value={String(year)} onChange={(v) => setYear(Number(v))} items={years.map((y) => ({ value: String(y), label: String(y) }))} /> : null}
       </div>
-      <p className="text-xs text-muted" aria-live="polite">
-        {shown} events · {linkCount} documented links in {year}
-        {linkCount === 0 && shown > 0 ? " — no links recorded between the visible events." : ""}
-      </p>
       <FlowMap
         label={`Care journey for ${patient.name}, ${year}`}
         nodes={nodes}
@@ -200,7 +151,7 @@ function JourneyInner({ patient }: { patient: Patient }) {
         rows={LANES.map((l, i) => ({ y: TOP + i * LANE_H + 22, label: l.label, hint: l.hint }))}
         columns={MONTHS.map((m, i) => ({ x: LEFT + i * COL_W, label: m, strong: year === 2026 && i === 10 }))}
         initialFocusX={lastX}
-        key={`${year}-${system}`}
+        key={`${year}-${events.length}`}
       />
       <EventDrawer events={record.events} eventId={open} onClose={() => setOpen(null)} onOpenEvent={setOpen} patientId={patient.id} />
     </div>

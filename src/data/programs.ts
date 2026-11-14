@@ -11,9 +11,9 @@ export const CLASSES: YogaClass[] = [
     enrolled: [
       { patientId: "p-kabir", attendance: "present", precaution: "HR ceiling 110 bpm; avoid breath retention", clearance: "current" },
       { patientId: "p-vivek", attendance: "present", precaution: "BP check before class if headache", clearance: "current" },
-      { patientId: "p-arun", attendance: "absent", precaution: "Post-MI: seated variations only until review", clearance: "current" },
+      { patientId: "p-arun", attendance: "absent", precaution: "Seated variations only until review", clearance: "current" },
       { patientId: "p-karthik", attendance: "late", clearance: "current" },
-      { patientId: "p-gaurav", attendance: "present", precaution: "OSA — avoid supine breath-holds", clearance: "current" },
+      { patientId: "p-gaurav", attendance: "present", precaution: "No supine breath-holds", clearance: "current" },
     ],
     waitlist: [],
   },
@@ -44,7 +44,7 @@ export const CLASSES: YogaClass[] = [
     enrolled: [
       { patientId: "p-fatima", attendance: "pending", precaution: "Avoid loaded flexion", clearance: "current" },
       { patientId: "p-meenakshi", attendance: "pending", precaution: "Wrist-friendly variations", clearance: "current" },
-      { patientId: "p-lakshmi-n", attendance: "pending", precaution: "Knee OA — chair-supported standing poses", clearance: "current" },
+      { patientId: "p-lakshmi-n", attendance: "pending", precaution: "Chair-supported standing poses", clearance: "current" },
       { patientId: "p-deepak", attendance: "cancelled", clearance: "current" },
     ],
     waitlist: [],
@@ -56,12 +56,12 @@ export const CLASSES: YogaClass[] = [
     waitlist: [],
   },
   {
-    id: "c-pcos-14", title: "PCOS Strength & Flow", kind: "group", instructorId: "s-lakshmi", room: "Yoga Hall", start: D(14, "09:00"), durationMin: 60, capacity: 10,
+    id: "c-pcos-14", title: "Strength & Flow", kind: "group", instructorId: "s-lakshmi", room: "Yoga Hall", start: D(14, "09:00"), durationMin: 60, capacity: 10,
     focus: "Strength-biased flow, 2× weekly programme",
     enrolled: [
       { patientId: "p-aditi", attendance: "pending", clearance: "current" },
       { patientId: "p-neelam", attendance: "pending", clearance: "current" },
-      { patientId: "p-tanvi", attendance: "pending", precaution: "Anaemia — hydrate, stop if light-headed", clearance: "current" },
+      { patientId: "p-tanvi", attendance: "pending", precaution: "Hydrate; stop if light-headed", clearance: "current" },
     ],
     waitlist: [],
   },
@@ -69,7 +69,7 @@ export const CLASSES: YogaClass[] = [
     id: "c-mobility-14", title: "Gentle Mobility 60+", kind: "group", instructorId: "s-arjun", room: "Yoga Deck", start: D(14, "10:00"), durationMin: 45, capacity: 10,
     focus: "Fall prevention, chair-supported balance",
     enrolled: [
-      { patientId: "p-lakshmi-n", attendance: "pending", precaution: "Knee OA — chair-supported standing poses", clearance: "current" },
+      { patientId: "p-lakshmi-n", attendance: "pending", precaution: "Chair-supported standing poses", clearance: "current" },
       { patientId: "p-rekha", attendance: "pending", precaution: "SpO₂ floor 92%", clearance: "changed" },
       { patientId: "p-sunita", attendance: "pending", clearance: "current" },
     ],

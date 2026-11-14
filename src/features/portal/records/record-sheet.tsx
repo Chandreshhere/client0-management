@@ -85,7 +85,7 @@ export function RecordSheet({ row, open, onOpenChange, onCorrect }: { row: Recor
           ) : null}
 
           <dl className="divide-y divide-line rounded-inner bg-sunken px-4 py-2">
-            <MetaRow label="Happened">{longDate(`${row.date}T12:00:00+05:30`)}</MetaRow>
+            <MetaRow label={row.doc || (e && ["lab", "imaging", "document"].includes(e.type)) ? "Date issued" : "Date"}>{longDate(`${row.date}T12:00:00+05:30`)}</MetaRow>
             <MetaRow label="Added to your record">
               {longDate(row.enteredAt)} · {formatTime(row.enteredAt)}
             </MetaRow>

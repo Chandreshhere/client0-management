@@ -21,6 +21,8 @@ import { EmptyState, PageHeader, Stat } from "@/components/ui/misc";
 import { StatusBadge, priorityTone } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { useRole } from "@/components/shell/role-context";
+import { AddOnBadge } from "@/components/shell/plan-switcher";
+import { scheduleAccess } from "./access";
 import { ChipGroup, PeopleList } from "@/components/viz/cards";
 import { DIARY_TO, LEAVE, PRIORITY_LABEL, PRIORITY_RANK, serviceById } from "./data";
 import { dateOf, findConflicts, hhmm, isoAt, minOf, shortDay } from "./engine";
@@ -29,7 +31,7 @@ import { StaffOnly } from "./staff-only";
 import { useSchedule, type WaitEntry, type WaitOffer } from "./store";
 import { DisciplineDot } from "./ui";
 import { AddWaitlistModal, OfferSlotModal } from "./waitlist-modals";
-import { offerable, waitMatch, type WaitMatch } from "./waitlist-insights";
+import { offerable, waitMatch, wantText, type WaitMatch } from "./waitlist-insights";
 import { WaitlistTimeline, type ListRow, type Outlook } from "./waitlist-timeline";
 import { scrollToElement } from "@/lib/scroll";
 
@@ -75,7 +77,11 @@ const requestedKey = (w: WaitEntry) => (w.staffIds.length === 1 ? w.staffIds[0] 
 function Waitlist() {
   const router = useRouter();
   const { toast } = useToast();
-  const { waitlist, person, patchWaitlist, removeWaitlist, restoreWaitlist, addBookings, occupants, takeClassSeat, classSeats } = useSchedule();
+  const { waitlist: all, person, patchWaitlist, removeWaitlist, restoreWaitlist, addBookings, occupants, takeClassSeat, classSeats, groupClasses } = useSchedule();
+  const { role } = useRole();
+  const access = scheduleAccess(role);
+  // Requests for a place in a group class only exist where the plan has group classes.
+  const waitlist = useMemo(() => (groupClasses ? all : all.filter((w) => !w.classId)), [all, groupClasses]);
   const [disc, setDisc] = useState<CareDiscipline[]>([...CARE_DISCIPLINES]);
   const [who, setWho] = useState<string | null>(null);
   const [sort, setSort] = useState<Sort>("priority");
@@ -123,12 +129,12 @@ function Waitlist() {
           id: w.id,
           name: person(w.patientId)?.name ?? "Patient",
           priority: w.priority,
-          want: w.want,
+          want: wantText(w, access.clinical),
           discipline: w.discipline,
           added: w.addedAt,
           outlook: outlookFor(w, matches.get(w.id)!),
         })),
-    [rows, person, matches],
+    [rows, person, matches, access.clinical],
   );
 
   const revealRow = (id: string) => {
@@ -152,7 +158,7 @@ function Waitlist() {
     setOfferFor(null);
     toast({
       title: `Offer recorded for ${person(entry.patientId)?.name ?? "patient"}`,
-      description: `${offerLabel(offer)}. Nobody was contacted — messaging isn't connected. Mark their reply here.`,
+      description: `${offerLabel(offer)}. Call the patient with the offer, then record their reply here.`,
       tone: "success",
     });
   };
@@ -193,7 +199,7 @@ function Waitlist() {
     patchWaitlist(entry.id, { status: "booked", bookedId: b.id });
     toast({
       title: `Booked · ${shortDay(o.date)}, ${hhmm(o.start)}`,
-      description: `${name} with ${staff?.name}. Added to the calendar in this browser session — no confirmation was sent.`,
+      description: `${name} with ${staff?.name}. Added to the calendar — confirm the time with the patient by phone.`,
       tone: "success",
       action: { label: "View in calendar", onClick: () => router.push(`/schedule?date=${o.date}&focus=${b.id}`) },
     });
@@ -229,11 +235,13 @@ function Waitlist() {
       <PageHeader
         eyebrow="Front desk · Scheduling"
         title="Waitlist"
-        description="Patients who want an earlier or specific slot. Free slots are matched against the diary up to the end of the demo week — offers are recorded here and nobody is contacted automatically."
+        description="Patients waiting for an earlier slot or a place in a full class. Free slots are matched against the diary; call the patient with an offer and record their reply here."
         actions={
-          <Button variant="primary" leading={<ListPlus />} onClick={openAdd}>
-            Add to waitlist
-          </Button>
+          access.canBook ? (
+            <Button variant="primary" leading={<ListPlus />} onClick={openAdd}>
+              Add to waitlist
+            </Button>
+          ) : undefined
         }
       />
 
@@ -248,7 +256,7 @@ function Waitlist() {
           label="Longest on the list"
           value={oldest ? relativeTime(oldest.addedAt).replace(" ago", "") : "—"}
           icon={<Clock />}
-          context={oldest ? `${person(oldest.patientId)?.name ?? "Patient"} · ${oldest.want}` : "Nobody waiting"}
+          context={oldest ? `${person(oldest.patientId)?.name ?? "Patient"} · ${wantText(oldest, access.clinical)}` : "Nobody waiting"}
         />
         <Stat
           tone="dark"
@@ -424,7 +432,7 @@ function Waitlist() {
                             <StatusCell w={w} />
                           </td>
                           <td className="py-4 pl-2 pr-6">
-                            <RowActions w={w} emphasise={offerable(matches.get(w.id)!)} onOffer={() => setOfferFor(w.id)} onAccept={() => accept(w)} onDecline={() => decline(w)} onRemove={() => remove(w)} />
+                            <RowActions w={w} canAct={access.canBook} emphasise={offerable(matches.get(w.id)!)} onOffer={() => setOfferFor(w.id)} onAccept={() => accept(w)} onDecline={() => decline(w)} onRemove={() => remove(w)} />
                           </td>
                         </motion.tr>
                       ))}
@@ -448,7 +456,7 @@ function Waitlist() {
                     <p className="text-xs text-muted">On the list {relativeTime(w.addedAt).replace(" ago", "")} · since {formatDate(w.addedAt, { day: "numeric", month: "short" })}</p>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <StatusCell w={w} />
-                      <RowActions w={w} emphasise={offerable(matches.get(w.id)!)} onOffer={() => setOfferFor(w.id)} onAccept={() => accept(w)} onDecline={() => decline(w)} onRemove={() => remove(w)} />
+                      <RowActions w={w} canAct={access.canBook} emphasise={offerable(matches.get(w.id)!)} onOffer={() => setOfferFor(w.id)} onAccept={() => accept(w)} onDecline={() => decline(w)} onRemove={() => remove(w)} />
                     </div>
                   </li>
                 ))}
@@ -458,8 +466,9 @@ function Waitlist() {
         </Card>
       </div>
 
-      <p className="text-xs text-muted">
-        &ldquo;Free by {shortDay(DIARY_TO)}&rdquo; counts 30-minute steps where the requested practitioner and their room are both free inside their working hours and the patient&apos;s preferred times — the same list the Offer dialog shows. Changes here are kept in this browser session only.
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+        &ldquo;Free by {shortDay(DIARY_TO)}&rdquo; counts 30-minute steps where the requested practitioner and their room are both free inside their working hours and the patient&apos;s preferred times — the same list the Offer dialog shows. Sending offers by WhatsApp or SMS is an add-on.
+        <AddOnBadge addOn="messaging" />
       </p>
 
       <OfferSlotModal entry={entryForOffer} onClose={() => setOfferFor(null)} onOffer={recordOffer} />
@@ -498,6 +507,8 @@ function PatientCell({ w, foldWait }: { w: WaitEntry; foldWait?: boolean }) {
 }
 
 function WantCell({ w }: { w: WaitEntry }) {
+  const clinical = scheduleAccess(useRole().role).clinical;
+  const want = wantText(w, clinical);
   const staff = w.staffIds.length === 1 ? staffById(w.staffIds[0]) : undefined;
   const cls = w.classId ? CLASSES.find((c) => c.id === w.classId) : undefined;
   return (
@@ -621,8 +632,17 @@ function StatusCell({ w }: { w: WaitEntry }) {
   return <StatusBadge tone="neutral">Waiting</StatusBadge>;
 }
 
-function RowActions({ w, emphasise, onOffer, onAccept, onDecline, onRemove }: { w: WaitEntry; emphasise: boolean; onOffer: () => void; onAccept: () => void; onDecline: () => void; onRemove: () => void }) {
+function RowActions({ w, canAct, emphasise, onOffer, onAccept, onDecline, onRemove }: { w: WaitEntry; canAct: boolean; emphasise: boolean; onOffer: () => void; onAccept: () => void; onDecline: () => void; onRemove: () => void }) {
   const p = useSchedule().person(w.patientId);
+  if (!canAct) {
+    return p && !p.local ? (
+      <span className="flex justify-end">
+        <Button asChild size="sm" variant="ghost" trailing={<ArrowUpRight />}>
+          <Link href={`/patients/${p.id}`}>Open record</Link>
+        </Button>
+      </span>
+    ) : null;
+  }
   return (
     <span className="flex flex-wrap items-center justify-end gap-2">
       {w.status === "waiting" ? (

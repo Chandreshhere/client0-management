@@ -7,8 +7,6 @@ import { TODAY_KEY, dayDiff, dayKey, shortDay } from "@/features/tasks/time";
 import type { CareDocument, DocSource } from "./store";
 
 /** Labels, icons and date wording for the document intake & review inbox. */
-export const DOC_STATUSES: DocStatus[] = ["unclassified", "awaiting-review", "reviewed", "filed"];
-
 export const docStatusTone = (s: DocStatus): Tone => ({ unclassified: "warning", "awaiting-review": "info", reviewed: "success", filed: "neutral" } as const)[s];
 
 export const DOC_TYPES: ClinicalDocument["type"][] = ["Lab report", "Imaging", "Discharge summary", "Prescription", "Referral letter", "Consent form"];
@@ -22,6 +20,15 @@ export const TYPE_ICON: Record<ClinicalDocument["type"], Icon> = {
   "Consent form": Signature,
 };
 
+/** Short channel names. "Lab partner" and "Email import" never show — see `asUploadedOnPlan`. */
+export const SOURCE_SHORT: Record<DocSource, string> = {
+  "Patient upload": "Patient app",
+  "Front desk scan": "Scanned",
+  "Lab partner": "Scanned",
+  "Email import": "Staff",
+  "Staff upload": "Staff",
+};
+
 export const SOURCE_ICON: Record<DocSource, Icon> = {
   "Patient upload": User,
   "Front desk scan": Printer,
@@ -30,7 +37,7 @@ export const SOURCE_ICON: Record<DocSource, Icon> = {
   "Staff upload": UploadSimple,
 };
 
-/** Report date vs upload date: flag old reports so they never read as new results. */
+/** Date issued vs upload date: flag old reports so they never read as new results. */
 export function reportLag(doc: Pick<CareDocument, "reportDate" | "uploadedAt">): { days: number; label: string } | null {
   const days = dayDiff(doc.reportDate, dayKey(doc.uploadedAt));
   if (days < 30) return null;

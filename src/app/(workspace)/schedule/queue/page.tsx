@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { QueueView } from "@/features/schedule/queue-board";
 
-export const metadata: Metadata = { title: "Queue" };
+export const metadata: Metadata = { title: "Check-in" };
 
-/** Front-desk token queue: arrivals, waiting, with practitioner, checkout, done. */
+/** Check-in board: arrived → waiting → with practitioner → checkout → done, plus walk-ins. */
 export default function QueuePage() {
   return <QueueView />;
 }

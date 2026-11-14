@@ -13,7 +13,7 @@ import { COOKIE_PLAN, COOKIE_ROLE, setCookie } from "@/lib/cookies";
 import { pluralize } from "@/lib/format";
 import { spring } from "@/lib/motion";
 import { focusFirstInvalid } from "@/features/auth/form-bits";
-import { LAST_STEP, STEPS, VALIDATORS, formatDays, freshProgress, loadProgress, saveProgress, seatLimit, type OnboardingData, type Progress } from "./model";
+import { LAST_STEP, STEPS, VALIDATORS, formatDays, freshProgress, loadProgress, saveProgress, type OnboardingData, type Progress } from "./model";
 import { MobileProgress, StepRail, type StepState } from "./step-rail";
 import { ClinicStep } from "./steps/clinic-step";
 import { PlanStep } from "./steps/plan-step";
@@ -23,7 +23,7 @@ import { HoursStep } from "./steps/hours-step";
 import { ReviewStep } from "./steps/review-step";
 import { scrollToY } from "@/lib/scroll";
 
-const HINTS = ["Name, city, specialities", "Pricing and users", "Consultation types and fees", "Invites and workspaces", "Days, times and lunch", "Check and finish"];
+const HINTS = ["Name, city, specialities", "Plan, practitioners and seats", "Consultation types and fees", "Invites and roles", "Days, times and lunch", "Check and finish"];
 
 const slide: Variants = {
   enter: (dir: number) => ({ opacity: 0, x: dir * 48 }),
@@ -133,11 +133,11 @@ export function OnboardingWizard() {
       case 0:
         return data.clinic.name.trim() ? [data.clinic.name.trim(), data.clinic.city].filter(Boolean).join(" · ") : HINTS[0];
       case 1:
-        return `${plan.name} · ${plan.pricing.kind === "flat" ? "flat fee" : pluralize(data.plan.users, "user")}`;
+        return `${plan.name} · ${pluralize(data.plan.practitioners, "practitioner")}`;
       case 2:
         return data.services.length ? pluralize(data.services.length, "service") : HINTS[2];
       case 3:
-        return plan.pricing.kind === "flat" ? "1 practitioner workspace" : `${1 + data.invites.length} of ${seatLimit(data)} seats`;
+        return pluralize(1 + data.invites.length, "person", "people");
       case 4:
         return data.hours.length > 1 ? `${data.hours.length} branches` : `${formatDays(data.hours[0].days)} · ${data.hours[0].open}–${data.hours[0].close}`;
       default:

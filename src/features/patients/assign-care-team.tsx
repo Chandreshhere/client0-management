@@ -3,7 +3,6 @@
 import { useState } from "react";
 import type { Patient } from "@/data/types";
 import { staffById } from "@/data/staff";
-import { minPlanFor } from "@/data/plans";
 import { usePlan } from "@/components/shell/role-context";
 import { Avatar, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -17,12 +16,12 @@ export type AssignTarget = { mode: "team"; id: string } | { mode: "coordinator";
 const cleanTeam = (t: Record<string, string | undefined>): CareTeam =>
   Object.fromEntries(Object.entries(t).filter(([, v]) => !!v && v !== NONE)) as CareTeam;
 
-function optionsFor(role: (typeof CARE_SLOTS)[number]["role"]) {
+function optionsFor(role: (typeof CARE_SLOTS)[number]["role"], branches: boolean) {
   return [
     ...staffWithRole(role).map((s) => ({
       value: s.id,
       label: s.name,
-      description: s.status === "on-leave" ? `${s.workingHours}` : `${s.title} · ${branchLabel(s.branch)}`,
+      description: s.status === "on-leave" ? `${s.workingHours}` : branches ? `${s.title} · ${branchLabel(s.branch)}` : s.title,
     })),
     { value: NONE, label: "Not assigned" },
   ];
@@ -56,7 +55,7 @@ export function AssignCareTeamModal({
   );
 }
 
-const footerNote = "Kept in this browser session. In production every reassignment is written to the activity history.";
+const footerNote = "Recorded in the activity log. Kept in this browser session.";
 
 function TeamBody({ patient, onClose, onSave }: { patient: RegistryPatient | undefined; onClose: () => void; onSave: Parameters<typeof AssignCareTeamModal>[0]["onSave"] }) {
   const { has } = usePlan();
@@ -68,16 +67,17 @@ function TeamBody({ patient, onClose, onSave }: { patient: RegistryPatient | und
   }));
   const [reason, setReason] = useState("");
   if (!patient) return null;
-  const coordinatorLocked = !has("coordinator");
+  // Care coordinators exist on Pro only; the slot isn't offered below it.
+  const slots = CARE_SLOTS.filter((s) => s.key !== "coordinator" || has("coordinator"));
 
   const save = () => {
     const next = cleanTeam(team);
-    const changed = CARE_SLOTS.filter((s) => (patient.careTeam[s.key] ?? NONE) !== team[s.key]).length;
+    const changed = slots.filter((s) => (patient.careTeam[s.key] ?? NONE) !== team[s.key]).length;
     onSave(
       { [patient.id]: next },
       {
         title: changed ? `Care team updated for ${patient.name}` : `No changes for ${patient.name}`,
-        description: changed ? `${changed} ${changed === 1 ? "role" : "roles"} changed${reason.trim() ? ` · “${reason.trim()}”` : ""}. Saved in this browser session — not written to an audit log.` : "The care team was already set this way.",
+        description: changed ? `${changed} ${changed === 1 ? "role" : "roles"} changed${reason.trim() ? ` · “${reason.trim()}”` : ""}. Recorded in the activity log.` : "The care team was already set this way.",
       },
     );
   };
@@ -101,27 +101,13 @@ function TeamBody({ patient, onClose, onSave }: { patient: RegistryPatient | und
           save();
         }}
       >
-        {CARE_SLOTS.map((slot) => {
-          const locked = slot.key === "coordinator" && coordinatorLocked;
-          return (
-            <Field
-              key={slot.key}
-              label={slot.label}
-              hint={locked ? `Care coordinators are on the ${minPlanFor("coordinator").name} plan.` : leaveNote(team[slot.key])}
-            >
-              {({ id }) => (
-                <Select
-                  id={id}
-                  value={team[slot.key]}
-                  onValueChange={(v) => setTeam((t) => ({ ...t, [slot.key]: v }))}
-                  options={optionsFor(slot.role)}
-                  disabled={locked}
-                  className="w-full"
-                />
-              )}
-            </Field>
-          );
-        })}
+        {slots.map((slot) => (
+          <Field key={slot.key} label={slot.key === "doctor" ? "Primary doctor" : slot.label} hint={slot.key === "doctor" && !leaveNote(team[slot.key]) ? "Reviews this patient's reports and answers flags." : leaveNote(team[slot.key])}>
+            {({ id }) => (
+              <Select id={id} value={team[slot.key]} onValueChange={(v) => setTeam((t) => ({ ...t, [slot.key]: v }))} options={optionsFor(slot.role, has("branches"))} className="w-full" />
+            )}
+          </Field>
+        ))}
         <Field label="Reason" optional className="sm:col-span-2" hint="For example: cover during leave, patient request, programme change.">
           {(p) => <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is the care team changing?" {...p} />}
         </Field>
@@ -132,6 +118,7 @@ function TeamBody({ patient, onClose, onSave }: { patient: RegistryPatient | und
 }
 
 function CoordinatorBody({ patients, onClose, onSave }: { patients: RegistryPatient[]; onClose: () => void; onSave: Parameters<typeof AssignCareTeamModal>[0]["onSave"] }) {
+  const { has } = usePlan();
   const coordinators = staffWithRole("coordinator");
   const [value, setValue] = useState<string>(coordinators[0]?.id ?? NONE);
   const person = staffById(value);
@@ -141,7 +128,7 @@ function CoordinatorBody({ patients, onClose, onSave }: { patients: RegistryPati
     for (const p of patients) teams[p.id] = cleanTeam({ ...p.careTeam, coordinator: value });
     onSave(teams, {
       title: person ? `${person.name} assigned to ${patients.length} ${patients.length === 1 ? "patient" : "patients"}` : `Coordinator removed from ${patients.length} ${patients.length === 1 ? "patient" : "patients"}`,
-      description: "Saved in this browser session — not written to an audit log.",
+      description: "Recorded in the activity log.",
     });
   };
 
@@ -162,7 +149,7 @@ function CoordinatorBody({ patients, onClose, onSave }: { patients: RegistryPati
         <p className="min-w-0 flex-1 truncate text-xs text-muted">{patients.map((p) => p.name).join(", ")}</p>
       </div>
       <Field label="Care coordinator" className="mt-4" hint="Owns follow-up for stalled care, missed sessions and referrals.">
-        {({ id }) => <Select id={id} value={value} onValueChange={setValue} options={optionsFor("coordinator")} className="w-full" />}
+        {({ id }) => <Select id={id} value={value} onValueChange={setValue} options={optionsFor("coordinator", has("branches"))} className="w-full" />}
       </Field>
       {person ? (
         <div className="mt-4 flex items-center gap-3">

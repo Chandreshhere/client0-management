@@ -1,14 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { ChatCircleDots, PlusCircle } from "@phosphor-icons/react";
+import { PlusCircle } from "@phosphor-icons/react";
 import { pluralize } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { OrganCarousel } from "@/components/viz/organ";
 import { CARE_PLAN } from "@/data/featured";
-import { PortalHeader, Reveal } from "../ui";
+import { MessageButton, PortalHeader, Reveal } from "../ui";
 import { usePortalStore } from "../store";
 import { CURRENT_WEEK, PROGRAMME, SYSTEMS, systemById } from "../record";
 import { planStore, type ReadingKind } from "./store";
@@ -53,12 +52,7 @@ export function PlanView() {
             <Button variant="dark" leading={<PlusCircle />} onClick={() => openLog("bp")}>
               Log a reading
             </Button>
-            <Button asChild variant="secondary">
-              <Link href="/messages?new=1">
-                <ChatCircleDots />
-                Message my team
-              </Link>
-            </Button>
+            <MessageButton />
           </>
         }
       />
@@ -83,7 +77,7 @@ export function PlanView() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <Reveal index={2}>
-          <TodayPanel ticks={state.ticks} readings={state.readings} onLogBp={() => openLog("bp")} />
+          <TodayPanel ticks={state.ticks} meals={state.meals ?? {}} readings={state.readings} onLogBp={() => openLog("bp")} />
         </Reveal>
         {/* Shorter than the day list beside it: ride along instead of stretching an empty grey group. */}
         <Reveal index={3} className={SIDE_RAIL}>
@@ -92,7 +86,7 @@ export function PlanView() {
       </div>
 
       <Reveal index={4}>
-        <MealsPanel />
+        <MealsPanel meals={state.meals} />
       </Reveal>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

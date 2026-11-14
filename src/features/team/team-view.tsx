@@ -17,15 +17,16 @@ import { StatusBadge } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { ChipGroup } from "@/components/viz/cards";
 import { usePlan, useRole } from "@/components/shell/role-context";
+import { planById } from "@/data/plans";
 import { FilterPill, ROLE_LABEL, ReadOnlyBanner } from "@/features/settings/ui";
 import { NOW_MIN, hhmm } from "@/features/settings/time";
 import { StaffCards, StaffTable, type DirectoryRow } from "./directory";
-import { InviteModal, SeatMeter } from "./invite-modal";
+import { InviteModal, SeatSummary } from "./invite-modal";
 import { LeaveFocal, ReassignSheet } from "./leave-card";
 import { LoadCard } from "./load-card";
 import { StaffSheet } from "./staff-sheet";
 import { countTick, hoursToday, nowState, type StaffRole } from "./data";
-import { PLAN_RANGES, seatInfo } from "./seats";
+import { seatInfo } from "./seats";
 import { removeInvite, restoreInvite, useTeamState } from "./store";
 
 type BranchFilter = "all" | "indiranagar" | "hsr";
@@ -58,8 +59,11 @@ export function TeamView() {
 function TeamWorkspace({ canManage }: { canManage: boolean }) {
   const { toast } = useToast();
   const { user } = useRole();
-  const { plan } = usePlan();
+  const { plan, has } = usePlan();
   const state = useTeamState();
+  const planRoles = planById(plan).roles;
+  const branches = has("branches");
+  const diary = has("calendar");
   const [openId, setOpenId] = useState<string | null>(null);
   const [reassign, setReassign] = useState(false);
   const [invite, setInvite] = useState(false);
@@ -69,19 +73,23 @@ function TeamWorkspace({ canManage }: { canManage: boolean }) {
   const [view, setView] = useState<"cards" | "table">("cards");
   const [query, setQuery] = useState("");
 
+  // Only staff in roles this plan has: no Reception on Core, no coordinator below Pro.
   const rows: DirectoryRow[] = useMemo(
-    () => STAFF.map((s) => ({ s, now: nowState(s, !!state.deactivated[s.id]), deactivated: !!state.deactivated[s.id], roleRequest: state.roles[s.id] ?? null })),
-    [state.deactivated, state.roles],
+    () =>
+      STAFF.filter((s) => planRoles.includes(s.role)).map((s) => ({ s, now: nowState(s, !!state.deactivated[s.id]), deactivated: !!state.deactivated[s.id], roleRequest: state.roles[s.id] ?? null })),
+    [state.deactivated, state.roles, planRoles],
   );
   const q = query.trim().toLowerCase();
   const shown = rows
     .filter((r) => !disciplines.length || disciplines.includes(r.s.discipline))
-    .filter((r) => branch === "all" || r.s.branch === branch)
+    .filter((r) => !branches || branch === "all" || r.s.branch === branch)
     .filter((r) => (nowF === "all" ? true : nowF === "working" ? r.now.working : nowF === "later" ? r.now.key === "before" : r.now.key === "leave" || r.now.key === "deactivated" || r.now.key === "after"))
     .filter((r) => !q || `${r.s.name} ${r.s.title} ${ROLE_LABEL(r.s.role)} ${r.s.email}`.toLowerCase().includes(q));
-  const filtered = disciplines.length > 0 || branch !== "all" || nowF !== "all" || q !== "";
+  const filtered = disciplines.length > 0 || (branches && branch !== "all") || nowF !== "all" || q !== "";
 
-  const seats = seatInfo(plan, state.deactivated, state.invites);
+  // Accounts in roles the plan doesn't have (Reception on Core, coordinators below Pro) hold no seat.
+  const offPlan = useMemo(() => Object.fromEntries(STAFF.filter((s) => !planRoles.includes(s.role)).map((s) => [s.id, "not on this plan"])), [planRoles]);
+  const seats = seatInfo(plan, { ...offPlan, ...state.deactivated }, state.invites);
   const working = rows.filter((r) => r.now.working);
   const later = rows.filter((r) => r.now.key === "before").sort((a, b) => (hoursToday(a.s)?.start ?? 0) - (hoursToday(b.s)?.start ?? 0));
   const away = rows.filter((r) => r.now.key === "leave");
@@ -91,7 +99,8 @@ function TeamWorkspace({ canManage }: { canManage: boolean }) {
   const onDuty = hours.map((h) => rows.filter((r) => !r.deactivated && (() => { const w = hoursToday(r.s); return !!w && w.start <= h * 60 && w.end > h * 60; })()).length);
   const nowHour = hours.indexOf(Math.floor(NOW_MIN / 60));
 
-  const mix = DISCIPLINES.map((d) => ({ label: DISCIPLINE_LABEL[d], value: rows.filter((r) => !r.deactivated && r.s.discipline === d).length, color: DISCIPLINE_FILL[d] }));
+  const disciplinesShown = DISCIPLINES.filter((d) => rows.some((r) => r.s.discipline === d));
+  const mix = disciplinesShown.map((d) => ({ label: DISCIPLINE_LABEL[d], value: rows.filter((r) => !r.deactivated && r.s.discipline === d).length, color: DISCIPLINE_FILL[d] }));
   const active = rows.filter((r) => !r.deactivated);
 
   return (
@@ -99,7 +108,7 @@ function TeamWorkspace({ canManage }: { canManage: boolean }) {
       <PageHeader
         eyebrow="Administration"
         title="Team"
-        description="Who is working today, how loaded they are, who covers whom, and who can sign in. Status reconciles each person's live status with their hours at the demo clock (09:40)."
+        description={`Who is working today${diary ? ", how loaded they are" : ""}, who covers whom, and who can sign in. Status reconciles each person's live status with their hours at the demo clock (09:40).`}
         actions={
           canManage ? (
             <Button variant="dark" leading={<UserPlus />} onClick={() => setInvite(true)}>
@@ -111,9 +120,10 @@ function TeamWorkspace({ canManage }: { canManage: boolean }) {
 
       {!canManage ? <ReadOnlyBanner>The staff directory is visible to the whole team. Administrators invite people, change roles and arrange leave cover.</ReadOnlyBanner> : null}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      {/* Today's load counts appointments — only plans with the calendar (Clinic+) have them. */}
+      <div className={cn("grid grid-cols-1 gap-4", diary && "xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]")}>
         <LeaveFocal canManage={canManage} onReview={() => setReassign(true)} />
-        <LoadCard deactivated={state.deactivated} onOpenStaff={setOpenId} />
+        {diary ? <LoadCard deactivated={state.deactivated} onOpenStaff={setOpenId} /> : null}
       </div>
 
       {/* Seats is admin-only: without it the row has two cards, so it is two equal columns rather than three with one left empty. */}
@@ -148,11 +158,11 @@ function TeamWorkspace({ canManage }: { canManage: boolean }) {
             <h2 id="mix-title" className="text-xs text-muted">Team mix</h2>
             <p className="mt-2 text-[32px] font-light leading-none tracking-[-0.02em] text-ink">
               {active.length}
-              <span className="ml-2 text-sm text-muted">people · {BRANCHES.map((b) => `${b.name} ${active.filter((r) => r.s.branch === b.id).length}`).join(" · ")}</span>
+              <span className="ml-2 text-sm text-muted">{branches ? `people · ${BRANCHES.map((b) => `${b.name} ${active.filter((r) => r.s.branch === b.id).length}`).join(" · ")}` : "people"}</span>
             </p>
           </div>
           <ul className="flex flex-col gap-2 text-sm">
-            {ROLE_ROWS.map((r) => {
+            {ROLE_ROWS.filter((r) => planRoles.includes(r)).map((r) => {
               const n = active.filter((x) => x.s.role === r).length;
               return n ? (
                 <li key={r} className="flex items-center justify-between gap-3">
@@ -166,32 +176,9 @@ function TeamWorkspace({ canManage }: { canManage: boolean }) {
         </section>
 
         {canManage ? (
-          <section aria-labelledby="seats-title" className="flex flex-col justify-between gap-4 rounded-card bg-surface p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 id="seats-title" className="text-xs text-muted">Seats · {seats.planName} plan</h2>
-                <p className="mt-2 text-[32px] font-light leading-none tracking-[-0.02em] text-ink">
-                  {seats.flat ? 1 : seats.active}
-                  <span className="ml-2 text-sm text-muted">{seats.flat ? "practitioner workspace" : `of ${seats.max} · plan covers ${seats.min}–${seats.max} users`}</span>
-                </p>
-              </div>
-            </div>
-            <ul className="grid grid-cols-3 gap-2 text-xs" aria-label="Plan ranges">
-              {PLAN_RANGES.map((p) => (
-                <li key={p.id} aria-current={p.id === plan ? "true" : undefined} className={p.id === plan ? "rounded-[12px] bg-charcoal px-3 py-2 text-white" : "rounded-[12px] px-3 py-2 text-muted shadow-[inset_0_0_0_1px_var(--color-line)]"}>
-                  <span className="block">{p.name}</span>
-                  <span className="block tabular">{p.range}</span>
-                </li>
-              ))}
-            </ul>
-            <SeatMeter used={seats.active} ready={seats.ready} max={seats.max} />
-            <p className={seats.over ? "text-xs text-danger" : "text-xs text-muted"}>
-              {seats.over
-                ? `${pluralize(seats.over, "account")} beyond the plan's ${seats.max} users — new invites wait for a seat. Deactivate leavers or move to a larger plan.`
-                : seats.free
-                  ? `${pluralize(seats.free, "seat")} free for invites.`
-                  : "Every seat is used — new invites wait for a seat."}
-            </p>
+          <section aria-labelledby="seats-title" className="flex flex-col gap-4 rounded-card bg-surface p-6">
+            <h2 id="seats-title" className="text-xs text-muted">Seats · {seats.planName} plan</h2>
+            <SeatSummary plan={plan} seats={seats} />
           </section>
         ) : null}
       </div>
@@ -212,7 +199,8 @@ function TeamWorkspace({ canManage }: { canManage: boolean }) {
                     {inv.name} · {ROLE_LABEL(inv.role)}
                   </p>
                   <p className="truncate text-xs text-muted">
-                    {inv.email} · {BRANCHES.find((b) => b.id === inv.branch)?.name}
+                    {inv.email}
+                    {branches ? ` · ${BRANCHES.find((b) => b.id === inv.branch)?.name}` : ""}
                   </p>
                 </div>
                 <StatusBadge tone={inv.status === "ready" ? "draft" : "warning"}>{inv.status === "ready" ? "Draft · email not connected" : "Waiting for a seat"}</StatusBadge>
@@ -239,7 +227,7 @@ function TeamWorkspace({ canManage }: { canManage: boolean }) {
             <h2 id="dir-title" className="text-lg font-normal tracking-[-0.01em] text-ink">
               Staff directory
             </h2>
-            <p className="mt-1 text-sm text-muted">Day track: white = hours · charcoal = booked · hatched = break · line = now</p>
+            <p className="mt-1 text-sm text-muted">Day track: white = hours{diary ? " · charcoal = booked" : ""} · hatched = break · line = now</p>
           </div>
           <Segmented
             ariaLabel="Directory layout"
@@ -258,15 +246,17 @@ function TeamWorkspace({ canManage }: { canManage: boolean }) {
             ariaLabel="Discipline"
             value={disciplines}
             onChange={setDisciplines}
-            options={DISCIPLINES.map((d) => ({ value: d, label: DISCIPLINE_LABEL[d], count: rows.filter((r) => r.s.discipline === d).length }))}
+            options={disciplinesShown.map((d) => ({ value: d, label: DISCIPLINE_LABEL[d], count: rows.filter((r) => r.s.discipline === d).length }))}
           />
-          <FilterPill<BranchFilter>
-            label="Branch"
-            value={branch}
-            defaultValue="all"
-            onChange={setBranch}
-            options={[{ value: "all", label: "Both" }, ...BRANCHES.map((b) => ({ value: b.id as BranchFilter, label: b.name, count: rows.filter((r) => r.s.branch === b.id).length }))]}
-          />
+          {branches ? (
+            <FilterPill<BranchFilter>
+              label="Branch"
+              value={branch}
+              defaultValue="all"
+              onChange={setBranch}
+              options={[{ value: "all", label: "Both" }, ...BRANCHES.map((b) => ({ value: b.id as BranchFilter, label: b.name, count: rows.filter((r) => r.s.branch === b.id).length }))]}
+            />
+          ) : null}
           <FilterPill<NowFilter>
             label="Now"
             value={nowF}
@@ -311,7 +301,7 @@ function TeamWorkspace({ canManage }: { canManage: boolean }) {
           <StaffTable rows={shown} onOpen={setOpenId} />
         )}
         <p className="text-xs text-muted">
-          {pluralize(shown.length, "person", "people")} shown · synthetic staff · changes made here are saved in this browser session only and written to the audit log.
+          {pluralize(shown.length, "person", "people")} shown · synthetic staff · changes made here are saved in this browser session only and written to the activity log.
         </p>
       </section>
 

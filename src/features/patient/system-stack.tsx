@@ -48,10 +48,10 @@ export function SystemStack({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="max-w-[9ch] text-[40px] font-light leading-[1.02] tracking-[-0.03em] text-ink xl:text-[44px]">
+      <h2 className="max-w-[9ch] text-[40px] font-light leading-[1.02] tracking-[-0.03em] text-ink xl:text-[44px]">
         Overview Patient Health
         <span className="sr-only"> — {patient.name}</span>
-      </h1>
+      </h2>
       {/* Small screens: identity right under the title (the summary column comes later). */}
       <div className="-mt-2 flex items-center gap-3 @[760px]:hidden" aria-hidden="true">
         <Avatar src={patient.avatar} name={patient.name} size="sm" />

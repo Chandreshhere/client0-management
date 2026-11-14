@@ -2,18 +2,22 @@ import { Check } from "@phosphor-icons/react/ssr";
 import { PLANS, type Plan } from "@/data/plans";
 import { cn } from "@/lib/cn";
 import { formatINR } from "@/lib/format";
+import { CtaLink } from "@/features/marketing/cta";
 import s from "@/features/marketing/motion.module.css";
-import { ExploreDemoButton } from "./explore-demo-button";
-import { basePlanName, cardFeatures, planAnchor, priceParts, roleLabel } from "./model";
+import { addedRoles, basePlanName, branchesShort, cardFeatures, planAnchor, priceParts, roleLabel, storageLabel } from "./model";
 
 /**
- * The three plans. Team is the cobalt focal card. Each card lists its features grouped by
- * FEATURE_GROUPS — the base plan lists everything, the others "Everything in X, plus…".
- * Prices come straight from @/data/plans. Type budget per card: 12 / 14 / 26 / 44px · 300 / 400.
+ * The three plans, each including everything in the one before it. Clinic is the cobalt focal
+ * card (the middle of the range — no popularity claim). Each card states the price per
+ * practitioner, onboarding, free admin/reception seats, branches, storage, its roles (the roles it
+ * adds are set dark) and only the features it adds: "Everything in Core, plus…". Every figure
+ * comes from @/data/plans. Type budget per card: 12 / 14 / 26 / 44px · 300 / 400.
  */
+const FOCAL = "clinic";
+
 export function PlanCards({ headingLevel = "h3", className }: { headingLevel?: "h2" | "h3"; className?: string }) {
   return (
-    <div className={cn("grid grid-cols-1 gap-4 lg:grid-cols-3", className)}>
+    <div className={cn("grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start", className)}>
       {PLANS.map((plan) => (
         <PlanCard key={plan.id} plan={plan} Heading={headingLevel} />
       ))}
@@ -22,11 +26,18 @@ export function PlanCards({ headingLevel = "h3", className }: { headingLevel?: "
 }
 
 function PlanCard({ plan, Heading }: { plan: Plan; Heading: "h2" | "h3" }) {
-  const focal = plan.id === "team";
+  const focal = plan.id === FOCAL;
   const { amount, unit } = priceParts(plan);
   const base = basePlanName(plan);
   const groups = cardFeatures(plan);
+  const added = addedRoles(plan);
   const sub = focal ? "text-white/90" : "text-muted";
+
+  const facts = [
+    { label: "Admin / reception", value: `${plan.freeSeats} seats free`, note: `then ${formatINR(plan.extraSeat)} each` },
+    { label: "Branches", value: branchesShort(plan), note: plan.branches === "unlimited" ? "with own rooms" : "one location" },
+    { label: "Storage", value: storageLabel(plan), note: "more as add-on" },
+  ];
 
   return (
     <article
@@ -35,32 +46,60 @@ function PlanCard({ plan, Heading }: { plan: Plan; Heading: "h2" | "h3" }) {
       className={cn("flex scroll-mt-28 flex-col rounded-card p-2", focal ? "bg-primary text-white" : "bg-surface text-ink", s.revealTall)}
     >
       <div className="p-4">
-        <div className="flex items-center justify-between gap-3">
-          <Heading id={`${plan.id}-plan-name`} className="text-[26px] font-light leading-none tracking-[-0.02em]">
-            {plan.name}
-          </Heading>
-          <span
-            className={cn(
-              "inline-flex h-8 items-center rounded-full px-3 text-xs",
-              focal ? "text-white shadow-[inset_0_0_0_1px_rgb(255_255_255/0.4)]" : "text-muted shadow-[inset_0_0_0_1px_var(--color-line-strong)]",
-            )}
-          >
-            {plan.usersLabel}
-          </span>
-        </div>
-        <p className={cn("mt-3 min-h-[40px] text-sm", sub)}>{plan.audience}</p>
+        <Heading id={`${plan.id}-plan-name`} className="text-[26px] font-light leading-none tracking-[-0.02em]">
+          {plan.name}
+        </Heading>
+        <p className="mt-3 text-sm">{plan.positioning}</p>
+        <p className={cn("mt-1 text-sm md:min-h-[40px]", sub)}>{plan.audience}</p>
 
-        <p className="mt-8 flex items-baseline gap-2">
+        <p className="mt-8 flex flex-wrap items-baseline gap-x-2">
           <span className="text-[44px] font-light leading-none tracking-[-0.03em] tabular">{amount}</span>
           <span className={cn("text-sm", sub)}>{unit}</span>
         </p>
-        <p className={cn("mt-2 text-sm", sub)}>+ {formatINR(plan.setupFee)} one-time setup fee</p>
+        <p className={cn("mt-2 text-sm", sub)}>
+          Billed annually · <span className="whitespace-nowrap">{formatINR(plan.price.monthly)} billed monthly</span> · <span className="whitespace-nowrap">before GST</span>
+        </p>
+        <p className="mt-1 text-sm">+ {formatINR(plan.onboardingFee)} one-time onboarding</p>
 
-        <ExploreDemoButton planId={plan.id} tone={focal ? "light" : "dark"} className="mt-6 w-full" />
+        <dl className={cn("mt-6 grid grid-cols-2 gap-2 rounded-inner p-3 sm:grid-cols-3", focal ? "bg-white/10" : "bg-sunken")}>
+          {facts.map((f, i) => (
+            <div key={f.label} className={cn("min-w-0", i === 0 && "col-span-2 sm:col-span-1")}>
+              <dt className={cn("text-xs", sub)}>{f.label}</dt>
+              <dd className="mt-1 text-sm">{f.value}</dd>
+              <dd className={cn("mt-0.5 text-xs", sub)}>{f.note}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <CtaLink href={`/demo?plan=${plan.id}`} tone={focal ? "light" : "dark"} className="mt-6 w-full justify-between">
+          Try the {plan.name} demo
+        </CtaLink>
       </div>
 
       <div className={cn("flex flex-1 flex-col rounded-inner p-4", focal ? "bg-black/10" : "bg-sunken")}>
-        <p className="text-sm">{base ? `Everything in ${base}, plus:` : "Includes:"}</p>
+        <p className="text-sm">
+          {plan.roles.length} roles{" "}
+          <span className={sub}>· {base ? `adds ${added.map(roleLabel).join(" and ")}` : "the whole care team"}</span>
+        </p>
+        <ul className="mt-2 flex flex-wrap gap-1.5" aria-label={`Roles on ${plan.name}`}>
+          {plan.roles.map((r) => {
+            const isNew = base !== null && added.includes(r);
+            return (
+              <li
+                key={r}
+                className={cn(
+                  "inline-flex h-7 items-center rounded-full px-2.5 text-xs",
+                  isNew ? (focal ? "bg-white text-ink" : "bg-charcoal text-white") : focal ? "bg-black/15 text-white" : "bg-surface text-ink-2",
+                )}
+              >
+                {roleLabel(r)}
+                {isNew ? <span className="sr-only"> (added on {plan.name})</span> : null}
+              </li>
+            );
+          })}
+        </ul>
+
+        <p className="mt-6 text-sm">{base ? `Everything in ${base}, plus:` : "Includes:"}</p>
         {groups.map((g) => (
           <div key={g.group} className="mt-4">
             <p className={cn("text-xs", sub)}>{g.group}</p>
@@ -74,9 +113,6 @@ function PlanCard({ plan, Heading }: { plan: Plan; Heading: "h2" | "h3" }) {
             </ul>
           </div>
         ))}
-        <p className={cn("mt-auto pt-6 text-xs", sub)}>
-          Workspaces in the demo: {plan.roles.map(roleLabel).join(" · ")}
-        </p>
       </div>
     </article>
   );

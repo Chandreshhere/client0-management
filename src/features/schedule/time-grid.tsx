@@ -12,6 +12,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { DISCIPLINE_COLOR, LUNCH, NOW_MIN, TODAY_KEY } from "./data";
 import { hhmm, hoursLabel, hoursOn, isSunday, layoutLanes, rangeLabel, type DiaryEvent } from "./engine";
 import { ApptStatus, DisciplineDot } from "./ui";
+import { scheduleAccess, serviceText } from "./access";
+import { useRole } from "@/components/shell/role-context";
 
 /** 30 minutes = 64px (8px grid); 15 minutes = 32px. */
 export const ROW = 64;
@@ -50,7 +52,8 @@ export function TimeGrid({
   selectedId: string | null;
   recentIds: string[];
   doubleIds: Set<string>;
-  onSlot: (staffId: string, min: number) => void;
+  /** omitted for roles that can't book: empty slots aren't clickable */
+  onSlot?: (staffId: string, min: number) => void;
   /** scroll the diary so `min` sits `lead` minutes below the top (default 90) */
   scrollTo: { min: number; n: number; lead?: number } | null;
 }) {
@@ -176,7 +179,8 @@ const Track = memo(function Track({
   selectedId: string | null;
   recentIds: string[];
   doubleIds: Set<string>;
-  onSlot: (staffId: string, min: number) => void;
+  /** omitted for roles that can't book: empty slots aren't clickable */
+  onSlot?: (staffId: string, min: number) => void;
 }) {
   const [ghost, setGhost] = useState<number | null>(null);
   const lanes = useMemo(() => layoutLanes(col.events), [col.events]);
@@ -189,7 +193,7 @@ const Track = memo(function Track({
     const raw = range.start + Math.floor((e.clientY - r.top) / PX / 15) * 15;
     return Math.max(range.start, Math.min(range.end - 30, raw));
   };
-  const canBook = (min: number) => !col.leave && date >= TODAY_KEY && !isSunday(date) && !(isToday && min < NOW_MIN);
+  const canBook = (min: number) => !!onSlot && !col.leave && date >= TODAY_KEY && !isSunday(date) && !(isToday && min < NOW_MIN);
 
   // Off-duty time from the staff profile hours, inside the visible range (leave hatches the whole column).
   const hours = col.leave ? null : hoursOn(col.staff.id, date);
@@ -234,7 +238,7 @@ const Track = memo(function Track({
       onClick={(e) => {
         if (e.target !== e.currentTarget) return;
         const m = snap(e);
-        if (canBook(m)) onSlot(col.staff.id, m);
+        if (canBook(m)) onSlot?.(col.staff.id, m);
       }}
     >
       {isToday ? <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 rounded-t-inner bg-surface/45" style={{ height: Math.max(0, y(NOW_MIN)) }} /> : null}
@@ -314,13 +318,14 @@ const Block = memo(function Block({
   renderDetails,
 }: BlockShared & { ev: DiaryEvent; top: number; height: number; lane: number; lanes: number; selected: boolean; recent: boolean; double: boolean }) {
   const b = ev.booking;
+  const clinical = scheduleAccess(useRole().role).clinical;
   const status = b?.status;
   const inactive = status === "cancelled" || status === "no-show";
   const done = status === "completed";
   const cls = ev.cls;
   const title = nameOf(ev);
   const enrolled = cls ? cls.enrolled.filter((e) => e.attendance !== "cancelled").length : 0;
-  const sub = cls ? `${enrolled} of ${cls.capacity} enrolled` : privacy ? DISCIPLINE_LABEL[ev.discipline] : b?.service;
+  const sub = cls ? `${enrolled} of ${cls.capacity} enrolled` : privacy ? DISCIPLINE_LABEL[ev.discipline] : b ? serviceText(b.service, clinical) : undefined;
   // Card tiers by height (px): < 44 one line; < 60 title + time row; < 72 all three rows packed
   // (60px = 8 padding + 16 + 16 + 20, no gaps); taller cards get the roomier layout. Every row is
   // shrink-0 so a short card never squeezes a line below its 16px leading (that clipped descenders).

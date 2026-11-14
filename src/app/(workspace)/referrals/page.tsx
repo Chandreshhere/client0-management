@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { ReferralsView } from "@/features/referrals/referrals-view";
 
-export const metadata: Metadata = { title: "Referrals" };
+export const metadata: Metadata = { title: "Assignments" };
 
-/** Referral pipeline: where each handoff stopped, who it waits on, and role-aware next steps. */
+/** Assignments (spec F5): doctor → nutritionist or instructor, assigned → seen; back with the doctor after 48 h. */
 export default function ReferralsPage() {
   return <ReferralsView />;
 }

@@ -74,7 +74,12 @@ export type Booking = Appointment & {
   /** created in this browser session */
   local?: boolean;
   seriesId?: string;
-  reminder?: boolean;
+  /** walk-in reason for visit — shown to practitioners only */
+  reason?: string;
+  /** booking history (moved, cancelled, missed …), oldest first */
+  history?: { at: string; by: string; action: string }[];
+  /** payment recorded by hand at checkout (cash, UPI, card) — a visit is never shown as paid without one */
+  payment?: { method: "Cash" | "UPI" | "Card"; amount: number; reference?: string; at: string; by: string };
 };
 
 export const INACTIVE: AppointmentStatus[] = ["cancelled", "no-show"];

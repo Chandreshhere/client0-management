@@ -37,7 +37,7 @@ export function AnatomyExplorer({ entries, total, without }: { entries: OrganEnt
       {/* detail — every organ's panel sits in the same grid cell and only the selected one is
           visible, so the card always has the height of the tallest panel: switching organs never
           resizes this card, the picker boxes beside it, or the page below. */}
-      <article aria-labelledby="anatomy-detail-title" className="order-2 grid rounded-card bg-surface p-6 lg:order-1 lg:col-span-5">
+      <article aria-labelledby="anatomy-detail-title" className="order-2 grid grid-cols-[minmax(0,1fr)] rounded-card bg-surface p-6 lg:order-1 lg:col-span-5">
         <p className="sr-only" aria-live="polite">
           {entry.label}: {entry.patients.length} of {total} demo patients
         </p>
