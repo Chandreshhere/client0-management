@@ -488,12 +488,13 @@ function QueueBoard() {
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <Card id="queue-expected" className="scroll-mt-32">
-            <div className="flex items-end justify-between gap-4">
-              <div>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
                 <h2 className="text-lg font-normal tracking-[-0.01em] text-ink">Expected today</h2>
                 <p className="mt-1 text-sm text-muted">Booked and not yet arrived · check in to issue the next token.</p>
               </div>
-              <Button asChild size="sm" variant="ghost" trailing={<ArrowUpRight />}>
+              {/* top-aligned with the title row (the old items-end left it floating between the two lines) */}
+              <Button asChild size="sm" variant="ghost" trailing={<ArrowUpRight />} className="-mt-0.5 shrink-0">
                 <Link href="/schedule">Calendar</Link>
               </Button>
             </div>
@@ -512,9 +513,10 @@ function QueueBoard() {
                       <span className="w-12 shrink-0 font-mono text-[13px] text-ink tabular">{hhmm(minOf(b.start))}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm text-ink">{queueDisplay ? "Name hidden" : nameFor(b)}</span>
-                        <span className="flex items-center gap-1.5 truncate text-xs text-muted">
+                        {/* the text sits in its own min-w-0 span: an ellipsis never applies to a flex container's bare text */}
+                        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
                           <DisciplineDot discipline={b.discipline} />
-                          {queueDisplay ? b.room : `${b.service} · ${b.room}`}
+                          <span className="min-w-0 truncate">{queueDisplay ? b.room : `${b.service} · ${b.room}`}</span>
                         </span>
                       </span>
                       <span className="hidden items-center gap-2 text-xs text-muted md:flex">
@@ -534,7 +536,7 @@ function QueueBoard() {
             )}
           </Card>
 
-          <Card id="queue-not-seen" className="scroll-mt-32">
+          <Card id="queue-not-seen" className="scroll-mt-32 self-start">
             <h2 className="text-lg font-normal tracking-[-0.01em] text-ink">Not seen today</h2>
             <p className="mt-1 text-sm text-muted">No-shows and cancellations — rebook before the day ends.</p>
             {notSeen.length ? (

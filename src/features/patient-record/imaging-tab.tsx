@@ -40,6 +40,14 @@ const CARD_NAME: Record<StudyKind, string> = {
   "spine-mri": "Spine MRI",
 };
 
+/**
+ * The modality badge sits top-left, except on renders that print their own label there (the
+ * featured echo carries "EF 58%" in its top-left corner): those get the badge top-right, so the
+ * two never stack into "Echo58%". The organ chip keeps the bottom-right corner.
+ */
+const LABEL_TOP_LEFT = new Set<StudyKind>(["echo"]);
+const badgeSide = (kind: StudyKind) => (LABEL_TOP_LEFT.has(kind) ? "right-2" : "left-2");
+
 export function ImagingTab({ patientId }: { patientId: string }) {
   const patient = patientById(patientId)!;
   const { role } = useRole();
@@ -213,7 +221,7 @@ function StudyCard({ study, kind, patientId, onOpen }: { study: Study; kind: Stu
     >
       <span className="relative block aspect-[4/3] overflow-hidden rounded-inner bg-black">
         <StudyThumb kind={kind} title={`${study.title} (illustrative)`} className="transition-transform duration-500 [transition-timing-function:var(--ease-spring)] group-hover:scale-105" />
-        <span className="absolute left-2 top-2 inline-flex h-6 items-center rounded-full bg-black/45 px-2.5 text-[11px] text-white/90 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.24)]">{MODALITY[kind].short}</span>
+        <span className={cn("absolute top-2 inline-flex h-6 items-center rounded-full bg-black/45 px-2.5 text-[11px] text-white/90 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.24)]", badgeSide(kind))}>{MODALITY[kind].short}</span>
         {sys ? (
           <span className="absolute bottom-2 right-2 flex rounded-full ring-2 ring-black/30" title={`${sys.name} system`}>
             <OrganThumb kind={sys.organ} size="sm" className="bg-white/90" />
@@ -253,7 +261,7 @@ function StudyFeature({ study, kind, patientId, onOpen, wide = false }: { study:
     >
       <button type="button" onClick={onOpen} aria-label={`Open ${study.title} in the viewer`} className="group relative block aspect-[4/3] overflow-hidden rounded-inner bg-black">
         <StudyThumb kind={kind} title={`${study.title} (illustrative)`} className="transition-transform duration-500 [transition-timing-function:var(--ease-spring)] group-hover:scale-105" />
-        <span className="absolute left-2 top-2 inline-flex h-6 items-center rounded-full bg-black/45 px-2.5 text-[11px] text-white/90 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.24)]">{MODALITY[kind].long}</span>
+        <span className={cn("absolute top-2 inline-flex h-6 items-center rounded-full bg-black/45 px-2.5 text-[11px] text-white/90 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.24)]", badgeSide(kind))}>{MODALITY[kind].long}</span>
         <span className="absolute bottom-2 left-2 text-[11px] text-white/60">Illustrative render — not diagnostic</span>
       </button>
       <div className="flex min-w-0 flex-col gap-4 p-2 @[560px]:p-4">

@@ -35,7 +35,8 @@ export const STAFF_STATUS: Record<Staff["status"], { label: string; tone: Tone }
   "in-session": { label: "In session", tone: "dark" },
   "on-break": { label: "On break", tone: "warning" },
   "on-leave": { label: "On leave", tone: "danger" },
-  off: { label: "Off", tone: "neutral" },
+  // at 09:40 on the demo day: shift starts later (or a day off)
+  off: { label: "Off shift", tone: "neutral" },
 };
 
 /**

@@ -300,32 +300,30 @@ function LagText({ doc }: { doc: RecordDocument }) {
   return <span className={cn("block text-[11px]", lag.late ? "text-warning" : "text-muted")}>{lag.text}</span>;
 }
 
+/**
+ * Table from an 880px container. Columns are sized to their content (dates ~80px, "8 Sept 2026 10:40"
+ * ~116px, "Awaiting review" badge ~120px) so the Document column keeps the spare room. Reviewer gets
+ * its own column from a 1100px container (below that it sits under the status), Type from 1280px
+ * (below that the type icon plus "Lab report · 2 pages" under the title carry it).
+ */
 function DocTable({ docs, statusOf, onOpen, freshId }: RowProps) {
   return (
     <Card padded={false} className="hidden @[880px]:block">
       <div className="scrollbar-thin relative overflow-x-auto">
-        <table className="w-full min-w-[900px] table-fixed border-separate border-spacing-0 text-sm">
+        <table className="w-full table-fixed border-separate border-spacing-0 text-sm">
           <caption className="sr-only">Documents. Report date and uploaded date are separate columns.</caption>
-          <colgroup>
-            <col />
-            <col className="w-[128px]" />
-            <col className="w-[112px]" />
-            <col className="w-[132px]" />
-            <col className="w-[148px]" />
-            <col className="w-[164px]" />
-            <col className="w-[152px]" />
-            <col className="w-[56px]" />
-          </colgroup>
           <thead>
             <tr className="text-xs text-muted">
               <th scope="col" className="py-4 pl-6 pr-3 text-left font-normal">Document</th>
-              <th scope="col" className="px-3 py-4 text-left font-normal">Type</th>
-              <th scope="col" className="px-3 py-4 text-left font-normal">Report date</th>
-              <th scope="col" className="px-3 py-4 text-left font-normal">Uploaded</th>
-              <th scope="col" className="px-3 py-4 text-left font-normal">Source</th>
-              <th scope="col" className="px-3 py-4 text-left font-normal">Reviewer</th>
-              <th scope="col" className="px-3 py-4 text-left font-normal">Status</th>
-              <th scope="col" className="py-4 pl-3 pr-6 font-normal">
+              <th scope="col" className="hidden w-[168px] px-3 py-4 text-left font-normal @[1280px]:table-cell">Type</th>
+              <th scope="col" className="w-[112px] px-3 py-4 text-left font-normal">Report date</th>
+              <th scope="col" className="w-[152px] px-3 py-4 text-left font-normal">Uploaded</th>
+              <th scope="col" className="w-[144px] px-3 py-4 text-left font-normal">Source</th>
+              <th scope="col" className="hidden w-[168px] px-3 py-4 text-left font-normal @[1100px]:table-cell">Reviewer</th>
+              <th scope="col" className="w-[152px] px-3 py-4 text-left font-normal">
+                Status<span className="@[1100px]:hidden"> · reviewer</span>
+              </th>
+              <th scope="col" className="w-[72px] py-4 pl-3 pr-6 font-normal">
                 <span className="sr-only">Open</span>
               </th>
             </tr>
@@ -346,11 +344,13 @@ function DocTable({ docs, statusOf, onOpen, freshId }: RowProps) {
                             e.stopPropagation();
                             onOpen(d.id);
                           }}
-                          className="block w-full truncate rounded-md text-left text-ink"
+                          title={d.title}
+                          className="line-clamp-2 w-full rounded-md text-left text-pretty text-ink"
                         >
                           {d.title}
                         </button>
                         <span className="block truncate text-xs text-muted">
+                          <span className="@[1280px]:hidden">{d.type} · </span>
                           {d.pages} {d.pages === 1 ? "page" : "pages"}
                           {d.id === freshId || d.local ? " · added now" : ""}
                           {d.summary && !d.local ? ` · ${readableDates(d.summary)}` : ""}
@@ -358,7 +358,7 @@ function DocTable({ docs, statusOf, onOpen, freshId }: RowProps) {
                       </span>
                     </span>
                   </td>
-                  <td className={cn(cell, "truncate text-ink-2")}>{d.type}</td>
+                  <td className={cn(cell, "hidden truncate text-ink-2 @[1280px]:table-cell")}>{d.type}</td>
                   <td className={cn(cell, "whitespace-nowrap text-ink")}>{formatDate(d.reportDate)}</td>
                   <td className={cn(cell, "whitespace-nowrap")}>
                     <span className="block text-ink-2">
@@ -370,11 +370,12 @@ function DocTable({ docs, statusOf, onOpen, freshId }: RowProps) {
                     <span className="block truncate">{d.source}</span>
                     {d.uploadedBy !== d.source ? <span className="block truncate text-xs text-muted">{d.uploadedBy.replace(/^Lab partner · /, "")}</span> : null}
                   </td>
-                  <td className={cn(cell, "text-ink-2")}>
+                  <td className={cn(cell, "hidden text-ink-2 @[1100px]:table-cell")}>
                     <Reviewer id={d.reviewerId} />
                   </td>
                   <td className={cell}>
                     <StatusCell doc={d} status={status} />
+                    <span className="mt-1 block truncate text-xs text-muted @[1100px]:hidden">{staffById(d.reviewerId ?? undefined)?.name ?? "Unassigned"}</span>
                   </td>
                   <td className={cn(cell, "pr-6 text-right")}>
                     <span className="inline-flex size-8 items-center justify-center rounded-full text-ink-2 transition-colors group-hover:bg-surface" aria-hidden="true">

@@ -88,7 +88,7 @@ export function RegistryBrowse({
     <div className="grid grid-cols-1 items-start gap-6 @[880px]:grid-cols-[304px_minmax(0,1fr)]">
       <section
         aria-label="Patients in this view"
-        className="flex min-w-0 flex-col rounded-card bg-charcoal p-2 text-white @[880px]:sticky @[880px]:top-[104px] @[880px]:max-h-[calc(100dvh-128px)]"
+        className="flex min-w-0 flex-col rounded-card bg-charcoal p-2 text-white @[880px]:sticky @[880px]:top-[80px] @[880px]:max-h-[calc(100dvh-104px)]"
       >
         <div className="flex items-center justify-between gap-3 px-3 pb-3 pt-2">
           <div className="min-w-0">

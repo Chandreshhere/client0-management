@@ -18,9 +18,11 @@ import {
 } from "@/components/ui/dropdown";
 import { useToast } from "@/components/ui/toast";
 import { useRole } from "./role-context";
+import { cn } from "@/lib/cn";
 
 /** Profile menu + demo workspace switcher (the role dropdown is a demo affordance only). */
-export function UserMenu() {
+/** `compact`: avatar only below 2xl — used when the header row also carries section tabs. */
+export function UserMenu({ compact = false }: { compact?: boolean }) {
   const { role, setRole, user, plan } = useRole();
   const allowed = planById(plan).roles;
   const { toast } = useToast();
@@ -33,7 +35,7 @@ export function UserMenu() {
           className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-surface pl-1 pr-1 shadow-[inset_0_0_0_1px_var(--color-line)] transition-colors hover:bg-canvas data-[state=open]:shadow-[inset_0_0_0_1px_var(--color-line-strong)] sm:pr-3"
         >
           <Avatar src={user.avatar} name={user.name} size="sm" />
-          <span className="hidden min-w-0 text-left leading-tight xl:block">
+          <span className={cn("hidden min-w-0 text-left leading-tight", compact ? "2xl:block" : "xl:block")}>
             <span className="block max-w-[140px] truncate text-xs font-medium text-ink">{user.name}</span>
             <span className="block text-[11px] text-muted">{DEMO_USER[role].label}</span>
           </span>

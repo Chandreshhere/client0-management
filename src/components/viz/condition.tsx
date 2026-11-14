@@ -139,15 +139,27 @@ export function SparkValue({ value, sub }: { value: ReactNode; sub?: ReactNode }
   );
 }
 
-export function BarsSpark({ values, highlightLast = true, label }: { values: number[]; highlightLast?: boolean; label: string }) {
-  const max = Math.max(...values, 1);
+export function BarsSpark({
+  values,
+  highlightLast = true,
+  label,
+  domain,
+}: {
+  values: number[];
+  highlightLast?: boolean;
+  label: string;
+  /** Fixed [floor, ceiling] the bars scale within (a bar at the floor is the 8% minimum). Default: zero to the largest value. */
+  domain?: [number, number];
+}) {
+  const [lo, hi] = domain ?? [0, Math.max(...values, 1)];
+  const pct = (v: number) => Math.min(100, Math.max(8, ((v - lo) / (hi - lo || 1)) * 100));
   return (
     <div className="flex h-full items-end gap-[3px]" role="img" aria-label={label}>
       {values.map((v, i) => (
         <span
           key={i}
           className={cn("w-[2px] rounded-full", highlightLast && i === values.length - 1 ? "bg-primary" : "bg-line-strong")}
-          style={{ height: `${Math.max(8, (v / max) * 100)}%` }}
+          style={{ height: `${pct(v)}%` }}
         />
       ))}
     </div>

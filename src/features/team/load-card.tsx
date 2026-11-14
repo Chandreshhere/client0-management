@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChartBar } from "@phosphor-icons/react";
 import { formatDate, pluralize } from "@/lib/format";
 import { BarChart } from "@/components/charts/bar-chart";
@@ -21,6 +21,33 @@ const SERIES = [
 ];
 
 const DAY = new Intl.DateTimeFormat("en-IN", { weekday: "short", timeZone: "UTC" });
+
+/** The week chart's plot height at its smallest (px); it grows to fill the panel beside the clinician list. */
+const MIN_PLOT = 196;
+
+/**
+ * Plot height that fills the box: the box takes the panel's spare height (flex-1), and the chart's
+ * legend (drawn by the kit chart above its fixed-height plot) is subtracted from it.
+ */
+function useFillHeight(min: number, contentKey: string) {
+  const box = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(min);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = () => {
+      const chart = el.firstElementChild as HTMLElement | null;
+      const plot = chart?.lastElementChild as HTMLElement | null;
+      const legend = chart && plot ? chart.offsetHeight - plot.offsetHeight : 0;
+      setHeight(Math.max(min, Math.floor(el.clientHeight - legend)));
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // re-measure when the panel switches between the chart and the "nothing in the diary" note
+  }, [min, contentKey]);
+  return [box, height] as const;
+}
 const dayShort = (key: string) => `${DAY.format(new Date(`${key}T12:00:00Z`))} ${Number(key.slice(8, 10))}`;
 
 export function LoadCard({ deactivated, onOpenStaff }: { deactivated: Record<string, string>; onOpenStaff: (id: string) => void }) {
@@ -39,6 +66,7 @@ export function LoadCard({ deactivated, onOpenStaff }: { deactivated: Record<str
   const cancelled = week.reduce((s, d) => s + d.cancelled, 0);
   const todayIdx = WEEK_KEYS.indexOf(TODAY_KEY);
   const totalToday = ranked.reduce((s, r) => s + r.load.count, 0);
+  const [plotBox, plotHeight] = useFillHeight(MIN_PLOT, total || cancelled ? "chart" : "empty");
 
   return (
     <Group role="region" aria-labelledby="load-title" className="flex flex-col">
@@ -76,21 +104,26 @@ export function LoadCard({ deactivated, onOpenStaff }: { deactivated: Record<str
                 </span>
               </p>
             </div>
-            {total || cancelled ? (
-              <BarChart
-                ariaLabel={`${sel.s.name}, appointments per day this week: ${week.map((d) => `${dayShort(d.key)} ${d.attended} attended, ${d.booked} booked, ${d.noShow} no-show`).join("; ")}`}
-                categories={week.map((d) => dayShort(d.key))}
-                series={SERIES}
-                values={[week.map((d) => d.attended), week.map((d) => d.booked), week.map((d) => d.noShow)]}
-                highlight={todayIdx >= 0 ? todayIdx : undefined}
-                formatY={countTick}
-                height={196}
-              />
-            ) : (
-              <p className="flex min-h-[196px] items-center justify-center rounded-[12px] bg-sunken p-6 text-center text-sm text-muted">
-                {sel.now.key === "leave" ? `${sel.s.name} is on leave — no diary this week.` : "Nothing in the diary this week."}
-              </p>
-            )}
+            {/* The chart fills the panel's spare height, so the panel ends level with the clinician list instead of in a blank block. */}
+            <div className="relative min-h-[248px] flex-1">
+              <div ref={plotBox} className="absolute inset-0">
+                {total || cancelled ? (
+                  <BarChart
+                    ariaLabel={`${sel.s.name}, appointments per day this week: ${week.map((d) => `${dayShort(d.key)} ${d.attended} attended, ${d.booked} booked, ${d.noShow} no-show`).join("; ")}`}
+                    categories={week.map((d) => dayShort(d.key))}
+                    series={SERIES}
+                    values={[week.map((d) => d.attended), week.map((d) => d.booked), week.map((d) => d.noShow)]}
+                    highlight={todayIdx >= 0 ? todayIdx : undefined}
+                    formatY={countTick}
+                    height={plotHeight}
+                  />
+                ) : (
+                  <p className="flex h-full items-center justify-center rounded-[12px] bg-sunken p-6 text-center text-sm text-muted">
+                    {sel.now.key === "leave" ? `${sel.s.name} is on leave — no diary this week.` : "Nothing in the diary this week."}
+                  </p>
+                )}
+              </div>
+            </div>
             <button type="button" onClick={() => onOpenStaff(sel.s.id)} className="w-max text-xs text-ink underline underline-offset-2">
               Open {sel.s.name.split(" ").slice(0, 2).join(" ")}&apos;s profile
             </button>

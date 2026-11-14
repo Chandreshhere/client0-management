@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Barbell, Fire, Leaf } from "@phosphor-icons/react";
-import { formatNumber, pluralize } from "@/lib/format";
+import { formatDate, formatNumber, pluralize } from "@/lib/format";
 import { Segmented } from "@/components/ui/segmented";
 import { BarsSpark, SparkValue } from "@/components/viz/condition";
 import { SectionLabel } from "@/components/viz/cards";
@@ -12,7 +12,7 @@ import { staffById } from "@/data/staff";
 import { GUIDANCE, LOG_MATCH_LABEL, SLOTS, type LogMatch } from "@/features/nutrition/data";
 import { sumItems, totals } from "@/features/nutrition/model";
 import { useNutrition } from "@/features/nutrition/store";
-import { shortDate } from "./data";
+import { istDayKey, shortDate } from "./data";
 import { MATCH_LEVEL, logsFor, planNutrients, type Nutrient } from "./derive";
 import { ReadingTile } from "./viz";
 
@@ -116,12 +116,23 @@ export function PlanTargets({ authorId, defaultPlanId, className }: { authorId: 
 }
 
 const MATCH_ORDER: LogMatch[] = ["as-planned", "partly", "different", "skipped"];
+/** Row names for the dot plot: LOG_MATCH_LABEL, shortened to fit the 11px label column. */
+const MATCH_ROW: Record<LogMatch, string> = { "as-planned": "As planned", partly: "Partly", different: "Different", skipped: "Skipped" };
+/** One 16px row per match level (11px labels on a 16px leading sit centred on their track). */
+const ROW_H = 16;
+/** Inset of the first/last dot from the track ends: half the latest dot plus its ring. */
+const DOT_PAD = 10;
+/** Narrowest plot this renders at (177px in the dashboard column at 1280px) — used to thin colliding day labels. */
+const MIN_PLOT_W = 176;
+/** Widest weekday label ("Wed") at 11px, rounded up. */
+const DAY_LABEL_W = 24;
 
 /**
  * A patient's self-reported meal logs as a dot plot: one dot per logged meal in time order, its
- * row = how closely the meal matched the plan (as planned at the top, skipped at the bottom).
- * Earlier meals are hollow; the latest is the accent dot. (Same idea as the kit's DotsSpark,
- * drawn larger so each meal is legible at row size.)
+ * row = how closely the meal matched the plan (every row named, as planned at the top, skipped at
+ * the bottom), with the day under each run of dots. Earlier meals are hollow; the latest is the
+ * accent dot. Laid out in HTML so labels share the rows' geometry (a stretched SVG viewBox drifted
+ * off its labels).
  */
 export function LogDots({ patientId }: { patientId: string }) {
   const logs = logsFor(patientId);
@@ -129,29 +140,73 @@ export function LogDots({ patientId }: { patientId: string }) {
   const counts = MATCH_ORDER.map((m) => ({ m, n: logs.filter((l) => l.match === m).length })).filter((c) => c.n);
   const breakdown = counts.map((c) => `${c.n} ${LOG_MATCH_LABEL[c.m].toLowerCase()}`).join(", ");
   const range = logs.length > 1 ? `${shortDate(logs[0].eatenAt)}–${shortDate(logs[logs.length - 1].eatenAt)}` : shortDate(logs[0].eatenAt);
-  const W = 240, H = 64, padX = 10, rowH = (H - 16) / 3;
-  const x = (i: number) => (logs.length === 1 ? W / 2 : padX + (i / (logs.length - 1)) * (W - padX * 2));
-  const y = (m: LogMatch) => 8 + (3 - MATCH_LEVEL[m]) * rowH;
+
+  const frac = (i: number) => (logs.length === 1 ? 0.5 : i / (logs.length - 1));
+  const left = (f: number) => `calc(${DOT_PAD}px + (100% - ${DOT_PAD * 2}px) * ${f})`;
+  const rowY = (m: LogMatch) => (3 - MATCH_LEVEL[m]) * ROW_H + ROW_H / 2;
+
+  // Day labels: one per IST day, centred under that day's dots. Within a week a weekday reads
+  // fastest (the caption carries the dates); longer spans fall back to "7 Nov".
+  const days: { key: string; at: string; from: number; to: number }[] = [];
+  logs.forEach((l, i) => {
+    const key = istDayKey(l.eatenAt);
+    const d = days[days.length - 1];
+    if (d?.key === key) d.to = i;
+    else days.push({ key, at: l.eatenAt, from: i, to: i });
+  });
+  const spanDays = (Date.parse(days[days.length - 1].key) - Date.parse(days[0].key)) / 86_400_000;
+  const dayText = (iso: string) => (spanDays <= 6 ? formatDate(iso, { weekday: "short" }) : shortDate(iso));
+  // Thin labels that would touch at the narrowest plot width; the latest day is always kept.
+  const shown: { f: number; text: string }[] = [];
+  const gap = (a: number, b: number) => (b - a) * (MIN_PLOT_W - DOT_PAD * 2);
+  days.forEach((d, k) => {
+    const f = (frac(d.from) + frac(d.to)) / 2;
+    const label = { f, text: dayText(d.at) };
+    if (k === days.length - 1) {
+      while (shown.length && gap(shown[shown.length - 1].f, f) < DAY_LABEL_W + 4) shown.pop();
+      shown.push(label);
+    } else if (!shown.length || gap(shown[shown.length - 1].f, f) >= DAY_LABEL_W + 4) shown.push(label);
+  });
+
   return (
     <figure className="mt-3 rounded-[12px] bg-sunken/70 p-3">
-      <div className="flex items-stretch gap-3">
-        <span className="flex shrink-0 flex-col justify-between py-0.5 text-[11px] leading-none text-muted" aria-hidden="true">
-          <span>As planned</span>
-          <span>Skipped</span>
-        </span>
-        <svg viewBox={`0 0 ${W} ${H}`} className="h-16 min-w-0 flex-1" role="img" aria-label={`Self-reported meal logs, oldest to newest: ${logs.map((l) => `${shortDate(l.eatenAt)} ${l.slot}, ${LOG_MATCH_LABEL[l.match].toLowerCase()}`).join("; ")}`}>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
+        <span className="flex flex-col text-[11px] leading-4 text-muted" aria-hidden="true">
           {MATCH_ORDER.map((m) => (
-            <line key={m} x1={0} x2={W} y1={y(m)} y2={y(m)} stroke="var(--color-line-strong)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <span key={m} className="whitespace-nowrap">
+              {MATCH_ROW[m]}
+            </span>
           ))}
-          {logs.map((l, i) => {
-            const last = i === logs.length - 1;
-            return last ? (
-              <circle key={l.id} cx={x(i)} cy={y(l.match)} r={6} fill="var(--color-primary)" stroke="var(--color-surface)" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-            ) : (
-              <circle key={l.id} cx={x(i)} cy={y(l.match)} r={4.5} fill="var(--color-surface)" stroke="var(--color-ink-2)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-            );
-          })}
-        </svg>
+        </span>
+        <div
+          className="relative"
+          style={{ height: ROW_H * MATCH_ORDER.length }}
+          role="img"
+          aria-label={`Self-reported meal logs, oldest to newest: ${logs.map((l) => `${shortDate(l.eatenAt)} ${l.slot}, ${LOG_MATCH_LABEL[l.match].toLowerCase()}`).join("; ")}`}
+        >
+          {MATCH_ORDER.map((m) => (
+            <span key={m} aria-hidden="true" className="absolute inset-x-0 h-px -translate-y-1/2 bg-line-strong" style={{ top: rowY(m) }} />
+          ))}
+          {logs.map((l, i) => (
+            <span
+              key={l.id}
+              aria-hidden="true"
+              className={
+                i === logs.length - 1
+                  ? "absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-2 ring-surface"
+                  : "absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-ink-2 bg-surface"
+              }
+              style={{ left: left(frac(i)), top: rowY(l.match) }}
+            />
+          ))}
+        </div>
+        <div className="relative col-start-2 mt-1 h-4 text-[11px] leading-4 text-muted" aria-hidden="true">
+          {shown.map((d) => (
+            <span key={d.f} className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: left(d.f) }}>
+              {d.text}
+            </span>
+          ))}
+        </div>
       </div>
       <figcaption className="mt-2 text-[11px] leading-snug text-muted">
         Self-reported · {pluralize(logs.length, "meal")} logged {range}: {breakdown}

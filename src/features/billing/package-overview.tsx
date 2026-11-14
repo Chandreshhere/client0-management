@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Warning } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { formatDate, pluralize } from "@/lib/format";
@@ -10,6 +10,7 @@ import { FitBubbles } from "@/features/settings/viz";
 import { addDays, TODAY_KEY } from "@/features/settings/time";
 import type { PackageRow } from "./data";
 import { healthOf, isLive, isLow, pace, runways, type Runway } from "./package-insights";
+import { BUBBLE_AIR } from "./overview";
 
 /**
  * Packages overview (refs 5 & 6): a cobalt focal card with credits still to use per active package
@@ -55,6 +56,7 @@ export function CreditsFocal({ packages, onFocusPackage, onShowAttention }: { pa
       {live.length ? (
         <div className="px-2">
           <FitBubbles
+            className={BUBBLE_AIR}
             title="Credits left per active package"
             height={196}
             onSelect={onFocusPackage}
@@ -117,13 +119,55 @@ function useAxis(runs: Runway[]) {
   return { end, ticks, at: (d: number) => `${(Math.max(0, Math.min(end, d)) / end) * 100}%` };
 }
 
+/** Rendered width of an element (0 until measured on the client). */
+function useWidth<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setWidth(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width] as const;
+}
+
+/** Widest axis label at 11px ("13 Mar", "Today") with a little air, and the minimum gap between labels. */
+const TICK_LABEL_W = 40;
+const TICK_GAP = 8;
+
+/**
+ * Which ticks get a date label at this axis width: the first ("Today", left-aligned) and the last
+ * (right-aligned) always; a middle tick only if its centred label clears both its labelled
+ * neighbour and the last label. Gridlines are drawn for every tick regardless.
+ */
+function labelledTicks(ticks: number[], end: number, width: number) {
+  const n = ticks.length - 1;
+  if (!width || n < 1) return new Set([ticks[0], ticks[n]]);
+  const x = (t: number) => (t / end) * width;
+  const lastLeft = x(ticks[n]) - TICK_LABEL_W;
+  const keep = new Set([ticks[0], ticks[n]]);
+  let right = x(ticks[0]) + TICK_LABEL_W;
+  for (let i = 1; i < n; i++) {
+    const l = x(ticks[i]) - TICK_LABEL_W / 2, r = x(ticks[i]) + TICK_LABEL_W / 2;
+    if (l >= right + TICK_GAP && r <= lastLeft - TICK_GAP) {
+      keep.add(ticks[i]);
+      right = r;
+    }
+  }
+  return keep;
+}
+
 export function ExpiryRunway({ packages, onFocusPackage }: { packages: PackageRow[]; onFocusPackage: (key: string) => void }) {
   const runs = useMemo(() => runways(packages), [packages]);
-  const { ticks, at } = useAxis(runs);
+  const { end, ticks, at } = useAxis(runs);
+  const [axisRef, axisWidth] = useWidth<HTMLDivElement>();
+  const labelled = labelledTicks(ticks, end, axisWidth);
   const risky = runs.filter((r) => r.atRisk);
 
   return (
-    <section aria-labelledby="runway-title" className="flex flex-col gap-6 rounded-card bg-surface p-6">
+    <section aria-labelledby="runway-title" className="flex flex-col gap-6 self-start rounded-card bg-surface p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 id="runway-title" className="text-lg font-normal tracking-[-0.01em] text-ink">
@@ -142,12 +186,15 @@ export function ExpiryRunway({ packages, onFocusPackage }: { packages: PackageRo
           {/* axis (desktop) */}
           <div className="hidden grid-cols-[176px_minmax(0,1fr)_148px] gap-4 md:grid" aria-hidden="true">
             <span />
-            <div className="relative h-4 text-[11px] text-muted tabular">
-              {ticks.map((t, i) => (
-                <span key={t} className={cn("absolute whitespace-nowrap", i === 0 ? "" : i === ticks.length - 1 ? "-translate-x-full" : "-translate-x-1/2")} style={{ left: at(t) }}>
-                  {t === 0 ? "Today" : shortDay(addDays(TODAY_KEY, t))}
-                </span>
-              ))}
+            {/* Labels that would collide at this width are skipped ("11 Feb13 Mar"); their gridlines stay. */}
+            <div ref={axisRef} className="relative h-4 text-[11px] text-muted tabular">
+              {ticks.map((t, i) =>
+                labelled.has(t) ? (
+                  <span key={t} className={cn("absolute whitespace-nowrap", i === 0 ? "" : i === ticks.length - 1 ? "-translate-x-full" : "-translate-x-1/2")} style={{ left: at(t) }}>
+                    {t === 0 ? "Today" : shortDay(addDays(TODAY_KEY, t))}
+                  </span>
+                ) : null,
+              )}
             </div>
             <span className="text-right text-[11px] text-muted">Pace needed · plan</span>
           </div>

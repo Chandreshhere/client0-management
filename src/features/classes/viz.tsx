@@ -83,19 +83,36 @@ export function AttendanceChart({ s, classes, highlightId, height = 200, emptyTe
   const counts = sessions.map((c) => attendanceCounts(s, c));
   const values = ATT_SERIES.map((ser) => counts.map((n) => n[ser.id]));
   const hi = sessions.findIndex((c) => c.id === highlightId);
+  const lit = hi >= 0 ? hi : sessions.length - 1;
+  const n = sessions.length;
+  // "Mo 12:00" under every bar collides ("Mo 12:00Mo 17:30"), so the day is named once, on its
+  // first session, and later sessions that day show the time only: "Mo 7:30 · 12:00 · 17:30 · Tu 9:00".
+  const ticks = sessions.map((c, i) => (i > 0 && sessions[i - 1].start.slice(0, 10) === c.start.slice(0, 10) ? formatTime(c.start).replace(/^0/, "") : sessionLabel(c, true)));
   return (
     <div className={className}>
       <div className="scrollbar-none -mx-1 overflow-x-auto px-1">
-        <div style={{ minWidth: Math.max(0, sessions.length * 52) }}>
+        {/* The kit chart's own x labels are hidden and redrawn below at its bar centres (plot inset: 36px left, 8px right). */}
+        <div className="relative [&_svg_text[text-anchor=middle]]:hidden" style={{ minWidth: Math.max(0, n * 48) }}>
           <BarChart
-            categories={sessions.map((c) => sessionLabel(c, true))}
+            categories={sessions.map((c) => sessionLabel(c))}
             series={ATT_SERIES}
             values={values}
             height={height}
-            highlight={hi >= 0 ? hi : sessions.length - 1}
+            highlight={lit}
             formatY={(v) => String(Math.round(v))}
             ariaLabel={`Attendance per session: ${sessions.map((c, i) => `${sessionLabel(c)} ${c.title} — ${counts[i].present} present, ${counts[i].late} late, ${counts[i].absent} absent, ${counts[i].released} cancelled or rescheduled`).join("; ")}`}
           />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-7">
+            {ticks.map((t, i) => (
+              <span
+                key={sessions[i].id}
+                className={cn("absolute top-2.5 -translate-x-1/2 whitespace-nowrap text-[11px] leading-none tabular", i === lit ? "font-medium text-ink" : "text-muted")}
+                style={{ left: `calc(36px + (100% - 44px) * ${(i + 0.5) / n})` }}
+              >
+                {t}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
       <details className="group mt-3 text-sm">

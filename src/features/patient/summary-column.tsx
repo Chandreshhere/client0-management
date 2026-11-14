@@ -50,9 +50,9 @@ export function SummaryColumn({
       </Group>
 
       {/* Allergies + care plan */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-card bg-surface p-4">
-          <div className="flex items-center gap-2 text-sm text-ink">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-card bg-surface px-3 py-4">
+          <div className="flex items-center gap-2 whitespace-nowrap text-sm text-ink">
             <Virus size={18} className="text-ink-2" aria-hidden="true" />
             Allergies
           </div>
@@ -67,8 +67,8 @@ export function SummaryColumn({
             <p className="mt-3 text-xs leading-relaxed text-ink-2">{patient.allergies.join(", ")}</p>
           )}
         </div>
-        <button type="button" onClick={onOpenCarePlan} className="group rounded-card bg-surface p-4 text-left transition-colors hover:bg-canvas">
-          <span className="flex items-center gap-2 text-sm text-ink">
+        <button type="button" onClick={onOpenCarePlan} className="group flex flex-col justify-start rounded-card bg-surface px-3 py-4 text-left transition-colors hover:bg-canvas">
+          <span className="flex items-center gap-2 whitespace-nowrap text-sm text-ink">
             <ClipboardText size={18} className="text-ink-2" aria-hidden="true" />
             Care plan
           </span>

@@ -56,7 +56,7 @@ export function RecordsView() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <Suspense fallback={null}>
         <UploadParam onUpload={openUpload} />
       </Suspense>
@@ -170,10 +170,30 @@ export function RecordsView() {
   );
 }
 
+/** Shorter names for record types whose bubble is too small to hold the full label. */
+const SHORT_TYPE_LABEL: Record<string, string> = { Consultation: "Consult", "Clinical note": "Notes", "Vitals & tests": "Vitals", Medication: "Meds", "Lab result": "Labs" };
+const BUBBLE_W = 320;
+const BUBBLE_H = 230;
+
+/**
+ * The shared BubbleChart writes each label inside its bubble at 10px. Mirror its sizing (area ∝ value)
+ * and swap in a short name when the full one would spill past the circle (e.g. "Consultation" on a 2).
+ */
+function fitLabels(items: ReturnType<typeof releasedByType>) {
+  const total = items.reduce((a, i) => a + i.value, 0) || 1;
+  const scale = Math.sqrt((BUBBLE_W * BUBBLE_H * 0.42) / (Math.PI * total));
+  return items.map((it) => {
+    const r = Math.max(14, Math.sqrt(it.value) * scale);
+    const font = Math.min(12, Math.max(10, r * 0.22));
+    const fits = it.label.length * font * 0.5 <= 2 * r - 2;
+    return fits || !SHORT_TYPE_LABEL[it.label] ? it : { ...it, label: SHORT_TYPE_LABEL[it.label] };
+  });
+}
+
 /** Cobalt focal: released records by type for one year (bubble area = count). */
 function TypeBubbles({ year, onYear, systemId, total }: { year: number; onYear: (y: number) => void; systemId: string | null; total: number }) {
   const id = useId();
-  const items = releasedByType(year, systemId ?? undefined).slice(0, 8);
+  const items = fitLabels(releasedByType(year, systemId ?? undefined).slice(0, 8));
   const shown = items.reduce((a, i) => a + i.value, 0);
   const system = SYSTEMS.find((s) => s.id === systemId);
   return (
@@ -206,9 +226,11 @@ function TypeBubbles({ year, onYear, systemId, total }: { year: number; onYear: 
         </div>
       </div>
       <AnimatePresence mode="wait" initial={false}>
-        <motion.div key={`${year}-${systemId ?? "all"}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={spring} className="px-2">
+        {/* flex-1 + centred: the card matches the taller column beside it, so the bubbles take the middle of
+            the spare height rather than leaving it as a blank band above the bottom edge. */}
+        <motion.div key={`${year}-${systemId ?? "all"}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={spring} className="flex flex-1 flex-col justify-center px-2">
           {items.length ? (
-            <BubbleChart title={`Records released to you in ${year}${system ? ` · ${system.area}` : ""}, by type`} items={items} unit="records" height={230} />
+            <BubbleChart title={`Records released to you in ${year}${system ? ` · ${system.area}` : ""}, by type`} items={items} unit="records" height={BUBBLE_H} />
           ) : (
             <p className="flex h-[230px] items-center justify-center text-sm text-white/85">Nothing released for this body system in {year}.</p>
           )}
@@ -265,9 +287,14 @@ function UploadsPanel({ uploads, onUpload }: { uploads: { id: string; title: str
           </AnimatePresence>
         </ul>
       ) : (
-        <div className="flex flex-1 flex-col items-start gap-2 rounded-inner bg-surface p-4">
+        // Stretched to the "your rights" card beside it: a centred empty state, not text in the top corner.
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-inner bg-surface p-6 text-center">
+          <span className="flex size-10 items-center justify-center rounded-full bg-sunken text-ink-2" aria-hidden="true">
+            <FileArrowUp size={18} />
+          </span>
           <p className="text-sm text-ink">No uploads yet</p>
-          <p className="text-xs text-muted">Got a report from another lab or hospital? Upload it with the date of the test — we keep that separate from the upload date.</p>
+          <p className="max-w-[40ch] text-xs text-muted">Got a report from another lab or hospital? Upload it with the date of the test — we keep that separate from the upload date.</p>
+          <p className="text-[11px] text-faint">PDF, JPG or PNG · up to 10 MB</p>
         </div>
       )}
       <p className="px-2 pb-2 text-[11px] text-muted">Demo: files stay in this browser — nothing is uploaded to the clinic.</p>

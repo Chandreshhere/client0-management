@@ -21,6 +21,9 @@ import { MovementPanel } from "./movement";
 import { ReadingsPanel } from "./readings";
 import { LogReadingModal } from "./log-modal";
 
+/** Side column that is shorter than its neighbour: sticky from lg, scrolls inside if the viewport is short. */
+const SIDE_RAIL = "lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100dvh-96px)] lg:overflow-y-auto scrollbar-thin lg:rounded-card";
+
 /**
  * /portal/plan — reference 3 for the patient: the organ of the selected body system (from the
  * record), "My … condition" tiles, the body-condition carousel, then today's plan, medicines,
@@ -37,7 +40,7 @@ export function PlanView() {
   const openLog = (kind: ReadingKind = "bp") => setLog((l) => ({ open: true, kind, nonce: l.nonce + 1 }));
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <Suspense fallback={null}>
         <LogParam onLog={() => openLog("bp")} />
       </Suspense>
@@ -61,7 +64,7 @@ export function PlanView() {
       />
 
       <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.08fr)]">
-        <Reveal index={0}>
+        <Reveal index={0} className="flex">
           <PlanHero system={system} conditionId={conditionId} onSelectCondition={(id) => setConditionBySystem((m) => ({ ...m, [system.id]: id }))} />
         </Reveal>
         <Reveal index={1} className="flex min-w-0 flex-col gap-8">
@@ -82,7 +85,8 @@ export function PlanView() {
         <Reveal index={2}>
           <TodayPanel ticks={state.ticks} readings={state.readings} onLogBp={() => openLog("bp")} />
         </Reveal>
-        <Reveal index={3}>
+        {/* Shorter than the day list beside it: ride along instead of stretching an empty grey group. */}
+        <Reveal index={3} className={SIDE_RAIL}>
           <MedicinesPanel />
         </Reveal>
       </div>
@@ -95,7 +99,7 @@ export function PlanView() {
         <Reveal index={5}>
           <MovementPanel readings={state.readings} />
         </Reveal>
-        <Reveal index={6}>
+        <Reveal index={6} className={SIDE_RAIL}>
           <ReadingsPanel readings={state.readings} onLog={openLog} />
         </Reveal>
       </div>

@@ -50,6 +50,21 @@ export function Reveal({ index = 0, className, children }: { index?: number; cla
   );
 }
 
+/**
+ * Side rail in a three-column dashboard: a shorter column (today's schedule, escalations…) stays in
+ * view while the longer side scrolls, instead of ending early and leaving a blank column. Capped
+ * at the window height; anything taller scrolls inside the rail.
+ * The grid item itself stretches over its rows and an inner box is sticky — Chrome bounds a sticky
+ * grid item by the whole grid, so a sticky item would slide over the next row's card.
+ */
+export function Rail({ index = 0, className, innerClassName, children }: { index?: number; className?: string; innerClassName?: string; children: ReactNode }) {
+  return (
+    <Reveal index={index} className={className}>
+      <div className={cn("scrollbar-thin xl:sticky xl:top-20 xl:max-h-[calc(100dvh-96px)] xl:overflow-y-auto xl:rounded-card", innerClassName)}>{children}</div>
+    </Reveal>
+  );
+}
+
 /** Three-column dashboard grid that collapses to one column on phones. */
 export function DashGrid({ className, ...props }: ComponentProps<"div">) {
   return <div className={cn("grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3", className)} {...props} />;

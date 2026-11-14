@@ -16,6 +16,8 @@ import { ApptStatus, DisciplineDot } from "./ui";
 /** 30 minutes = 64px (8px grid); 15 minutes = 32px. */
 export const ROW = 64;
 const PX = ROW / 30;
+/** Minimum practitioner column width. */
+const COL = 136;
 
 export type GridColumn = { staff: Staff; events: DiaryEvent[]; you: boolean; leave?: string; count: number };
 
@@ -85,9 +87,11 @@ export function TimeGrid({
       ref={scrollRef}
       layoutScroll
       className="scrollbar-thin relative overflow-auto rounded-b-inner"
-      style={{ height: "max(440px, calc(100dvh - 344px))" }}
+      style={{ height: "max(440px, calc(100dvh - 296px))" }}
     >
-      <div className="relative" style={{ minWidth: 48 + columns.length * 148 }}>
+      {/* 136px tracks + 4px gaps: a full seven-person day fits 1366px with the sidebar open, so the
+          last column is no longer cut at the scroller's edge mid-word */}
+      <div className="relative" style={{ minWidth: 48 + columns.length * (COL + 4) }}>
         {/* header row */}
         <div className="sticky top-0 z-30 flex gap-1 bg-surface pb-1">
           <div className="sticky left-0 z-10 flex w-12 shrink-0 items-end justify-center bg-surface pb-2">
@@ -97,7 +101,8 @@ export function TimeGrid({
             <div
               key={c.staff.id}
               title={`${c.staff.name} · ${c.staff.title} · ${c.count} booked${hoursOn(c.staff.id, date) ? ` · works ${hoursLabel(hoursOn(c.staff.id, date)!)}` : ""}`}
-              className="flex min-w-[144px] flex-1 items-center gap-2 px-1 py-2"
+              className="flex min-w-0 flex-1 items-center gap-2 px-1 py-2"
+              style={{ minWidth: COL }}
             >
               <Avatar src={c.staff.avatar} name={c.staff.name} size="sm" />
               <div className="min-w-0 flex-1">
@@ -208,8 +213,9 @@ const Track = memo(function Track({
 
   return (
     <div
-      className={cn("relative min-w-[144px] flex-1 rounded-inner bg-sunken", ghost !== null && "cursor-pointer")}
+      className={cn("relative min-w-0 flex-1 rounded-inner bg-sunken", ghost !== null && "cursor-pointer")}
       style={{
+        minWidth: COL,
         height,
         backgroundImage: "linear-gradient(to bottom, var(--color-line-strong) 0 1px, transparent 1px), linear-gradient(to bottom, rgb(255 255 255 / 0.6) 0 1px, transparent 1px)",
         backgroundSize: `100% ${ROW * 2}px, 100% ${ROW}px`,
@@ -315,7 +321,12 @@ const Block = memo(function Block({
   const title = nameOf(ev);
   const enrolled = cls ? cls.enrolled.filter((e) => e.attendance !== "cancelled").length : 0;
   const sub = cls ? `${enrolled} of ${cls.capacity} enrolled` : privacy ? DISCIPLINE_LABEL[ev.discipline] : b?.service;
+  // Card tiers by height (px): < 44 one line; < 60 title + time row; < 72 all three rows packed
+  // (60px = 8 padding + 16 + 16 + 20, no gaps); taller cards get the roomier layout. Every row is
+  // shrink-0 so a short card never squeezes a line below its 16px leading (that clipped descenders).
   const tiny = height < 44;
+  const showSub = !!sub && height >= 60;
+  const tight = height < 72;
   const label = [title, privacy && !cls ? null : sub, rangeLabel(ev.start, ev.end), ev.room, status ? APPOINTMENT_STATUS_LABEL[status] : "Class", double ? "overlaps another booking" : null]
     .filter(Boolean)
     .join(", ");
@@ -336,7 +347,8 @@ const Block = memo(function Block({
             type="button"
             aria-label={label}
             className={cn(
-              "relative flex size-full flex-col overflow-hidden rounded-[12px] py-1.5 pl-3 pr-2 text-left outline-none",
+              "relative flex size-full min-w-0 flex-col overflow-hidden rounded-[12px] pl-3 pr-2 text-left outline-none",
+              !tiny && tight ? "py-1" : "py-1.5",
               "transition-[transform,box-shadow,background-color] duration-300 [transition-timing-function:var(--ease-spring)]",
               "hover:-translate-y-0.5 hover:shadow-lift focus-visible:shadow-[inset_0_0_0_2px_var(--color-primary)]",
               inactive ? "bg-hatch bg-surface/60 text-muted" : done ? "bg-surface/75 text-ink-2" : "bg-surface text-ink",
@@ -346,16 +358,16 @@ const Block = memo(function Block({
           >
             <span aria-hidden="true" className="absolute bottom-1.5 left-1 top-1.5 w-[3px] rounded-full" style={{ background: DISCIPLINE_COLOR[ev.discipline], opacity: inactive ? 0.35 : done ? 0.6 : 1 }} />
             {tiny ? (
-              <span className="flex min-w-0 items-center gap-1.5 text-xs leading-4">
+              <span className="flex min-w-0 shrink-0 items-center gap-1.5 text-xs leading-4">
                 <span className="shrink-0 font-mono text-[11px] text-muted">{hhmm(ev.start)}</span>
-                <span className={cn("truncate font-medium", inactive && "line-through")}>{title}</span>
+                <span className={cn("min-w-0 truncate font-medium", inactive && "line-through")}>{title}</span>
                 {status && status !== "booked" ? <StatusDot status={status} /> : null}
               </span>
             ) : (
               <>
-                <span className={cn("truncate text-[13px] font-medium leading-4", inactive && "line-through decoration-1")}>{title}</span>
-                {sub ? <span className="mt-0.5 truncate text-xs leading-4 text-muted">{sub}</span> : null}
-                <span className="mt-auto flex min-w-0 items-center gap-1.5 pt-0.5">
+                <span className={cn("block min-w-0 shrink-0 truncate text-[13px] font-medium leading-4", inactive && "line-through decoration-1")}>{title}</span>
+                {showSub ? <span className={cn("block min-w-0 shrink-0 truncate text-xs leading-4 text-muted", !tight && "mt-0.5")}>{sub}</span> : null}
+                <span className={cn("mt-auto flex min-w-0 shrink-0 items-center gap-1.5", !tight && "pt-0.5")}>
                   <span className="shrink-0 font-mono text-[11px] leading-4 text-muted">{hhmm(ev.start)}</span>
                   {double ? <Warning size={12} className="shrink-0 text-warning" aria-hidden="true" /> : null}
                   {status && status !== "booked" ? <ApptStatus status={status} className="ml-auto h-5 min-w-0 shrink px-2 text-[11px]" /> : null}

@@ -172,6 +172,25 @@ export function TrendChart({
                   ),
                 ),
           )}
+          {/* The latest reading is repainted on top, matching the kit's end mark (r 4 + 2px stroke):
+              a reading a few days earlier sits only px away and its ring otherwise ate the end mark
+              into a crescent at the plot's right edge. */}
+          {series.map((s) => {
+            const p = s.points[s.points.length - 1];
+            if (!p) return null;
+            return (
+              <span
+                key={`${s.id}-end`}
+                className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
+                style={{
+                  left: xOf(new Date(p.x).getTime()),
+                  top: yOf(p.y),
+                  borderColor: p.hollow ? s.color : "var(--color-surface)",
+                  background: p.hollow ? "var(--color-surface)" : s.color,
+                }}
+              />
+            );
+          })}
         </div>
       ) : null}
     </div>

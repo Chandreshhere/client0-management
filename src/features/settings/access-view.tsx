@@ -40,11 +40,12 @@ function Glyph({ level, locked }: { level: Level; locked?: boolean }) {
 function Cell({ grant }: { grant: Grant }) {
   const text = grant.locked ? grant.scope ?? "Can't self-grant" : grant.scope ?? LEVEL_LABEL[grant.level];
   const body = (
-    <span className={cn("inline-flex max-w-full items-start gap-2 text-left", grant.level === "none" && !grant.locked ? "text-faint" : "text-ink-2")}>
-      <span className="mt-[3px]">
+    <span className={cn("flex max-w-full items-start gap-2 text-left", grant.level === "none" && !grant.locked ? "text-faint" : "text-ink-2")}>
+      {/* glyph box is one text line tall, so the glyph centres on the first line however the label wraps */}
+      <span className="flex h-4 w-3.5 shrink-0 items-center justify-center">
         <Glyph level={grant.level} locked={grant.locked} />
       </span>
-      <span className="min-w-0 text-xs leading-snug">{grant.level === "none" && !grant.locked ? "No access" : text}</span>
+      <span className="min-w-0 text-xs leading-4 [overflow-wrap:anywhere]">{grant.level === "none" && !grant.locked ? "No access" : text}</span>
     </span>
   );
   const why = grant.why ?? (grant.level === "none" ? "Refused — not granted to this role (deny by default)." : `${LEVEL_LABEL[grant.level]}${grant.scope ? ` · ${grant.scope}` : ""}`);
@@ -161,61 +162,65 @@ export function AccessView() {
             </li>
           </ul>
         </div>
-        <TableCard minWidth={1120}>
-          <table className="w-full table-fixed text-sm">
-            <caption className="sr-only">Permissions by role</caption>
-            <colgroup>
-              <col className="w-[220px]" />
-              {MATRIX_ROLES.map((r) => (
-                <col key={r} />
-              ))}
-            </colgroup>
-            <thead>
-              <tr className="text-left align-bottom">
-                <th scope="col" className="sticky left-0 z-[1] bg-surface py-4 pl-6 pr-3 text-xs font-normal text-muted">
-                  Permission
-                </th>
+        {/* Fits a 944px card (1280px window with the sidebar open); narrower than that it scrolls sideways. */}
+        <div className="@container">
+          <TableCard minWidth={944}>
+            <table className="w-full table-fixed text-sm">
+              <caption className="sr-only">Permissions by role</caption>
+              <colgroup>
+                <col className="w-[192px] @[1040px]:w-[224px]" />
                 {MATRIX_ROLES.map((r) => (
-                  <th key={r} scope="col" className={cn("px-3 py-4 font-normal", r === role && "bg-sunken/70")}>
-                    <span className="block text-sm text-ink">{ROLE_LABEL(r)}</span>
-                    <span className="block text-xs text-muted">
-                      {r === "patient" ? pluralize(ROLE_COUNT(r), "patient") : pluralize(ROLE_COUNT(r), "person", "people")}
-                      {r === role ? " · you" : ""}
-                    </span>
-                  </th>
+                  <col key={r} />
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {PERMISSION_GROUPS.map((g) => (
-                <Fragment key={g}>
-                  <tr className="border-t border-line bg-canvas/60">
-                    <th scope="colgroup" colSpan={MATRIX_ROLES.length + 1} className="sticky left-0 py-2 pl-6 text-left text-xs font-normal text-muted">
-                      {g}
-                      {g === "Patient record" ? " · clinical content marked" : ""}
+              </colgroup>
+              <thead>
+                <tr className="text-left align-bottom">
+                  <th scope="col" className="sticky left-0 z-[1] bg-surface py-4 pl-6 pr-3 text-xs font-normal text-muted">
+                    Permission
+                  </th>
+                  {MATRIX_ROLES.map((r) => (
+                    <th key={r} scope="col" className={cn("px-2 py-4 font-normal", r === role && "bg-sunken/70")}>
+                      <span className="block text-sm text-ink">{ROLE_LABEL(r)}</span>
+                      <span className="block text-xs text-muted">
+                        {r === "patient" ? pluralize(ROLE_COUNT(r), "patient") : pluralize(ROLE_COUNT(r), "person", "people")}
+                        {r === role ? " · you" : ""}
+                      </span>
                     </th>
-                  </tr>
-                  {PERMISSIONS.filter((p) => p.group === g).map((p) => (
-                    <tr key={p.id} className="border-t border-line align-top">
-                      <th scope="row" className="sticky left-0 z-[1] bg-surface py-3 pl-6 pr-3 text-left font-normal">
-                        <span className="flex items-center gap-2 text-sm text-ink">
-                          {p.label}
-                          {p.clinical ? <span className="rounded-full bg-sunken px-1.5 text-[11px] text-ink-2">clinical</span> : null}
-                        </span>
-                        <span className="mt-0.5 block text-xs text-muted">{p.description}</span>
-                      </th>
-                      {MATRIX_ROLES.map((r) => (
-                        <td key={r} className={cn("px-3 py-3", r === role && "bg-sunken/70")}>
-                          <Cell grant={p.grants[r]} />
-                        </td>
-                      ))}
-                    </tr>
                   ))}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </TableCard>
+                </tr>
+              </thead>
+              <tbody>
+                {PERMISSION_GROUPS.map((g) => (
+                  <Fragment key={g}>
+                    <tr className="border-t border-line bg-canvas/60">
+                      <th scope="colgroup" colSpan={MATRIX_ROLES.length + 1} className="sticky left-0 py-2 pl-6 text-left text-xs font-normal text-muted">
+                        {g}
+                        {g === "Patient record" ? " · clinical content marked" : ""}
+                      </th>
+                    </tr>
+                    {PERMISSIONS.filter((p) => p.group === g).map((p) => (
+                      <tr key={p.id} className="border-t border-line align-top">
+                        <th scope="row" className="sticky left-0 z-[1] bg-surface py-3 pl-6 pr-3 text-left font-normal">
+                          {/* the "clinical" tag always sits at the top right of the title, however the title wraps */}
+                          <span className="flex items-start justify-between gap-2 text-sm text-ink">
+                            <span className="min-w-0">{p.label}</span>
+                            {p.clinical ? <span className="mt-0.5 shrink-0 rounded-full bg-sunken px-1.5 text-[11px] leading-4 text-ink-2">clinical</span> : null}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-muted">{p.description}</span>
+                        </th>
+                        {MATRIX_ROLES.map((r) => (
+                          <td key={r} className={cn("px-2 py-3", r === role && "bg-sunken/70")}>
+                            <Cell grant={p.grants[r]} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </TableCard>
+        </div>
       </section>
 
       <section aria-labelledby="review-title" className="flex flex-col gap-4">

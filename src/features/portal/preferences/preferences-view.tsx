@@ -91,186 +91,187 @@ export function PreferencesView() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <Reveal index={0}>
-          <Panel icon={<ChatCircleDots />} title="How we contact you" subtitle="Choose channels for each kind of message" className="h-full">
-            <div className="grid grid-cols-1 gap-4 rounded-inner bg-surface p-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <span className="text-sm text-ink">Mobile</span>
-                <span className="flex h-10 items-center rounded-control bg-sunken px-4 text-sm text-ink-2 tabular">{ME.phone}</span>
-                <span className="text-xs text-muted">To change it, ask the front desk — we verify new numbers.</span>
-              </div>
-              <Field label="Email" optional error={emailError ?? undefined} hint={prefs.email ? undefined : "Add one to get receipts and plan updates by email"}>
-                {(f) => (
-                  <Input
-                    {...f}
-                    type="email"
-                    autoComplete="email"
-                    value={prefs.email}
-                    onChange={(e) => {
-                      setEmailError(null);
-                      change((p) => ({ ...p, email: e.target.value.trim() }));
-                    }}
-                    onBlur={() => setEmailError(prefs.email && !EMAIL_RE.test(prefs.email) ? "Check the email address — or leave it empty" : null)}
-                    placeholder="name@example.com"
-                  />
-                )}
-              </Field>
-            </div>
-            <ul className="flex flex-col rounded-inner bg-surface px-4">
-              {TOPICS.map((t, i) => {
-                const options = t.allowed.filter((c) => c !== "email" || (prefs.email && emailOk));
-                const value = prefs.channels[t.id].filter((c) => options.includes(c));
-                return (
-                  <li key={t.id} className={cn("flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between", i > 0 && "border-t border-line")}>
-                    <span className="min-w-0">
-                      <span className="block text-sm text-ink">{t.label}</span>
-                      <span className="block text-xs text-muted">{t.detail}</span>
-                    </span>
-                    <ChipGroup<Channel>
-                      ariaLabel={`Channels for ${t.label.toLowerCase()}`}
-                      variant="dot"
-                      value={value}
-                      onChange={(v) => change((p) => ({ ...p, channels: { ...p.channels, [t.id]: v } }))}
-                      options={options.map((c) => ({ value: c, label: CHANNEL_LABEL[c] }))}
-                      className="shrink-0"
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-            <DemoNote className="px-2 pb-2">Results themselves are never sent by message — only a note that something is ready in your portal.</DemoNote>
-          </Panel>
-        </Reveal>
-
-        <Reveal index={1}>
-          <RemindersPanel prefs={prefs} onChange={change} />
-        </Reveal>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Reveal index={2}>
-          <Panel
-            icon={<UsersThree />}
-            title="People who help with your care"
-            subtitle={`${pluralize(state.caregivers.length, "person", "people")} with access`}
-            action={
-              <Button size="sm" variant="dark" leading={<UserPlus />} onClick={() => setCaregiverOpen((c) => ({ open: true, nonce: c.nonce + 1 }))}>
-                Add
-              </Button>
-            }
-            className="h-full"
-          >
-            {state.caregivers.length ? (
-              <ul className="flex flex-col gap-2">
-                <AnimatePresence initial={false}>
-                  {state.caregivers.map((c) => (
-                    <motion.li key={c.id} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={spring} className="flex flex-col gap-3 rounded-inner bg-surface p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <span className="min-w-0">
-                          <span className="block text-sm text-ink">
-                            {c.name} <span className="text-muted">· {c.relation}</span>
-                          </span>
-                          <span className="block text-xs text-muted">
-                            {c.phone} · since {longDate(c.since)}
-                            {c.until ? ` · until ${longDate(c.until)}` : " · until you remove it"}
-                          </span>
-                          {c.reason ? <span className="mt-1 block text-xs text-ink-2">{c.reason}</span> : null}
-                        </span>
-                        {c.status === "invited" ? <StatusBadge tone="warning">Invited · not sent</StatusBadge> : <StatusBadge tone="success">Active</StatusBadge>}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {(Object.keys(SCOPE_LABEL) as (keyof typeof SCOPE_LABEL)[]).map((s) => {
-                          const on = c.scopes.includes(s);
-                          return (
-                            <span key={s} className={cn("inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-xs", on ? "bg-sunken text-ink" : "text-faint line-through")}>
-                              {on ? <CheckCircle size={14} weight="fill" className="text-success" aria-hidden="true" /> : <X size={14} aria-hidden="true" />}
-                              {SCOPE_LABEL[s].label}
-                              <span className="sr-only">{on ? " — can see" : " — can't see"}</span>
-                            </span>
-                          );
-                        })}
-                        <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setConfirm({ kind: "caregiver", cg: c })}>
-                          Remove access
-                        </Button>
-                      </div>
-                    </motion.li>
-                  ))}
-                </AnimatePresence>
-              </ul>
-            ) : (
-              <p className="rounded-inner bg-surface p-4 text-sm text-muted">Nobody else can see your care. Add a family member or friend to share appointments or your plan.</p>
-            )}
-            <div className="rounded-inner bg-surface p-4">
-              <p className="text-sm text-ink">What they can never do</p>
-              <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-xs text-ink-2 marker:text-faint">
-                <li>See anything you haven&apos;t ticked — consultation notes stay between you and your clinicians</li>
-                <li>Message the clinic as you, or change your plan or bookings</li>
-                <li>Keep access after the end date you chose</li>
-              </ul>
-            </div>
-          </Panel>
-        </Reveal>
-
-        <Reveal index={3}>
-          <Panel icon={<ShieldCheck />} title="Consents" subtitle="What you've agreed to, and when" className="h-full">
-            <ul className="flex flex-col rounded-inner bg-surface px-4">
-              {(Object.keys(CONSENT_INFO) as ConsentId[]).map((id, i) => {
-                const info = CONSENT_INFO[id];
-                const c = prefs.consents[id];
-                const changed = c.given !== state.saved.consents[id].given;
-                const locked = !!info.locked || id === "abha";
-                return (
-                  <li key={id} className={cn("flex items-start gap-4 py-4", i > 0 && "border-t border-line")}>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm text-ink">{info.label}</span>
-                      <span className="block text-xs text-muted">{info.detail}</span>
-                      <span className="mt-1 block text-xs text-ink-2">
-                        {changed
-                          ? `${c.given ? "Given" : "Withdrawn"} just now · not saved yet`
-                          : c.at
-                            ? `${c.given ? "Given" : "Withdrawn"} ${longDate(c.at)} · ${info.source}`
-                            : c.given
-                              ? `${id === "abha" ? "Linked" : "Given"} · date not recorded`
-                              : "Not given"}
-                      </span>
-                      {locked && info.locked ? <span className="mt-1 block text-[11px] text-muted">{info.locked}</span> : null}
-                      {id === "abha" ? <span className="mt-1 block text-[11px] text-muted">Linking and unlinking happens in your ABHA app.</span> : null}
-                    </span>
-                    <Switch
-                      checked={c.given}
-                      disabled={locked}
-                      aria-label={info.label}
-                      onCheckedChange={(v) => {
-                        if (!v && info.withdrawWarning) setConfirm({ kind: "consent", id });
-                        else setConsent(id, v);
+      {/* Two independent stacks (no row alignment), so no panel is stretched to a taller neighbour.
+          On narrower screens the stacks dissolve (contents) and order-* keeps the reading order. */}
+      <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] xl:items-start">
+        <div className="contents xl:flex xl:flex-col xl:gap-4">
+          <Reveal index={0} className="order-1 xl:order-none">
+            <Panel icon={<ChatCircleDots />} title="How we contact you" subtitle="Choose channels for each kind of message">
+              <div className="grid grid-cols-1 gap-4 rounded-inner bg-surface p-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm text-ink">Mobile</span>
+                  <span className="flex h-10 items-center rounded-control bg-sunken px-4 text-sm text-ink-2 tabular">{ME.phone}</span>
+                  <span className="text-xs text-muted">To change it, ask the front desk — we verify new numbers.</span>
+                </div>
+                <Field label="Email" optional error={emailError ?? undefined} hint={prefs.email ? undefined : "Add one to get receipts and plan updates by email"}>
+                  {(f) => (
+                    <Input
+                      {...f}
+                      type="email"
+                      autoComplete="email"
+                      value={prefs.email}
+                      onChange={(e) => {
+                        setEmailError(null);
+                        change((p) => ({ ...p, email: e.target.value.trim() }));
                       }}
-                      className="mt-1"
+                      onBlur={() => setEmailError(prefs.email && !EMAIL_RE.test(prefs.email) ? "Check the email address — or leave it empty" : null)}
+                      placeholder="name@example.com"
                     />
-                  </li>
-                );
-              })}
-            </ul>
-          </Panel>
-        </Reveal>
-      </div>
+                  )}
+                </Field>
+              </div>
+              <ul className="flex flex-col rounded-inner bg-surface px-4">
+                {TOPICS.map((t, i) => {
+                  const options = t.allowed.filter((c) => c !== "email" || (prefs.email && emailOk));
+                  const value = prefs.channels[t.id].filter((c) => options.includes(c));
+                  return (
+                    <li key={t.id} className={cn("flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between", i > 0 && "border-t border-line")}>
+                      <span className="min-w-0">
+                        <span className="block text-sm text-ink">{t.label}</span>
+                        <span className="block text-xs text-muted">{t.detail}</span>
+                      </span>
+                      <ChipGroup<Channel>
+                        ariaLabel={`Channels for ${t.label.toLowerCase()}`}
+                        variant="dot"
+                        value={value}
+                        onChange={(v) => change((p) => ({ ...p, channels: { ...p.channels, [t.id]: v } }))}
+                        options={options.map((c) => ({ value: c, label: CHANNEL_LABEL[c] }))}
+                        className="shrink-0"
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+              <DemoNote className="px-2 pb-2">Results themselves are never sent by message — only a note that something is ready in your portal.</DemoNote>
+            </Panel>
+          </Reveal>
 
-      <Reveal index={4}>
-        <Panel icon={<Translate />} title="Language & reading" subtitle="For messages, reminders and printed plans">
-          <div className="grid grid-cols-1 gap-4 rounded-inner bg-surface p-4 md:grid-cols-2">
-            <Field label="Language" hint="This demo portal itself stays in English.">
-              {(f) => <Select id={f.id} value={prefs.language} onValueChange={(v) => change((p) => ({ ...p, language: v }))} options={LANGUAGES} />}
-            </Field>
-            <div className="flex items-start justify-between gap-4">
-              <span>
-                <span className="block text-sm text-ink">Larger text on printed plans</span>
-                <span className="block text-xs text-muted">Meal and exercise sheets printed at reception use 14 pt type</span>
-              </span>
-              <Switch checked={prefs.largeText} onCheckedChange={(v) => change((p) => ({ ...p, largeText: v }))} aria-label="Larger text on printed plans" className="mt-1" />
-            </div>
-          </div>
-        </Panel>
-      </Reveal>
+          <Reveal index={2} className="order-3 xl:order-none">
+            <Panel
+              icon={<UsersThree />}
+              title="People who help with your care"
+              subtitle={`${pluralize(state.caregivers.length, "person", "people")} with access`}
+              action={
+                <Button size="sm" variant="dark" leading={<UserPlus />} onClick={() => setCaregiverOpen((c) => ({ open: true, nonce: c.nonce + 1 }))}>
+                  Add
+                </Button>
+              }
+            >
+              {state.caregivers.length ? (
+                <ul className="flex flex-col gap-2">
+                  <AnimatePresence initial={false}>
+                    {state.caregivers.map((c) => (
+                      <motion.li key={c.id} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={spring} className="flex flex-col gap-3 rounded-inner bg-surface p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="min-w-0">
+                            <span className="block text-sm text-ink">
+                              {c.name} <span className="text-muted">· {c.relation}</span>
+                            </span>
+                            <span className="block text-xs text-muted">
+                              {c.phone} · since {longDate(c.since)}
+                              {c.until ? ` · until ${longDate(c.until)}` : " · until you remove it"}
+                            </span>
+                            {c.reason ? <span className="mt-1 block text-xs text-ink-2">{c.reason}</span> : null}
+                          </span>
+                          {c.status === "invited" ? <StatusBadge tone="warning">Invited · not sent</StatusBadge> : <StatusBadge tone="success">Active</StatusBadge>}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {(Object.keys(SCOPE_LABEL) as (keyof typeof SCOPE_LABEL)[]).map((s) => {
+                            const on = c.scopes.includes(s);
+                            return (
+                              <span key={s} className={cn("inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-xs", on ? "bg-sunken text-ink" : "text-faint line-through")}>
+                                {on ? <CheckCircle size={14} weight="fill" className="text-success" aria-hidden="true" /> : <X size={14} aria-hidden="true" />}
+                                {SCOPE_LABEL[s].label}
+                                <span className="sr-only">{on ? " — can see" : " — can't see"}</span>
+                              </span>
+                            );
+                          })}
+                          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setConfirm({ kind: "caregiver", cg: c })}>
+                            Remove access
+                          </Button>
+                        </div>
+                      </motion.li>
+                    ))}
+                  </AnimatePresence>
+                </ul>
+              ) : (
+                <p className="rounded-inner bg-surface p-4 text-sm text-muted">Nobody else can see your care. Add a family member or friend to share appointments or your plan.</p>
+              )}
+              <div className="rounded-inner bg-surface p-4">
+                <p className="text-sm text-ink">What they can never do</p>
+                <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-xs text-ink-2 marker:text-faint">
+                  <li>See anything you haven&apos;t ticked — consultation notes stay between you and your clinicians</li>
+                  <li>Message the clinic as you, or change your plan or bookings</li>
+                  <li>Keep access after the end date you chose</li>
+                </ul>
+              </div>
+            </Panel>
+          </Reveal>
+
+          <Reveal index={4} className="order-5 xl:order-none">
+            <Panel icon={<Translate />} title="Language & reading" subtitle="For messages, reminders and printed plans">
+              <div className="grid grid-cols-1 gap-4 rounded-inner bg-surface p-4 md:grid-cols-2">
+                <Field label="Language" hint="This demo portal itself stays in English.">
+                  {(f) => <Select id={f.id} value={prefs.language} onValueChange={(v) => change((p) => ({ ...p, language: v }))} options={LANGUAGES} />}
+                </Field>
+                <div className="flex items-start justify-between gap-4">
+                  <span>
+                    <span className="block text-sm text-ink">Larger text on printed plans</span>
+                    <span className="block text-xs text-muted">Meal and exercise sheets printed at reception use 14 pt type</span>
+                  </span>
+                  <Switch checked={prefs.largeText} onCheckedChange={(v) => change((p) => ({ ...p, largeText: v }))} aria-label="Larger text on printed plans" className="mt-1" />
+                </div>
+              </div>
+            </Panel>
+          </Reveal>
+        </div>
+        <div className="contents xl:flex xl:flex-col xl:gap-4">
+          <Reveal index={1} className="order-2 xl:order-none">
+            <RemindersPanel prefs={prefs} onChange={change} />
+          </Reveal>
+          <Reveal index={3} className="order-4 xl:order-none">
+            <Panel icon={<ShieldCheck />} title="Consents" subtitle="What you've agreed to, and when">
+              <ul className="flex flex-col rounded-inner bg-surface px-4">
+                {(Object.keys(CONSENT_INFO) as ConsentId[]).map((id, i) => {
+                  const info = CONSENT_INFO[id];
+                  const c = prefs.consents[id];
+                  const changed = c.given !== state.saved.consents[id].given;
+                  const locked = !!info.locked || id === "abha";
+                  return (
+                    <li key={id} className={cn("flex items-start gap-4 py-4", i > 0 && "border-t border-line")}>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm text-ink">{info.label}</span>
+                        <span className="block text-xs text-muted">{info.detail}</span>
+                        <span className="mt-1 block text-xs text-ink-2">
+                          {changed
+                            ? `${c.given ? "Given" : "Withdrawn"} just now · not saved yet`
+                            : c.at
+                              ? `${c.given ? "Given" : "Withdrawn"} ${longDate(c.at)} · ${info.source}`
+                              : c.given
+                                ? `${id === "abha" ? "Linked" : "Given"} · date not recorded`
+                                : "Not given"}
+                        </span>
+                        {locked && info.locked ? <span className="mt-1 block text-[11px] text-muted">{info.locked}</span> : null}
+                        {id === "abha" ? <span className="mt-1 block text-[11px] text-muted">Linking and unlinking happens in your ABHA app.</span> : null}
+                      </span>
+                      <Switch
+                        checked={c.given}
+                        disabled={locked}
+                        aria-label={info.label}
+                        onCheckedChange={(v) => {
+                          if (!v && info.withdrawWarning) setConfirm({ kind: "consent", id });
+                          else setConsent(id, v);
+                        }}
+                        className="mt-1"
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </Panel>
+          </Reveal>
+        </div>
+      </div>
 
       <AnimatePresence>
         {dirty ? (
@@ -364,7 +365,7 @@ function RemindersPanel({ prefs, onChange }: { prefs: Prefs; onChange: (fn: (p: 
   const visits = UPCOMING.filter((a) => Date.parse(a.start) > NOW_MS).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 3);
   const channels = prefs.channels.reminders.map((c) => CHANNEL_LABEL[c]).join(" + ");
   return (
-    <Panel icon={<Bell />} title="Reminders" subtitle={channels ? `By ${channels}` : "Reminders are off — no channel chosen"} className="h-full">
+    <Panel icon={<Bell />} title="Reminders" subtitle={channels ? `By ${channels}` : "Reminders are off — no channel chosen"}>
       <div className="flex flex-col gap-4 rounded-inner bg-surface p-4">
         <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none">
           <Segmented<Lead> ariaLabel="Remind me" value={prefs.lead} onChange={(v) => onChange((p) => ({ ...p, lead: v }))} variant="tray" size="sm" items={(Object.keys(LEAD_LABEL) as Lead[]).map((l) => ({ value: l, label: LEAD_LABEL[l] }))} />

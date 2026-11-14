@@ -31,10 +31,15 @@ export function istMinutes(iso: string) {
   return d.getUTCHours() * 60 + d.getUTCMinutes();
 }
 
-export const shortDate = (iso: string) => formatDate(iso, { day: "numeric", month: "short" });
-export const longDate = (iso: string) => formatDate(iso, { day: "numeric", month: "short", year: "numeric" });
+/** en-IN abbreviates September as "Sept"; every other month is three letters, so use "Sep". */
+export const threeLetterMonths = (s: string) => s.replace(/\bSept\b/g, "Sep");
+
+export const shortDate = (iso: string) => threeLetterMonths(formatDate(iso, { day: "numeric", month: "short" }));
+export const longDate = (iso: string) => threeLetterMonths(formatDate(iso, { day: "numeric", month: "short", year: "numeric" }));
 export const weekdayShort = (iso: string) => formatDate(iso, { weekday: "short" });
-export const monthShort = (iso: string) => formatDate(iso, { month: "short" });
+export const monthShort = (iso: string) => threeLetterMonths(formatDate(iso, { month: "short" }));
+/** "Sep" for a "YYYY-MM" month key. */
+export const monthKeyShort = (key: string) => monthShort(`${key}-15T12:00:00+05:30`);
 export const dayOfMonth = (iso: string) => formatDate(iso, { day: "numeric" });
 
 export const hoursUntil = (iso: string) => (Date.parse(iso) - NOW_MS) / 3_600_000;

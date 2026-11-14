@@ -124,7 +124,7 @@ function NotesWorkspace({
         <aside
           aria-label="Patient context"
           className={cn(
-            "scrollbar-thin min-w-0 @[1080px]:sticky @[1080px]:top-[104px] @[1080px]:block @[1080px]:max-h-[calc(100dvh-120px)] @[1080px]:overflow-y-auto @[1080px]:rounded-card @[1080px]:pb-10",
+            "scrollbar-thin min-w-0 @[1080px]:sticky @[1080px]:top-[80px] @[1080px]:block @[1080px]:max-h-[calc(100dvh-96px)] @[1080px]:overflow-y-auto @[1080px]:rounded-card @[1080px]:pb-10",
             // Fade the bottom edge so it reads as a pane that scrolls on its own.
             "@[1080px]:[mask-image:linear-gradient(to_bottom,black_calc(100%-40px),transparent)]",
             pane === "context" ? "block" : "hidden",

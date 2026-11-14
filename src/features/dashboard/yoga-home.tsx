@@ -38,7 +38,7 @@ import { THREADS } from "@/data/records";
 import { ATTENDANCE_LABEL, CLASSES, PACKAGES } from "@/data/programs";
 import type { AttendanceState, YogaClass } from "@/data/types";
 import { NOW_LABEL, NOW_MIN, TODAY_KEY, daysSince, istDayKey, istMinutes, shortDate, untilLabel } from "./data";
-import { DashGrid, DashboardHeader, FocalCard, FocalHead, LockedTile, NowMarker, Panel, PanelEmpty, Reveal, RowLink } from "./ui";
+import { DashGrid, DashboardHeader, FocalCard, FocalHead, LockedTile, NowMarker, Panel, PanelEmpty, Reveal, RowLink, Rail} from "./ui";
 import { WEEK_CLASSES, attendanceBySession, organFor, type AttendanceBucket } from "./derive";
 import { OrganBadge } from "./viz";
 
@@ -98,7 +98,7 @@ export function YogaHome() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <DashboardHeader
         summary={`Studio today: ${pluralize(todayClasses.length, "session")} · ${pluralize(todayClasses.reduce((n, c) => n + issuesFor(c).length, 0), "clearance alert")} · ${pluralize(escalations.length, "escalation")} open`}
         actions={
@@ -243,7 +243,7 @@ export function YogaHome() {
           )}
         </Reveal>
 
-        <Reveal index={3} className="flex flex-col gap-4">
+        <Rail index={3} innerClassName="flex flex-col gap-4">
           <Panel icon={<Siren />} title="Escalations" subtitle={`${pluralize(escalations.length, "concern")} with the care team`} href="/tasks" actionLabel="Open tasks">
             {escalations.length === 0 ? (
               <PanelEmpty icon={<Siren />} title="Nothing escalated" description="Raise a concern and the care team gets a task — you never need to interpret it as a diagnosis." />
@@ -280,7 +280,7 @@ export function YogaHome() {
             )}
           </Panel>
           <MissedSessionsPanel missed={missed} />
-        </Reveal>
+        </Rail>
 
         <Reveal index={4} className="lg:col-span-2 xl:col-span-3">
           <PackagesPanel />

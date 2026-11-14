@@ -26,7 +26,8 @@ import { RecordProvider, useRecord } from "./record-context";
  * Patient workspace overview — the reference dashboard, made functional:
  * summary column · body-system stack with 3D organ · connector threads · year timeline.
  * Container queries pick the layout from the space actually available (sidebar open or not):
- *   ≥1100px  four tracks + threads   ·   ≥760px two columns, timeline below   ·   else stacked list.
+ *   ≥1100px four tracks + threads · ≥940px three tracks + threads (1280–1366 laptops)
+ *   · ≥760px two columns, timeline below · else stacked list.
  */
 export function PatientOverview({ patient, record }: { patient: Patient; record: PatientRecord }) {
   return (
@@ -72,7 +73,8 @@ function OverviewInner({ patient }: { patient: Patient }) {
   }, [width]);
 
   const events = useMemo(() => [...record.events, ...localEvents].sort((a, b) => a.date.localeCompare(b.date)), [record.events, localEvents]);
-  const wide = width >= 1100;
+  // threads need the timeline beside the systems: true from the three-track layout up
+  const wide = width >= 940;
 
   const links = useMemo<Link[]>(() => {
     const inView = (e: CareEvent) => {
@@ -110,7 +112,9 @@ function OverviewInner({ patient }: { patient: Patient }) {
   return (
     <AnchorProvider>
       <div ref={containerRef} className="@container relative">
-        <div className="grid grid-cols-1 gap-6 @[760px]:grid-cols-[minmax(232px,260px)_1fr] @[1100px]:grid-cols-[minmax(232px,256px)_minmax(336px,392px)_minmax(40px,1fr)_minmax(372px,452px)]">
+        {/* 940–1100px (1280–1366 laptops): three columns so the care-map timeline stays beside the
+            body systems instead of dropping below them and leaving the right side empty. */}
+        <div className="grid grid-cols-1 gap-6 @[760px]:grid-cols-[minmax(232px,260px)_1fr] @[940px]:grid-cols-[minmax(232px,248px)_minmax(320px,1fr)_minmax(344px,420px)] @[1100px]:grid-cols-[minmax(232px,256px)_minmax(336px,392px)_minmax(40px,1fr)_minmax(372px,452px)]">
           <div className="order-2 @[760px]:order-1">
             <SummaryColumn
               patient={patient}
@@ -133,10 +137,11 @@ function OverviewInner({ patient }: { patient: Patient }) {
               hoveredCondition={hovered}
               onHoverCondition={setHovered}
               patient={patient}
+              onOpenEvent={setEventId}
             />
           </div>
           <div aria-hidden="true" className="order-3 hidden @[1100px]:block" />
-          <div className="order-3 @[760px]:col-span-2 @[1100px]:order-4 @[1100px]:col-span-1">
+          <div className="order-3 @[760px]:col-span-2 @[940px]:order-4 @[940px]:col-span-1">
             <TimelinePanel
               events={events}
               year={year}

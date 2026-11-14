@@ -6,6 +6,7 @@ import type { Discipline } from "@/data/types";
 import { BRANCHES, STAFF } from "@/data/staff";
 import { DISCIPLINE_LABEL } from "@/data/appointments";
 import { pluralize } from "@/lib/format";
+import { cn } from "@/lib/cn";
 import { BarChart, SegmentedBar } from "@/components/charts/bar-chart";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -115,8 +116,9 @@ function TeamWorkspace({ canManage }: { canManage: boolean }) {
         <LoadCard deactivated={state.deactivated} onOpenStaff={setOpenId} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <section aria-labelledby="duty-title" className="flex flex-col gap-4 rounded-card bg-surface p-6 md:col-span-2 xl:col-span-1">
+      {/* Seats is admin-only: without it the row has two cards, so it is two equal columns rather than three with one left empty. */}
+      <div className={cn("grid grid-cols-1 gap-4 md:grid-cols-2", canManage && "xl:grid-cols-3")}>
+        <section aria-labelledby="duty-title" className={cn("flex flex-col gap-4 rounded-card bg-surface p-6", canManage && "md:col-span-2 xl:col-span-1")}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 id="duty-title" className="text-xs text-muted">Staff on duty by hour · today</h2>

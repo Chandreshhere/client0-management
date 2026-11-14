@@ -60,7 +60,7 @@ export function ClassesWeek() {
   const lastEnded = [...visible].reverse().find((c) => phaseOf(s, c) === "ended");
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <PageHeader
         title="Classes this week"
         description="Group classes and one-to-one sessions, 9–14 Nov. The lesson plan is shared; attendance, precautions, observations and packages stay individual."
@@ -167,7 +167,8 @@ export function ClassesWeek() {
             <SeatLegend />
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-4 @[640px]:grid-cols-2 @[960px]:grid-cols-3 @[1180px]:grid-cols-6 @[1180px]:gap-2">
+        {/* items-start: each day hugs its sessions instead of stretching to the busiest day as an empty grey block. */}
+        <div className="grid grid-cols-1 items-start gap-4 @[640px]:grid-cols-2 @[960px]:grid-cols-3 @[1180px]:grid-cols-6 @[1180px]:gap-2">
           {days.map(({ day, classes }) => (
             <DayColumn key={day} day={day} classes={classes} s={s} filtered={filters.length > 0} />
           ))}

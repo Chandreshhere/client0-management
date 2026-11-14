@@ -109,7 +109,7 @@ const failed = INVOICES.find((i) => i.status === "failed");
 
 export function AdminHome() {
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <DashboardHeader
         summary="What needs attention in the clinic today?"
         actions={
@@ -531,7 +531,7 @@ function StaffTodayPanel() {
   const shown = all ? ordered : ordered.slice(0, 8);
   const counts = STAFF.reduce<Record<string, number>>((m, s) => ({ ...m, [s.status]: (m[s.status] ?? 0) + 1 }), {});
   return (
-    <Panel icon={<UsersThree />} title="Staff today" subtitle={`${STAFF.length - (counts["on-leave"] ?? 0)} working · ${counts["in-session"] ?? 0} in session · ${counts["on-leave"] ?? 0} on leave`} href="/team" actionLabel="Open team">
+    <Panel icon={<UsersThree />} title="Staff today" subtitle={`${STAFF.length - (counts["on-leave"] ?? 0) - (counts.off ?? 0)} on shift now · ${counts["in-session"] ?? 0} in session · ${counts.off ?? 0} later today · ${counts["on-leave"] ?? 0} on leave`} href="/team" actionLabel="Open team">
       <ul className="flex flex-col rounded-inner bg-surface p-2">
         {shown.map((s) => (
           <li key={s.id} className="flex items-center gap-3 rounded-[12px] px-2 py-2">

@@ -115,16 +115,22 @@ export function PlanOrganCard({ patientId, header, className, heroClassName }: {
 
 const SLOT_ABBR: Record<SlotId, string> = { early: "EM", breakfast: "B", midmorning: "MM", lunch: "L", evening: "E", dinner: "D" };
 
-/** Kit BarsSpark, one bar per meal slot (spread across the well) with slot initials underneath. */
+/**
+ * Kit BarsSpark, one bar per meal slot (spread across the well) with slot initials underneath.
+ * In a narrow well (half-width tiles) six initials collide, so only the first and last
+ * (EM … D) are labelled; the caption under the tiles spells out the order.
+ */
 function SlotBars({ values, label }: { values: number[]; label: string }) {
   return (
-    <div className="flex h-full flex-col gap-1.5">
+    <div className="@container flex h-full flex-col gap-1.5">
       <div className="min-h-0 flex-1 [&>div]:justify-between [&>div>span]:w-1.5 [&>div>span]:bg-faint">
         <BarsSpark values={values} highlightLast={false} label={label} />
       </div>
       <div className="flex justify-between text-[11px] leading-none text-muted" aria-hidden="true">
-        {SLOTS.map((s) => (
-          <span key={s.id} className="flex w-1.5 justify-center">{SLOT_ABBR[s.id]}</span>
+        {SLOTS.map((s, i) => (
+          <span key={s.id} className={cn("flex w-1.5 justify-center", i > 0 && i < SLOTS.length - 1 && "invisible @[112px]:visible")}>
+            {SLOT_ABBR[s.id]}
+          </span>
         ))}
       </div>
     </div>
@@ -199,7 +205,10 @@ export function LogsTile({ logs, patientId, className }: { logs: FoodLog[]; pati
       value={entries.length ? `${entries.length} logged · ${c["as-planned"]} as planned${last ? ` · latest ${last.eatenAt.startsWith("2026-11-13") ? "today" : shortDay(last.eatenAt.slice(0, 10))}` : ""}` : "Nothing logged"}
       chart={
         entries.length ? (
-          <DotsSpark values={buckets.map((b) => b.entries.length)} label={`Self-reported entries per day, ${range}: ${buckets.map((b) => `${shortDay(b.day)} ${b.entries.length}`).join(", ")}`} />
+          // Inset the plot so the first and last dots (centred on the svg edges) are drawn whole.
+          <div className="h-full px-2 [&>svg]:overflow-visible">
+            <DotsSpark values={buckets.map((b) => b.entries.length)} label={`Self-reported entries per day, ${range}: ${buckets.map((b) => `${shortDay(b.day)} ${b.entries.length}`).join(", ")}`} />
+          </div>
         ) : (
           <p className="flex h-full items-center text-xs text-muted">No entries since {shortDay(days[0])}</p>
         )

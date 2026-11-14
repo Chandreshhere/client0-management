@@ -16,7 +16,7 @@ import { MonthStrip } from "@/components/viz/timeline-scrubber";
 import { ScanThumb } from "@/features/patient/scan-thumb";
 import { IMAGING, STATUS_TEXT, SYSTEMS, authorName, labStatus, type ImagingStudy, type LabResult } from "../record";
 import { DatedWell, RangeGauge, StatusLine } from "../viz";
-import { dayOfMonth, monthShort, shortDate, weekdayShort } from "../time";
+import { dayOfMonth, monthShort, shortDate, threeLetterMonths, weekdayShort } from "../time";
 import { PENDING, ROW_KIND_LABEL, plainRange, type RecordRow, type RowKind } from "./data";
 
 const KIND_ICON: Record<RowKind, typeof FileText> = { visit: ClipboardText, letter: FileText, prescription: PillIcon, plan: ClipboardText };
@@ -27,7 +27,7 @@ const PAGE = 8;
 // ---------------------------------------------------------------------------------------------
 
 const monthName = (key: string, month: "short" | "long" = "short") =>
-  new Intl.DateTimeFormat("en-IN", { month, timeZone: "Asia/Kolkata" }).format(new Date(`${key}-15T12:00:00+05:30`));
+  threeLetterMonths(new Intl.DateTimeFormat("en-IN", { month, timeZone: "Asia/Kolkata" }).format(new Date(`${key}-15T12:00:00+05:30`)));
 
 export function SummariesSection({ rows, scope, onOpen }: { rows: RecordRow[]; scope: string; onOpen: (r: RecordRow) => void }) {
   const kinds = (Object.keys(ROW_KIND_LABEL) as RowKind[]).filter((k) => rows.some((r) => r.kind === k));

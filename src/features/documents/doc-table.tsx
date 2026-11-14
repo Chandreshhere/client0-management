@@ -2,6 +2,7 @@
 
 import { IdentificationCard, LockSimple } from "@phosphor-icons/react";
 import type { DocStatus, Role } from "@/data/types";
+import { patientById } from "@/data/patients";
 import { staffById } from "@/data/staff";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
@@ -26,7 +27,7 @@ export const outcomeTone = (o: ReviewOutcome) => ({ normal: "success", "follow-u
 
 /**
  * The intake & review table. Report date and upload date are separate columns — an old report
- * uploaded today must never read as a new result. Below md the rows become stacked cards.
+ * uploaded today must never read as a new result. Below a 960px container the rows become stacked cards.
  */
 export function DocTable({
   docs,
@@ -47,23 +48,31 @@ export function DocTable({
 }) {
   const isPatient = role === "patient";
   const showOutcome = tab === "reviewed" || tab === "filed";
+  // Fixed layout sized from the content (lag pill 125px, longest patient link ~133px, buttons ≤ 112px).
+  // The table appears once its container is 960px wide; Reviewer gets its own column from 1100px
+  // (below that it sits under the due date) and Source from 1240px (below that it leads the upload line).
+  const statusW = isPatient || showOutcome ? "w-[168px]" : "w-[136px]";
+  const actionW = tab === "unclassified" && !isPatient ? "w-[152px]" : "w-[112px]";
 
   return (
-    <>
-      {/* md+: table */}
-      <div className="scrollbar-thin relative hidden overflow-x-auto rounded-card bg-surface md:block">
-        <table className="w-full min-w-[960px] text-sm">
+    <div className="@container">
+      {/* ≥960px container: table */}
+      <div className="scrollbar-thin relative hidden overflow-x-auto rounded-card bg-surface @[960px]:block">
+        <table className="w-full table-fixed text-sm">
           <caption className="sr-only">Documents — {tab === "mine" ? "your documents" : DOC_STATUS_LABEL[tab]}</caption>
           <thead>
             <tr className="text-left text-xs text-muted">
               <th scope="col" className="py-4 pl-6 pr-2 font-normal">Document</th>
-              {!isPatient ? <th scope="col" className="px-2 py-4 font-normal">Patient</th> : null}
-              <th scope="col" className="px-2 py-4 font-normal">Report date</th>
-              <th scope="col" className="px-2 py-4 font-normal">Uploaded</th>
-              <th scope="col" className="px-2 py-4 font-normal">Source</th>
-              <th scope="col" className="px-2 py-4 font-normal">Reviewer</th>
-              <th scope="col" className="px-2 py-4 font-normal">{isPatient ? "Status" : showOutcome ? "Outcome" : "Due"}</th>
-              <th scope="col" className="py-4 pl-2 pr-6 text-right font-normal">
+              {!isPatient ? <th scope="col" className="w-[168px] px-2 py-4 font-normal">Patient</th> : null}
+              <th scope="col" className="w-[144px] px-2 py-4 font-normal">Report date</th>
+              <th scope="col" className="w-[152px] px-2 py-4 font-normal">Uploaded</th>
+              <th scope="col" className="hidden w-[120px] px-2 py-4 font-normal @[1240px]:table-cell">Source</th>
+              <th scope="col" className="hidden w-[160px] px-2 py-4 font-normal @[1100px]:table-cell">Reviewer</th>
+              <th scope="col" className={cn(statusW, "px-2 py-4 font-normal")}>
+                {isPatient ? "Status" : showOutcome ? "Outcome" : "Due"}
+                <span className="@[1100px]:hidden"> · reviewer</span>
+              </th>
+              <th scope="col" className={cn(actionW, "py-4 pl-2 pr-6 text-right font-normal")}>
                 <span className="sr-only">Action</span>
               </th>
             </tr>
@@ -76,20 +85,24 @@ export function DocTable({
               const lag = reportLag(d);
               const due = docDue(d);
               const reviewer = staffById(d.reviewerId ?? undefined);
+              // Upload line without the Source column: "Lab partner · Anand Diagnostics", "Front desk · Sneha
+              // Kulkarni"; just "Patient upload" when the patient uploaded it (their name is in the next column).
+              const uploader = d.uploadedBy.replace(/^Lab partner · /, "");
+              const uploadLine = uploader === d.source || uploader === patientById(d.patientId)?.name ? d.source : `${SOURCE_SHORT[d.source]} · ${uploader}`;
               return (
                 <tr key={d.id} data-doc-id={d.id} className={cn("border-t border-line align-top transition-colors duration-700", flashId === d.id ? "bg-primary-soft" : "hover:bg-canvas/70")}>
                   <td className="py-4 pl-6 pr-2">
-                    <div className="flex min-w-[190px] max-w-[260px] items-start gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
                       <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", access === "restricted" ? "bg-charcoal text-white" : "bg-sunken text-ink-2")}>
                         <TypeIcon size={16} aria-hidden="true" />
                       </span>
                       <div className="min-w-0">
-                        <button type="button" onClick={() => onOpen(d)} className="text-left text-sm text-ink underline-offset-2 hover:underline">
+                        <button type="button" onClick={() => onOpen(d)} className="text-left text-sm text-pretty text-ink underline-offset-2 hover:underline">
                           {displayTitle(d, access)}
                         </button>
                         <p className="mt-0.5 text-xs text-muted">
-                          {d.type} · {d.pages} {d.pages === 1 ? "page" : "pages"}
-                          {d.local ? " · added this session" : ""}
+                          <span className="whitespace-nowrap">{d.type}</span> · <span className="whitespace-nowrap">{d.pages} {d.pages === 1 ? "page" : "pages"}</span>
+                          {d.local ? <span className="whitespace-nowrap"> · added this session</span> : null}
                         </p>
                       </div>
                     </div>
@@ -97,7 +110,7 @@ export function DocTable({
                   {!isPatient ? (
                     <td className="px-2 py-4">
                       {d.patientId ? (
-                        <span className="flex max-w-[160px] flex-col items-start gap-1.5">
+                        <span className="flex max-w-full flex-col items-start gap-1.5">
                           <PersonInline id={d.patientId} link className="max-w-full text-sm" />
                           {access === "restricted" ? null : <OrganTag patientId={d.patientId} className="max-w-full" />}
                         </span>
@@ -111,24 +124,30 @@ export function DocTable({
                   ) : null}
                   <td className="px-2 py-4">
                     <span className="whitespace-nowrap text-ink tabular">{reportDateText(d.reportDate)}</span>
-                    {lag ? <span className="mt-1 flex w-max rounded-full bg-warning-soft px-2 py-0.5 text-[11px] text-warning">{lag.label}</span> : null}
+                    {lag ? <span className="mt-1 flex w-max whitespace-nowrap rounded-full bg-warning-soft px-2 py-0.5 text-[11px] text-warning">{lag.label}</span> : null}
                   </td>
                   <td className="px-2 py-4">
                     <span className="whitespace-nowrap text-ink tabular">{uploadedText(d.uploadedAt)}</span>
-                    <span className="mt-0.5 block max-w-[140px] truncate text-xs text-muted" title={d.uploadedBy}>by {d.uploadedBy}</span>
-                  </td>
-                  <td className="px-2 py-4">
-                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-ink-2" title={d.source}>
-                      <SourceIcon size={16} className="text-muted" aria-hidden="true" />
-                      {SOURCE_SHORT[d.source]}
+                    {/* Without the Source column the upload line names the channel first. */}
+                    <span className="mt-0.5 block truncate text-xs text-muted @[1240px]:hidden" title={`${d.source} · ${d.uploadedBy}`}>
+                      {uploadLine}
+                    </span>
+                    <span className="mt-0.5 hidden truncate text-xs text-muted @[1240px]:block" title={d.uploadedBy}>
+                      by {d.uploadedBy}
                     </span>
                   </td>
-                  <td className="px-2 py-4">
+                  <td className="hidden px-2 py-4 @[1240px]:table-cell">
+                    <span className="inline-flex max-w-full items-center gap-1.5 text-ink-2" title={d.source}>
+                      <SourceIcon size={16} className="shrink-0 text-muted" aria-hidden="true" />
+                      <span className="truncate">{SOURCE_SHORT[d.source]}</span>
+                    </span>
+                  </td>
+                  <td className="hidden px-2 py-4 @[1100px]:table-cell">
                     {reviewer ? (
-                      <span className="flex items-start gap-2 text-ink-2">
+                      <span className="flex min-w-0 items-start gap-2 text-ink-2">
                         <Avatar src={reviewer.avatar} name={reviewer.name} size="xs" />
                         <span className="min-w-0">
-                          <span className="block max-w-[130px] truncate">{reviewer.name}</span>
+                          <span className="block truncate">{reviewer.name}</span>
                           {d.reviewerId === userId ? <span className="block text-xs text-muted">You</span> : null}
                         </span>
                       </span>
@@ -144,6 +163,7 @@ export function DocTable({
                     ) : (
                       <span className={cn("whitespace-nowrap tabular", due.tone === "danger" ? "text-danger" : due.tone === "ink" ? "text-ink" : "text-muted")}>{due.text}</span>
                     )}
+                    <span className="mt-1 block truncate text-xs text-muted @[1100px]:hidden">{reviewer ? (d.reviewerId === userId ? "Assigned to you" : reviewer.name) : "Unassigned"}</span>
                   </td>
                   <td className="py-4 pl-2 pr-6 text-right">
                     <RowAction doc={d} role={role} userId={userId} onOpen={onOpen} onIdentify={onIdentify} />
@@ -155,8 +175,8 @@ export function DocTable({
         </table>
       </div>
 
-      {/* < md: stacked cards */}
-      <ul className="flex flex-col gap-2 md:hidden">
+      {/* < 960px container: stacked cards */}
+      <ul className="flex flex-col gap-2 @[960px]:hidden">
         {docs.map((d) => {
           const access = contentAccess(d, role, userId);
           const TypeIcon = access === "restricted" ? LockSimple : TYPE_ICON[d.type];
@@ -222,7 +242,7 @@ export function DocTable({
           );
         })}
       </ul>
-    </>
+    </div>
   );
 }
 

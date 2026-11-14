@@ -21,6 +21,13 @@ import type { InvoiceView } from "./store";
 
 const SHORT_STATUS: Partial<Record<DisplayStatus, string>> = { failed: "Not confirmed", "partially-paid": "Partially paid" };
 
+/**
+ * The shared packer leaves only ~6 viewBox px between neighbours, so on the cobalt card the white
+ * focal bubble reads as touching (or overlapping) its neighbours. Drawing every circle at 90% of its
+ * packed radius, about its own centre, opens a clear gap; areas stay proportional and labels stay put.
+ */
+export const BUBBLE_AIR = "[&_circle]:origin-center [&_circle]:[transform-box:fill-box] [&_circle]:scale-90";
+
 export function OutstandingFocal({ invoices, onFocusStatus }: { invoices: InvoiceView[]; onFocusStatus: (s: DisplayStatus) => void }) {
   const buckets = useMemo(() => outstandingByStatus(invoices), [invoices]);
   const total = buckets.reduce((s, b) => s + b.amount, 0);
@@ -41,6 +48,7 @@ export function OutstandingFocal({ invoices, onFocusStatus }: { invoices: Invoic
         <>
           <div className="px-2">
             <FitBubbles
+              className={BUBBLE_AIR}
               title="Outstanding balance by status"
               height={220}
               onSelect={(id) => onFocusStatus(id as DisplayStatus)}

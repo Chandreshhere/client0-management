@@ -58,7 +58,7 @@ import {
   type ContactChannel,
   type ContactOutcome,
 } from "./data";
-import { DashGrid, DashboardHeader, FocalCard, FocalHead, Panel, Reveal, StageTrack, StepTrack } from "./ui";
+import { DashGrid, DashboardHeader, FocalCard, FocalHead, Panel, Reveal, StageTrack, StepTrack, Rail} from "./ui";
 import { isOpenReferral, isStuckReferral, referralPipeline } from "./derive";
 import { StageFlow, type FlowStage } from "./viz";
 
@@ -243,7 +243,7 @@ export function CoordinatorHome() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <DashboardHeader
         summary={`${pluralize(STALLED.length, "stalled handoff")} across ${pluralize(stalledPatients, "patient")} · ${overdueCount} overdue · ${pluralize(myOpenTasks, "open task")} of yours`}
         actions={
@@ -269,7 +269,7 @@ export function CoordinatorHome() {
           <StalledCard handled={handled} onAct={act} />
         </Reveal>
 
-        <Reveal index={1} className="flex flex-col gap-4">
+        <Rail index={1} innerClassName="flex flex-col gap-4">
           <Panel
             icon={<PhoneCall />}
             title="Contact attempts"
@@ -309,15 +309,15 @@ export function CoordinatorHome() {
             </ul>
           </Panel>
           <CohortPanel />
-        </Reveal>
+        </Rail>
 
         <Reveal index={2} className="lg:col-span-2">
           <ReferralPipelinePanel />
         </Reveal>
 
-        <Reveal index={3} className="lg:row-span-2">
+        <Rail index={3} className="lg:row-span-2">
           <ProgrammesPanel />
-        </Reveal>
+        </Rail>
 
         <Reveal index={4} className="lg:col-span-2">
           <TasksByOwnerPanel />

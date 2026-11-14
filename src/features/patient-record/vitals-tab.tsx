@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ArrowUpRight, ChartLine, Plus, Table as TableIcon } from "@phosphor-icons/react";
 import type { Patient } from "@/data/types";
 import type { BodySystem } from "@/data/featured";
@@ -171,7 +171,7 @@ function OrganFocus({ patient, record, system, lead, onSystem, switchable }: { p
   const conditions = record.conditions.filter((c) => c.systemId === system.id);
   const latest = lead?.points[lead.points.length - 1];
   return (
-    <section aria-label={`${system.name} system`} className="relative flex flex-col overflow-hidden rounded-card bg-surface p-6 @[1040px]:sticky @[1040px]:top-[104px]">
+    <section aria-label={`${system.name} system`} className="relative flex flex-col overflow-hidden rounded-card bg-surface p-6 @[1040px]:sticky @[1040px]:top-[80px]">
       <p className="text-xs text-muted">
         {patient.name.split(" ")[0]} · {ORGAN_LABEL[system.organ]}
       </p>
@@ -200,7 +200,9 @@ function OrganFocus({ patient, record, system, lead, onSystem, switchable }: { p
             <span className="text-xs text-muted">{lead.unit}</span>
             <StatusText m={lead} className="ml-auto" />
           </p>
-          <p className="text-[11px] text-muted">{lead.targetLabel}</p>
+          <p className="text-[11px] text-muted">
+            <KeepParts text={lead.targetLabel} />
+          </p>
         </GlassCard>
       ) : null}
       {switchable ? (
@@ -230,6 +232,24 @@ function OrganFocus({ patient, record, system, lead, onSystem, switchable }: { p
       ) : null}
     </section>
   );
+}
+
+/**
+ * "Systolic target < 130 · Diastolic target < 80 · Clinic & home" with each part on one line: a
+ * narrow card wraps only between parts (the "·" stays with the part before it), never inside
+ * "< 80".
+ */
+function KeepParts({ text }: { text: string }) {
+  const parts = text.split(" · ");
+  return parts.map((part, i) => (
+    <Fragment key={i}>
+      <span className="whitespace-nowrap">
+        {part}
+        {i < parts.length - 1 ? " ·" : null}
+      </span>
+      {i < parts.length - 1 ? " " : null}
+    </Fragment>
+  ));
 }
 
 function StatusText({ m, className }: { m: VitalMeasure; className?: string }) {
@@ -298,7 +318,7 @@ function MeasureChartCard({ m }: { m: VitalMeasure }) {
         <div className="min-w-0">
           <h3 className="text-lg font-normal tracking-[-0.01em] text-ink">{m.label}</h3>
           <p className="mt-1 text-xs text-muted">
-            {m.targetLabel} · {SOURCE_SHORT[m.source]}
+            <KeepParts text={`${m.targetLabel} · ${SOURCE_SHORT[m.source]}`} />
           </p>
         </div>
         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sunken text-ink-2 [&_svg]:size-[18px]" aria-hidden="true">

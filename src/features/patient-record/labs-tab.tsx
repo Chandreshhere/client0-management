@@ -68,6 +68,9 @@ function pendingCount(g: LabGroup, metaFor: MetaFor, featured: boolean) {
   return keys.size;
 }
 
+/** In the two-column card grids (from 560px), an odd last card spans both columns instead of leaving a hole. */
+const loneLast = (i: number, n: number) => (n > 1 && n % 2 === 1 && i === n - 1 ? "@[560px]:col-span-2" : undefined);
+
 export function LabsTab({ patientId }: { patientId: string }) {
   const patient = patientById(patientId)!;
   const { role } = useRole();
@@ -147,7 +150,7 @@ function LabsBody({ patientId, groups, group, onGroup }: { patientId: string; gr
         <section aria-label={featured ? "Results within range, by panel" : "Results within target, by body system"} className="min-w-0">
           <SectionLabel>{featured ? "Within range · by panel" : "Within target · by body system"}</SectionLabel>
           <div className={cn("grid grid-cols-1 gap-3", groups.length > 1 && "@[560px]:grid-cols-2")}>
-            {groups.map((g) => {
+            {groups.map((g, i) => {
               const share = groupShare(g);
               const s = systemFor(g);
               const open = pendingCount(g, metaFor, featured);
@@ -161,6 +164,7 @@ function LabsBody({ patientId, groups, group, onGroup }: { patientId: string; gr
                   count={open || undefined}
                   active={groups.length > 1 && g.id === group.id}
                   onClick={groups.length > 1 ? () => onGroup(g.id) : undefined}
+                  className={loneLast(i, groups.length)}
                 >
                   <span className="block text-[11px] leading-snug text-muted">
                     {share.within} of {share.total} {share.total === 1 ? "result" : "results"} {g.analytes.every((a) => a.isTarget) ? "on target" : "in range"} · {share.recent ? "last 12 months" : "all on file (none in the last 12 months)"}
@@ -175,14 +179,14 @@ function LabsBody({ patientId, groups, group, onGroup }: { patientId: string; gr
         <section aria-label="Latest result per test" className="min-w-0">
           <SectionLabel>Latest result per test</SectionLabel>
           <div className={cn("grid grid-cols-1 gap-3", cards.length > 1 && "@[560px]:grid-cols-2")}>
-            {cards.map(({ a, g }) => {
+            {cards.map(({ a, g }, i) => {
               const latest = a.points[a.points.length - 1];
               const on = g.id === group.id && a.key === analyte.key;
               const meta = metaFor(a, latest.d, latest.eventId);
               return (
                 <MediaStatCard
                   key={`${g.id}-${a.key}`}
-                  className={cn("transition-shadow duration-200", on && "shadow-[0_0_0_2px_var(--color-canvas),0_0_0_4px_var(--color-ink)]")}
+                  className={cn("transition-shadow duration-200", on && "shadow-[0_0_0_2px_var(--color-canvas),0_0_0_4px_var(--color-ink)]", loneLast(i, cards.length))}
                   value={
                     <>
                       {fmtV(a, latest.v)}

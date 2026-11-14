@@ -247,6 +247,9 @@ export function FlowMap({
         ))}
       </div>
 
+      {/* Once the map is panned, cards slide under the pinned lane labels: fade that edge so a
+          half-hidden card reads as "continues to the left", not as text colliding with a label. */}
+      {rows?.length && pan.x < -8 ? <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 z-[3] w-32 bg-gradient-to-r from-canvas via-canvas/85 to-transparent" /> : null}
       {rows?.map((r) => (
         <div key={r.label} data-flow-ui title={r.hint} className="pointer-events-none absolute left-3 z-[3] -translate-y-1/2 rounded-full bg-canvas/95 px-3 py-1 text-[11px] text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)]" style={{ top: r.y * zoom + pan.y }}>
           {r.label}

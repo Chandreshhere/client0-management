@@ -180,40 +180,46 @@ function Row({ appt, change, actions, past }: { appt: PortalAppt; change?: ApptC
   return (
     <div className="flex items-start gap-4 rounded-inner bg-surface p-4">
       <DateTile iso={appt.start} muted={cancelled} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <p className="text-sm text-ink tabular">
-            {dayLabel(appt.start)} · {formatTime(appt.start)} <span className="text-muted">· {appt.durationMin} min</span>
-          </p>
-          <DisciplineTag discipline={appt.discipline} />
+      {/* Status sits beside the time + title only; the detail lines below run the full row width
+          instead of truncating next to an empty status column. */}
+      <div className="grid min-w-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] md:gap-x-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="text-sm text-ink tabular">
+              {dayLabel(appt.start)} · {formatTime(appt.start)} <span className="text-muted">· {appt.durationMin} min</span>
+            </p>
+            <DisciplineTag discipline={appt.discipline} />
+          </div>
+          <button
+            type="button"
+            onClick={() => actions.details(appt)}
+            className={cn("mt-1 block max-w-full text-left text-base text-ink underline-offset-4 hover:underline sm:truncate", cancelled && "text-muted line-through")}
+          >
+            {appt.service}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => actions.details(appt)}
-          className={cn("mt-1 block max-w-full text-left text-base text-ink underline-offset-4 hover:underline sm:truncate", cancelled && "text-muted line-through")}
-        >
-          {appt.service}
-        </button>
-        <p className="mt-1 text-xs text-muted sm:truncate">
-          {staff?.name}
-          {appt.alsoWith?.length ? ` with ${appt.alsoWith.map((id) => staffById(id)?.name.split(" ")[0]).join(" & ")}` : ""} · {appt.room} · {appt.cost}
-        </p>
-        {appt.pending && appt.status === "booked" && !change ? (
-          <p className="mt-2 flex items-start gap-2 text-xs text-ink-2">
-            <HourglassMedium size={16} className="mt-px shrink-0 text-warning" aria-hidden="true" />
-            <span>
-              {appt.pending.label} · {appt.pending.reply}
-            </span>
-          </p>
-        ) : null}
-        {change ? <p className="mt-2 text-xs text-muted">Your current time stays booked until the clinic confirms — demo, nothing was sent.</p> : null}
-        {appt.requestNote ? <p className="mt-2 text-xs text-muted">Your note: “{appt.requestNote}”</p> : null}
-        <div className="mt-3 md:hidden">
-          <RowStatus appt={appt} status={status} past={past} />
+        <div className="hidden max-w-[280px] md:block">
+          <RowStatus appt={appt} status={status} past={past} align="end" />
         </div>
-      </div>
-      <div className="hidden max-w-[280px] shrink-0 md:block">
-        <RowStatus appt={appt} status={status} past={past} align="end" />
+        <div className="min-w-0 md:col-span-2">
+          <p className="mt-1 text-xs text-muted">
+            {staff?.name}
+            {appt.alsoWith?.length ? ` with ${appt.alsoWith.map((id) => staffById(id)?.name.split(" ")[0]).join(" & ")}` : ""} · {appt.room} · {appt.cost}
+          </p>
+          {appt.pending && appt.status === "booked" && !change ? (
+            <p className="mt-2 flex items-start gap-2 text-xs text-ink-2">
+              <HourglassMedium size={16} className="mt-px shrink-0 text-warning" aria-hidden="true" />
+              <span>
+                {appt.pending.label} · {appt.pending.reply}
+              </span>
+            </p>
+          ) : null}
+          {change ? <p className="mt-2 text-xs text-muted">Your current time stays booked until the clinic confirms — demo, nothing was sent.</p> : null}
+          {appt.requestNote ? <p className="mt-2 text-xs text-muted">Your note: “{appt.requestNote}”</p> : null}
+          <div className="mt-3 md:hidden">
+            <RowStatus appt={appt} status={status} past={past} />
+          </div>
+        </div>
       </div>
       <RowMenu appt={appt} change={change} actions={actions} past={past} />
     </div>

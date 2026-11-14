@@ -31,19 +31,21 @@ export function InvoiceTable({
 }) {
   return (
     <>
-      <div className="scrollbar-thin relative hidden overflow-x-auto rounded-card bg-surface md:block">
-        <table className="w-full min-w-[880px] text-sm">
+      {/* Fixed layout so the table fits its card from ~970px up (narrower: it scrolls). Items is the
+          flexible column and only appears once the card has room for it (container, not viewport, width). */}
+      <div className="@container scrollbar-thin relative hidden overflow-x-auto rounded-card bg-surface md:block">
+        <table className="w-full min-w-[968px] table-fixed text-sm">
           <caption className="sr-only">Invoices</caption>
           <thead>
             <tr className="text-left text-xs text-muted">
-              <th scope="col" className="py-4 pl-6 pr-2 font-normal">Invoice</th>
-              <th scope="col" className="px-2 py-4 font-normal">Patient</th>
-              <th scope="col" className="hidden px-2 py-4 font-normal min-[1360px]:table-cell">Items</th>
-              <th scope="col" className="px-2 py-4 text-right font-normal">Total</th>
-              <th scope="col" className="px-2 py-4 text-right font-normal">Paid</th>
-              <th scope="col" className="py-4 pl-4 pr-2 font-normal">Status</th>
-              <th scope="col" className="px-2 py-4 font-normal">Method</th>
-              <th scope="col" className="py-4 pl-2 pr-6 text-right font-normal">
+              <th scope="col" className="w-[144px] py-4 pl-6 pr-2 font-normal">Invoice</th>
+              <th scope="col" className="w-[184px] px-2 py-4 font-normal">Patient</th>
+              <th scope="col" className="hidden px-2 py-4 font-normal @[1120px]:table-cell">Items</th>
+              <th scope="col" className="w-[80px] px-2 py-4 text-right font-normal">Total</th>
+              <th scope="col" className="w-[80px] px-2 py-4 text-right font-normal">Paid</th>
+              <th scope="col" className="w-[192px] py-4 pl-4 pr-2 font-normal">Status</th>
+              <th scope="col" className="w-[136px] px-2 py-4 font-normal">Method</th>
+              <th scope="col" className="w-[152px] py-4 pl-2 pr-6 text-right font-normal">
                 <span className="sr-only">Action</span>
               </th>
             </tr>
@@ -82,7 +84,7 @@ export function InvoiceTable({
                       <Link
                         href={`/patients/${p.id}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex max-w-[172px] items-center gap-2 text-ink-2 underline-offset-2 hover:text-ink hover:underline"
+                        className="inline-flex max-w-full items-center gap-2 text-ink-2 underline-offset-2 hover:text-ink hover:underline"
                       >
                         <Avatar src={p.avatar} name={p.name} size="xs" />
                         <span className="truncate">{p.name}</span>
@@ -91,8 +93,8 @@ export function InvoiceTable({
                       <span className="text-muted">Unknown patient</span>
                     )}
                   </td>
-                  <td className="hidden px-2 py-4 min-[1360px]:table-cell">
-                    <span className="block max-w-[200px] truncate text-ink-2" title={inv.items.map((i) => i.label).join(", ")}>
+                  <td className="hidden px-2 py-4 @[1120px]:table-cell">
+                    <span className="block truncate text-ink-2" title={inv.items.map((i) => i.label).join(", ")}>
                       {itemsSummary(inv.items)}
                     </span>
                   </td>
@@ -100,11 +102,11 @@ export function InvoiceTable({
                   <td className={cn("whitespace-nowrap px-2 py-4 text-right tabular", inv.paidNow === 0 ? "text-muted" : "text-ink")}>{money(inv.paidNow)}</td>
                   <td className="py-4 pl-4 pr-2">
                     <StatusBadge tone={STATUS_TONE[inv.display]}>{STATUS_LABEL[inv.display]}</StatusBadge>
-                    {inv.display === "failed" ? <span className="mt-1 block max-w-[176px] text-xs text-danger">Not marked paid until the gateway confirms</span> : null}
-                    {inv.manual ? <span className="mt-1 block max-w-[176px] text-xs text-muted">Gateway confirmation not connected</span> : null}
+                    {inv.display === "failed" ? <span className="mt-1 block text-xs text-danger">Not marked paid until the gateway confirms</span> : null}
+                    {inv.manual ? <span className="mt-1 block text-xs text-muted">Gateway confirmation not connected</span> : null}
                     {open && inv.balance > 0 && inv.display !== "failed" && inv.paidNow > 0 ? <span className="mt-1 block text-xs text-muted tabular">{money(inv.balance)} left</span> : null}
                   </td>
-                  <td className="px-2 py-4">
+                  <td className="truncate px-2 py-4">
                     <MethodLabel method={inv.method} />
                   </td>
                   <td className="py-4 pl-2 pr-6 text-right">

@@ -17,11 +17,13 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-wrap items-end justify-between gap-6", className)}>
-      <div className="min-w-0 max-w-[720px]">
-        {eyebrow ? <div className="mb-3 text-sm text-muted">{eyebrow}</div> : null}
-        <h1 className="text-[36px] font-light leading-[1.05] tracking-[-0.028em] text-ink md:text-display">{title}</h1>
-        {description ? <p className="mt-3 max-w-[60ch] text-sm text-muted">{description}</p> : null}
+    // Compact page heading: the content starts high on every page (small label, 30px title,
+    // one summary line, actions on the same row).
+    <div className={cn("flex flex-wrap items-end justify-between gap-x-6 gap-y-3", className)}>
+      <div className="min-w-0 max-w-[880px]">
+        {eyebrow ? <div className="mb-1 text-xs text-muted">{eyebrow}</div> : null}
+        <h1 className="text-[26px] font-light leading-[1.15] tracking-[-0.02em] text-ink md:text-[30px]">{title}</h1>
+        {description ? <p className="mt-1 max-w-[80ch] text-sm text-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
@@ -84,7 +86,8 @@ export function Stat({ label, value, context, icon, className, tone = "surface" 
   }[tone];
   const sub = tone === "primary" || tone === "dark" ? "text-white/75" : "text-muted";
   return (
-    <div className={cn("flex flex-col justify-between gap-6 rounded-card p-6", toneClass, className)}>
+    // Top-aligned: values line up across a row of tiles even when one caption wraps to two lines.
+    <div className={cn("flex flex-col justify-start gap-6 rounded-card p-6", toneClass, className)}>
       <div className={cn("flex items-center justify-between gap-2 text-xs", sub)}>
         <span>{label}</span>
         {icon ? <span className="[&_svg]:size-[18px]">{icon}</span> : null}

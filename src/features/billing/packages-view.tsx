@@ -261,12 +261,14 @@ export function PackagesView() {
                     </span>
                   </div>
                   {organs.length ? (
-                    <ul className="-my-2 -mr-2 flex shrink-0 -space-x-4" aria-label={`Enrolled patients' primary body systems: ${organs.map((o) => `${o.label} (${o.patients.length})`).join(", ")}`}>
+                    // One organ: the 72px badge. Two: smaller badges side by side (not stacked over each
+                    // other), so a long title like "Weight Management" keeps to one line.
+                    <ul className="-my-2 -mr-2 flex shrink-0 gap-2" aria-label={`Enrolled patients' primary body systems: ${organs.map((o) => `${o.label} (${o.patients.length})`).join(", ")}`}>
                       {organs.slice(0, 2).map((o) => (
                         <li key={o.organ}>
                           <Tip label={`${o.label} · ${o.patients.map((p) => p.name).join(", ")}`}>
-                            <span tabIndex={0} className="flex size-[72px] items-center justify-center rounded-full bg-sunken/70 outline-none ring-4 ring-surface focus-visible:ring-primary">
-                              <OrganImage kind={o.organ} className="size-14" />
+                            <span tabIndex={0} className={cn("flex items-center justify-center rounded-full bg-sunken/70 outline-none ring-4 ring-surface focus-visible:ring-primary", organs.length > 1 ? "size-12" : "size-[72px]")}>
+                              <OrganImage kind={o.organ} className={organs.length > 1 ? "size-10" : "size-14"} />
                             </span>
                           </Tip>
                         </li>

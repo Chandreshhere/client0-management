@@ -18,7 +18,7 @@ export function MedicinesPanel() {
   const allergies = ME.allergies;
 
   return (
-    <Panel icon={<PillIcon />} title="Medicines" subtitle={`${doctor?.name} · care plan updated ${shortDate(`${CARE_PLAN.medical.updated}T12:00:00+05:30`)}`} className="h-full">
+    <Panel icon={<PillIcon />} title="Medicines" subtitle={`${doctor?.name} · care plan updated ${shortDate(`${CARE_PLAN.medical.updated}T12:00:00+05:30`)}`}>
       <ul className="flex flex-col gap-2">
         {MEDICINES.map((m) => (
           <li key={m.name} className="flex items-start gap-3 rounded-inner bg-surface p-4">

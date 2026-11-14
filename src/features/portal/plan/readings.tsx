@@ -54,7 +54,6 @@ export function ReadingsPanel({ readings, onLog }: { readings: LoggedReading[]; 
           Log
         </Button>
       }
-      className="h-full"
     >
       <div className="flex flex-col gap-4 rounded-inner bg-surface p-4">
         <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none">

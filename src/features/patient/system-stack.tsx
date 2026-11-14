@@ -11,6 +11,8 @@ import { spring, snappy } from "@/lib/motion";
 import { Tip } from "@/components/ui/tooltip";
 import { useAnchor } from "./connectors";
 import { OrganCanvas } from "./organ-canvas";
+import { EVENT_ICON } from "./event-meta";
+import { formatDate } from "@/lib/format";
 
 /**
  * Centre column of the reference: page title, focal cobalt system card with the 3D organ,
@@ -26,6 +28,7 @@ export function SystemStack({
   hoveredCondition,
   onHoverCondition,
   patient,
+  onOpenEvent,
 }: {
   active: BodySystemId;
   onActivate: (id: BodySystemId) => void;
@@ -35,6 +38,7 @@ export function SystemStack({
   hoveredCondition: string | null;
   onHoverCondition: (id: string | null) => void;
   patient: Patient;
+  onOpenEvent?: (eventId: string) => void;
 }) {
   const { record, systemById, conditionById } = useRecord();
   const sys = systemById(active);
@@ -70,7 +74,8 @@ export function SystemStack({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
               transition={spring}
-              className={cn("absolute left-4 top-[64px] z-[3] max-w-[168px] font-normal leading-[1.1] tracking-[-0.015em]", sys.name.length > 12 ? "text-[21px]" : "text-title")}
+              // wraps before the glass condition card (which starts at 50% of the stack = 78% of this card)
+              className={cn("absolute left-4 top-[64px] z-[3] max-w-[min(168px,calc(78%-24px))] font-normal leading-[1.1] tracking-[-0.015em]", sys.name.length > 12 ? "text-[21px]" : "text-title")}
             >
               {sys.name}
             </motion.h2>
@@ -89,7 +94,7 @@ export function SystemStack({
           </div>
         </div>
         {/* Organ: outside the clipped card so it can overflow under the glass card, like the reference. */}
-        <OrganCanvas live shape={sys.organ} label={`3D illustration of the ${sys.organ} — ${sys.name} system`} className="pointer-events-none absolute left-[9%] top-[54px] z-[2] h-[236px] w-[236px]" />
+        <OrganCanvas shape={sys.organ} label={`3D illustration of the ${sys.organ} — ${sys.name} system`} className="pointer-events-none absolute left-[9%] top-[54px] z-[2] h-[236px] w-[236px] drop-shadow-[0_18px_24px_rgb(0_0_0/0.28)]" />
 
         <FeaturedCondition key={featured.id} conditionId={featured.id} onOpen={onOpenCondition} hovered={hoveredCondition === featured.id} onHover={onHoverCondition} />
 
@@ -104,15 +109,21 @@ export function SystemStack({
         </div>
       </div>
 
-      <LayoutGroup id="systems">
-        <div className="mt-8 flex flex-col gap-4">
-          <AnimatePresence mode="popLayout" initial={false}>
-            {others.map((s) => (
-              <SystemRow key={s.id} system={s} onActivate={onActivate} onOpenCondition={onOpenCondition} onAddEvent={onAddEvent} onOpenRecords={onOpenRecords} hoveredCondition={hoveredCondition} onHoverCondition={onHoverCondition} />
-            ))}
-          </AnimatePresence>
-        </div>
-      </LayoutGroup>
+      {others.length ? (
+        <LayoutGroup id="systems">
+          {/* 16px below the focal card, like the gap between system cards; more only when the
+              secondary condition chips hang below the card (each chip ≈ 40px from top 244px). */}
+          <div className="flex flex-col gap-4" style={{ marginTop: Math.max(0, secondary.length * 40 - 48) - 8 }}>
+            <AnimatePresence mode="popLayout" initial={false}>
+              {others.map((s) => (
+                <SystemRow key={s.id} system={s} onActivate={onActivate} onOpenCondition={onOpenCondition} onAddEvent={onAddEvent} onOpenRecords={onOpenRecords} hoveredCondition={hoveredCondition} onHoverCondition={onHoverCondition} />
+              ))}
+            </AnimatePresence>
+          </div>
+        </LayoutGroup>
+      ) : (
+        <SingleSystemFill system={sys} patient={patient} onOpenEvent={onOpenEvent} gap={Math.max(0, secondary.length * 40 - 48) - 8} />
+      )}
     </div>
   );
 }
@@ -230,5 +241,53 @@ function SystemRow({
         ))}
       </div>
     </motion.div>
+  );
+}
+
+/**
+ * A patient with one body system has no other system cards: instead of an empty column, show
+ * what was recorded most recently for this system (each row opens the event) and say plainly
+ * that nothing else is on record.
+ */
+function SingleSystemFill({ system, patient, onOpenEvent, gap }: { system: BodySystem; patient: Patient; onOpenEvent?: (eventId: string) => void; gap: number }) {
+  const { record } = useRecord();
+  const today = "2026-11-13";
+  const recent = record.events
+    .filter((e) => e.systemId === system.id && e.state !== "scheduled" && e.date <= today)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 4);
+  return (
+    <div className="flex flex-col gap-4" style={{ marginTop: gap }}>
+      {recent.length ? (
+        <section aria-label={`Latest in ${system.name}`} className="rounded-card bg-sunken p-2">
+          <p className="px-2 pb-2 pt-1 text-xs text-muted">Latest in {system.name}</p>
+          <ul className="flex flex-col gap-1">
+            {recent.map((e) => {
+              const Icon = EVENT_ICON[e.type];
+              return (
+                <li key={e.id}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenEvent?.(e.id)}
+                    className="flex w-full items-center gap-3 rounded-inner bg-surface p-3 text-left transition-colors hover:bg-canvas"
+                  >
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sunken text-ink-2" aria-hidden="true">
+                      <Icon size={16} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-ink">{e.title}</span>
+                      <span className="block truncate text-xs text-muted">{formatDate(e.date, { day: "numeric", month: "short" })}{e.source ? ` · ${e.source}` : ""}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+      <p className="rounded-card px-4 py-3 text-xs text-muted shadow-[inset_0_0_0_1px_var(--color-line-strong)]">
+        No other body systems on record for {patient.name.split(" ")[0]}. A condition recorded against another system gets its own card here.
+      </p>
+    </div>
   );
 }

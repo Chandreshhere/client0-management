@@ -56,7 +56,7 @@ export function PatientHome() {
   const pkg = PACKAGES.find((p) => p.patientId === me.id);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <DashboardHeader
         summary={`${next ? `Your ${next.service.split(" · ")[0]} is at ${formatTime(next.start)}` : "No more visits today"} · ${pluralize(mine.length, "appointment")} today · ${me.balanceDue ? `${formatINR(me.balanceDue)} to pay` : "nothing to pay"}`}
         actions={

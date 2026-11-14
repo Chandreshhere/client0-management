@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChatCircleText, EnvelopeSimple, FileText, NotePencil, Printer, WhatsappLogo } from "@phosphor-icons/react";
+import { ChatCircleText, EnvelopeSimple, FileText, LockSimple, NotePencil, Printer, WhatsappLogo } from "@phosphor-icons/react";
 import type { Patient } from "@/data/types";
 import { BRANCHES, staffById } from "@/data/staff";
 import { PATIENTS } from "@/data/patients";
@@ -112,7 +112,9 @@ export function TemplatesView() {
   const { toast } = useToast();
   const templates = useTemplates();
   const clinic = useClinic();
-  const owner = settingsAccess(role, plan).canEditClinic;
+  const access = settingsAccess(role, plan);
+  const owner = access.canEditClinic;
+  const ownerLabel = access.ownerLabel;
   const clinicalEditor = role === "doctor";
   const [id, setId] = useState(templates[0]?.id ?? "");
   const [mode, setMode] = useState<"preview" | "edit">("preview");
@@ -222,20 +224,25 @@ export function TemplatesView() {
                 {t.channel} · {t.purpose} · owner: {t.owner} · edited {whenInline(t.editedAt)} by {staffById(t.editedBy)?.name ?? "the team"}
               </p>
             </div>
-            <Segmented
-              ariaLabel="Template view"
-              size="sm"
-              variant="tray"
-              value={mode}
-              onChange={(v) => {
-                if (v === "edit" && !canEdit) return;
-                setMode(v);
-              }}
-              items={[
-                { value: "preview", label: "Preview" },
-                ...(canEdit ? [{ value: "edit" as const, label: "Edit" }] : []),
-              ]}
-            />
+            {canEdit ? (
+              <Segmented
+                ariaLabel="Template view"
+                size="sm"
+                variant="tray"
+                value={mode}
+                onChange={setMode}
+                items={[
+                  { value: "preview", label: "Preview" },
+                  { value: "edit", label: "Edit" },
+                ]}
+              />
+            ) : (
+              // One option isn't a choice: say what this is instead of showing a one-tab tab bar.
+              <p className="flex h-8 items-center gap-1.5 text-xs text-muted">
+                <LockSimple size={14} aria-hidden="true" />
+                Preview only · edited by {t.clinical ? "the clinical lead" : ownerLabel}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
@@ -278,20 +285,7 @@ export function TemplatesView() {
               ) : (
                 <Preview t={t} parts={parts} />
               )}
-            </div>
-
-            <aside className="flex flex-col gap-4" aria-label="Preview details">
-              <Field label="Preview with" hint={t.clinical ? "Clinical slots stay blank — a clinician fills them in." : "Fields fill from this patient's record."}>
-                {(a) => (
-                  <Select
-                    id={a.id}
-                    ariaLabel="Preview patient"
-                    value={patientId}
-                    onValueChange={setPatientId}
-                    options={SAMPLE_PATIENTS.map((p) => ({ value: p.id, label: p.name, description: p.nextAppointment ? `next ${formatDate(p.nextAppointment, { day: "numeric", month: "short" })}` : p.program ?? "invoice on file" }))}
-                  />
-                )}
-              </Field>
+              {/* Under the message it counts (and the editor): keeps this column level with the details beside it. */}
               {sms ? (
                 <div className="rounded-inner bg-sunken p-4">
                   <p className="text-xs text-muted">If sent as a text</p>
@@ -308,6 +302,20 @@ export function TemplatesView() {
                   </p>
                 </div>
               ) : null}
+            </div>
+
+            <aside className="flex flex-col gap-4" aria-label="Preview details">
+              <Field label="Preview with" hint={t.clinical ? "Clinical slots stay blank — a clinician fills them in." : "Fields fill from this patient's record."}>
+                {(a) => (
+                  <Select
+                    id={a.id}
+                    ariaLabel="Preview patient"
+                    value={patientId}
+                    onValueChange={setPatientId}
+                    options={SAMPLE_PATIENTS.map((p) => ({ value: p.id, label: p.name, description: p.nextAppointment ? `next ${formatDate(p.nextAppointment, { day: "numeric", month: "short" })}` : p.program ?? "invoice on file" }))}
+                  />
+                )}
+              </Field>
               <div className="rounded-inner bg-sunken p-4">
                 <p className="text-xs text-muted">Fields in this template</p>
                 <ul className="mt-2 flex flex-col gap-1.5 text-xs">

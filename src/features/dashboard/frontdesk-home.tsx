@@ -38,7 +38,7 @@ import { INVOICES, INVOICE_STATUS_LABEL, collected } from "@/data/records";
 import { BubbleChart } from "@/components/viz/bubble-chart";
 import type { Appointment, AppointmentStatus } from "@/data/types";
 import { NOW_ISO, NOW_LABEL, NOW_MIN, istMinutes, minutesUntil, shortDate, spanLabel, whenLabel } from "./data";
-import { DashGrid, DashboardHeader, DisciplineDot, FocalCard, FocalHead, NowMarker, Panel, PanelEmpty, Reveal } from "./ui";
+import { DashGrid, DashboardHeader, DisciplineDot, FocalCard, FocalHead, NowMarker, Panel, PanelEmpty, Reveal, Rail} from "./ui";
 import { StageFlow, type FlowStage } from "./viz";
 
 /**
@@ -145,7 +145,7 @@ export function FrontdeskHome() {
   const longest = waiting.reduce<QueueEntry | null>((m, q) => (!m || Date.parse(q.arrivedAt) < Date.parse(m.arrivedAt) ? q : m), null);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <DashboardHeader
         summary={`${pluralize(branchAppointments.length, "appointment")} today · ${waiting.length} waiting · ${pluralize(missingForms.length, "intake form")} missing · ${formatINR(outstanding)} outstanding`}
         actions={
@@ -171,9 +171,9 @@ export function FrontdeskHome() {
           <QueueCard queue={queue} active={active} waitingCount={waiting.length} longest={longest} expected={expected} onAdvance={advance} onArrive={markArrived} nextToken={nextToken} />
         </Reveal>
 
-        <Reveal index={1} className="xl:col-start-3 xl:row-span-4 xl:row-start-1 xl:self-start">
+        <Rail index={1} className="xl:col-start-3 xl:row-span-4 xl:row-start-1">
           <DiaryPanel statusOf={statusOf} />
-        </Reveal>
+        </Rail>
 
         <Reveal index={2}>
           <IntakePanel />
@@ -363,7 +363,10 @@ function queueStages(queue: QueueEntry[]): FlowStage[] {
     return { name: p?.name ?? "Patient", avatar: p?.avatar };
   };
   const waitHint = (list: QueueEntry[]) => (list.length ? `longest ${spanLabel(Math.max(...list.map((q) => NOW_MIN - istMinutes(q.arrivedAt))))}` : "nobody");
-  const done = [...DONE_BEFORE_NOW.map((a) => ({ apptId: a.id, arrivedAt: a.arrivedAt! })), ...at("completed")];
+  // finished visits from the diary plus any completed through the live queue — once each (a visit
+  // with a token is in both lists, which double-counted "Done")
+  const inQueue = new Set(queue.map((q) => q.apptId));
+  const done = [...DONE_BEFORE_NOW.filter((a) => !inQueue.has(a.id)).map((a) => ({ apptId: a.id, arrivedAt: a.arrivedAt! })), ...at("completed")];
   const describe = (label: string, list: { apptId: string }[], extra = "") =>
     `${label}: ${list.length}${list.length ? ` — ${list.map((q) => person(q.apptId).name).join(", ")}` : ""}${extra ? `, ${extra}` : ""}`;
   const arrived = at("arrived");
@@ -654,7 +657,7 @@ function CheckoutPanel({ statusOf }: { statusOf: (a: Appointment) => Appointment
   const invoices = [...openInvoices].filter((i) => i.status !== "failed").sort((a, b) => Number(todayPatients.has(b.patientId)) - Number(todayPatients.has(a.patientId)) || b.total - b.paid - (a.total - a.paid));
 
   return (
-    <Panel icon={<Receipt />} title="Checkout & invoices due" subtitle={`${formatINR(outstanding)} outstanding · ${pluralize(openInvoices.length, "invoice")}`} href="/billing" actionLabel="Open billing">
+    <Panel icon={<Receipt />} title="Checkout & invoices due" subtitle={`${formatINR(outstanding)} outstanding · ${pluralize(openInvoices.length, "invoice")}${invoices.length > 4 ? ` · ${Math.min(4, invoices.length)} shown` : ""}${failedInvoice ? " · 1 failed in Payments" : ""}`} href="/billing" actionLabel="Open billing">
       {finishing.map((a) => {
         const p = patientById(a.patientId);
         const inv = openInvoices.find((i) => i.patientId === a.patientId);

@@ -23,7 +23,7 @@ import { WEEK_APPOINTMENTS } from "@/data/appointments";
 import { TASKS } from "@/data/care";
 import { DOCUMENTS } from "@/data/records";
 import { FEATURES, FEATURE_GROUPS, PLANS, addedFeatures, featureById, monthlyCost, planById, type PlanId } from "@/data/plans";
-import { TODAY, formatDayLabel, formatINR, formatTime } from "@/lib/format";
+import { TODAY, formatDate, formatDayLabel, formatINR, formatTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { useRole } from "@/components/shell/role-context";
 import { LockBadge, priceLine } from "@/components/shell/plan-switcher";
@@ -174,8 +174,10 @@ export function HelpPage() {
       />
 
       {/* Session focal + shortcuts */}
-      <div className="grid grid-cols-1 items-start gap-6 @[960px]:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-        <section aria-labelledby="session-title" className="relative flex min-h-[304px] flex-col overflow-hidden rounded-card bg-primary p-6 text-white">
+      {/* Both cards share the row height: the session card carries a short facts strip so it isn't a
+          blank cobalt block with its buttons floating ~90px under the text. */}
+      <div className="grid grid-cols-1 gap-6 @[960px]:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+        <section aria-labelledby="session-title" className="relative flex flex-col overflow-hidden rounded-card bg-primary p-6 text-white">
           <Rings />
           <span className="relative inline-flex h-8 w-fit items-center rounded-full px-3 text-xs text-white/90 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.35)]">Your demo session</span>
           <div className="relative mt-6 flex items-center gap-4">
@@ -190,6 +192,18 @@ export function HelpPage() {
             </div>
           </div>
           <p className="relative mt-4 max-w-[44ch] text-sm text-white/80">{DEMO_USER[role].description}.</p>
+          <dl className="relative mt-6 grid grid-cols-2 gap-4 border-t border-white/20 pt-4 text-sm">
+            <div>
+              <dt className="text-xs text-white/70">Demo clock</dt>
+              <dd className="mt-0.5">
+                {formatDate(TODAY.toISOString(), { weekday: "short", day: "numeric", month: "short" })} · <span className="whitespace-nowrap">{formatTime(TODAY.toISOString())} IST</span>
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-white/70">Your changes</dt>
+              <dd className="mt-0.5">Kept in this browser only</dd>
+            </div>
+          </dl>
           <div className="relative mt-auto flex flex-wrap gap-2 pt-6">
             <Dropdown>
               <DropdownTrigger asChild>
@@ -222,7 +236,7 @@ export function HelpPage() {
           <ul className="flex flex-col gap-2">
             {SHORTCUTS.map((s) => (
               <li key={s.id}>
-                <Inset className={cn("flex flex-wrap items-center justify-between gap-3 py-3 transition-colors duration-300", pressed === s.id && "bg-primary-soft")}>
+                <Inset className={cn("flex flex-wrap items-center justify-between gap-3 py-2.5 transition-colors duration-300", pressed === s.id && "bg-primary-soft")}>
                   <span className="text-sm text-ink">{s.does}</span>
                   <span className="flex items-center gap-1">
                     {s.keys}
@@ -277,7 +291,8 @@ export function HelpPage() {
                       ))}
                     </p>
                   </div>
-                  <div className="flex items-center justify-between gap-2 px-2 pb-1 pt-3">
+                  {/* fixed height: a badge (24px) and a button (32px) leave the white panel — and its chips — at the same height */}
+                  <div className="flex h-12 items-center justify-between gap-2 px-2 pb-1 pt-3">
                     {current ? (
                       <StatusBadge tone="dark">You are here</StatusBadge>
                     ) : allowed ? (
@@ -300,7 +315,9 @@ export function HelpPage() {
           <li className="@[640px]:col-span-2 @[1040px]:col-span-1">
             <article className="flex h-full flex-col rounded-card bg-surface p-4 shadow-[inset_0_0_0_1px_var(--color-line)]">
               <h3 className="text-sm font-medium text-ink">Where to start</h3>
-              <ul className="mt-3 flex flex-col gap-3 text-sm text-ink-2">
+              {/* xs like the role cards' secondary text: at sm this tile set the row height and left ~75px
+                  above the plan chips of the three role cards beside it */}
+              <ul className="mt-3 flex flex-col gap-2 text-xs leading-5 text-ink-2">
                 {TOUR.map((t) => (
                   <li key={t.role}>
                     <span className="text-ink">{DEMO_USER[t.role].label}</span> — {t.tip}
@@ -406,7 +423,8 @@ export function HelpPage() {
 
         <Group>
           <GroupHeader icon={<ArrowUpRight />} title="Good places to start" subtitle="Each opens in this tab" />
-          <ul className="flex flex-col gap-2">
+          {/* two columns while this group spans the page; one again once it shares the row (@1080) */}
+          <ul className="grid grid-cols-1 gap-2 @[640px]:grid-cols-2 @[1080px]:grid-cols-1">
             {LINKS.map((l) => (
               <li key={l.href}>
                 <Link href={l.href} className="group flex items-center gap-3 rounded-inner bg-surface p-4 transition-colors hover:bg-canvas">

@@ -301,7 +301,11 @@ function Builder({ plan, plans, logs }: { plan: PlanRecord; plans: PlanRecord[];
           ))}
         </div>
 
-        <aside aria-label="Plan context" className="flex min-w-0 flex-col gap-4">
+        {/* Sticky rail with its own scroll: it is taller than the meal list, so stretching the grid row left ~475px of dead space under the meals. */}
+        <aside
+          aria-label="Plan context"
+          className="flex min-w-0 flex-col gap-4 @[1040px]:sticky @[1040px]:top-20 @[1040px]:max-h-[calc(100dvh-96px)] @[1040px]:self-start @[1040px]:overflow-y-auto scrollbar-thin"
+        >
           <PlanOrganCard patientId={plan.patientId} header={<p className="mb-2 text-sm text-ink">What this plan addresses</p>} />
           <LogsTile logs={logs} patientId={plan.patientId} />
           {patient ? <RoutinePanel patient={patient} routine={routine} /> : null}

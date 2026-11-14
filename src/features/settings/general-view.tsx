@@ -324,6 +324,9 @@ function ClinicCard({ canEdit, ownerLabel }: { canEdit: boolean; ownerLabel: str
                 ["Phone", saved.phone],
                 ["Email", saved.email],
                 ["Default appointment", `${saved.slotMinutes} minutes`],
+                // Shown read-only too (the edit form has them): the card no longer ends far above the profile card.
+                ["Opening hours", `${hhmm(CLINIC_FIXED.hours.start)}–${hhmm(CLINIC_FIXED.hours.end)}`],
+                ["Receipt note", saved.receiptNote],
               ] as const
             ).map(([k, v]) => (
               <div key={k}>
@@ -333,7 +336,9 @@ function ClinicCard({ canEdit, ownerLabel }: { canEdit: boolean; ownerLabel: str
             ))}
           </dl>
           {fixed}
-          <InfoNote icon={<Lock />}>Clinic details are changed by {ownerLabel}.</InfoNote>
+          <InfoNote icon={<Lock />} className="mt-auto">
+            Clinic details are changed by {ownerLabel}.
+          </InfoNote>
         </>
       )}
     </section>
@@ -359,7 +364,9 @@ function BranchesSection({ canEdit }: { canEdit: boolean }) {
         </div>
       </div>
       {!canEdit ? <ReadOnlyBanner>Rooms and branches are managed by administrators. You can see how each room is used today.</ReadOnlyBanner> : null}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      {/* Branches differ in room count: each card keeps its own height (no stretched grey group), and the
+          shorter one rides along (sticky) while the longer one scrolls. */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
         {shown.map((b) => (
           <BranchCard key={b.id} branch={b} canEdit={canEdit} />
         ))}
@@ -410,7 +417,7 @@ function BranchCard({ branch, canEdit }: { branch: ReturnType<typeof useRooms>[n
   }
 
   return (
-    <Group className="flex flex-col">
+    <Group className="flex flex-col xl:sticky xl:top-20">
       <GroupHeader
         icon={<MapPin />}
         title={`${branch.name} · ${branch.city}`}

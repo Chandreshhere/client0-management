@@ -57,6 +57,7 @@ import {
   Reveal,
   RowLink,
   StageTrack,
+  Rail,
 } from "./ui";
 import { DayStrip, SystemIcon } from "./viz";
 
@@ -115,7 +116,7 @@ export function DoctorHome() {
   });
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <DashboardHeader
         summary={`${schedule.length} appointments today · ${reports.length} reports to review · ${unsignedNotes.length} note to sign`}
         actions={
@@ -141,7 +142,7 @@ export function DoctorHome() {
           {nextAppt ? <NextPatientCard apptId={nextAppt.id} /> : null}
         </Reveal>
 
-        <Reveal index={1}>
+        <Rail index={1}>
           <Panel icon={<CalendarBlank />} title="Today's schedule" subtitle={`${schedule.length} appointments · ${staffById(ME)?.room ?? ""}`} href="/schedule" actionLabel="Open schedule">
             <Inset>
               <p className="mb-3 text-xs text-muted">Your day, 08:00–18:00 · {spanLabelMin(BOOKED_MIN)} booked · each block is one appointment</p>
@@ -179,7 +180,7 @@ export function DoctorHome() {
             ))}
             {NOW_AT === schedule.length ? <NowMarker /> : null}
           </Panel>
-        </Reveal>
+        </Rail>
 
         <Reveal index={2}>
           <Panel

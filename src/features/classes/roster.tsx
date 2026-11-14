@@ -174,28 +174,30 @@ export function ClassRoster({ cls }: { cls: YogaClass }) {
       />
 
       <Group aria-label="Session status" className="grid grid-cols-2 gap-2 @[880px]:grid-cols-4">
-        <Inset className="flex flex-col gap-1">
+        <Inset className="flex flex-col justify-between gap-1">
           <span className="text-xs text-muted">Session</span>
           <span className="flex items-center gap-2 text-sm text-ink">
             {phase === "in-progress" ? <span className="relative flex size-2"><span className="absolute inset-0 animate-pulse-ring rounded-full bg-success" /><span className="relative size-2 rounded-full bg-success" /></span> : <Clock size={16} className="text-muted" aria-hidden="true" />}
             {phase === "upcoming" ? `Starts ${relativeTime(cls.start)}` : phase === "in-progress" ? `In progress since ${formatTime(s.sessions[cls.id]?.startedAt ?? cls.start)}` : `Ended ${formatTime(s.sessions[cls.id]?.endedAt ?? end.toISOString())}`}
           </span>
         </Inset>
-        <Inset className="flex flex-col gap-1">
+        <Inset className="flex flex-col justify-between gap-1">
           <span className="text-xs text-muted">Instructor</span>
           <span className="flex min-w-0 items-center gap-2 text-sm text-ink">
             <Avatar src={inst?.avatar} name={inst?.name ?? "Instructor"} size="xs" />
             <span className="truncate">{inst?.name}{inst?.id === user.id ? " (you)" : ""}</span>
           </span>
         </Inset>
-        <Inset className="flex flex-col gap-1">
+        <Inset className="flex flex-col justify-between gap-1">
           <span className="flex items-baseline justify-between text-xs text-muted">
             Places <span className="tabular">{cls.enrolled.length}/{cls.capacity}{cls.waitlist.length ? ` · +${cls.waitlist.length} waiting` : ""}</span>
           </span>
-          <SeatDots cls={cls} s={s} draft size="md" className="mt-2" />
-          <span className="mt-1 text-[11px] text-muted">One dot per place · colour once attendance is marked</span>
+          <span className="flex flex-col gap-1">
+            <SeatDots cls={cls} s={s} draft size="md" className="mt-2" />
+            <span className="text-[11px] text-muted">One dot per place · colour once attendance is marked</span>
+          </span>
         </Inset>
-        <Inset className="flex flex-col gap-1">
+        <Inset className="flex flex-col justify-between gap-1">
           <span className="text-xs text-muted">Attendance</span>
           <span className="text-sm text-ink tabular">
             {cls.enrolled.length - unmarked} of {cls.enrolled.length} marked
@@ -321,7 +323,11 @@ export function ClassRoster({ cls }: { cls: YogaClass }) {
           </Group>
         </div>
 
-        <aside aria-label="Session details" className="flex min-w-0 flex-col gap-4">
+        {/* Sticky rail with its own scroll, so a short roster doesn't end in a long blank run beside it (and vice versa). */}
+        <aside
+          aria-label="Session details"
+          className="flex min-w-0 flex-col gap-4 @[1040px]:sticky @[1040px]:top-20 @[1040px]:max-h-[calc(100dvh-96px)] @[1040px]:self-start @[1040px]:overflow-y-auto scrollbar-thin"
+        >
           <SessionPlanCard
             cls={cls}
             plan={plan}

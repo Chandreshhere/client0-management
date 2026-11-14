@@ -40,7 +40,7 @@ export function Sidebar() {
       style={{ width: collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED }}
     >
       <div className="flex h-full flex-col overflow-hidden rounded-card bg-surface">
-        <div className={cn("flex h-[72px] shrink-0 items-center", collapsed ? "justify-center px-2" : "justify-between pl-6 pr-3")}>
+        <div className={cn("flex h-[72px] shrink-0 items-center short:h-14", collapsed ? "justify-center px-2" : "justify-between pl-6 pr-3")}>
           <Logo collapsed={collapsed} />
           {!collapsed ? (
             <Tip label="Collapse sidebar" shortcut="⌘B" side="right">
@@ -66,7 +66,7 @@ export function Sidebar() {
                 onClick={() => setSidebarCollapsed(false)}
                 aria-label="Expand sidebar"
                 aria-expanded="false"
-                className="flex size-11 items-center justify-center rounded-full text-muted transition-colors hover:bg-sunken hover:text-ink"
+                className="flex size-11 short:size-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-sunken hover:text-ink"
               >
                 <SidebarSimple size={20} className="-scale-x-100" />
               </button>
@@ -121,7 +121,7 @@ export function NavBody({ collapsed, onNavigate }: { collapsed: boolean; onNavig
       {role !== "patient" ? <BranchSwitcher collapsed={collapsed} /> : null}
       <LayoutGroup id="sidebar-nav">
         {sections.map((section) => (
-          <div key={section.id} className="mt-4 first:mt-2">
+          <div key={section.id} className="mt-4 first:mt-2 short:mt-2">
             {collapsed ? (
               <div className="mx-auto my-2 h-px w-6 bg-line" aria-hidden="true" />
             ) : (
@@ -154,7 +154,7 @@ export function NavBody({ collapsed, onNavigate }: { collapsed: boolean; onNavig
                     onClick={onNavigate}
                     className={cn(
                       "flex items-center gap-3 rounded-full text-sm text-ink-2 transition-colors hover:bg-sunken hover:text-ink",
-                      collapsed ? "size-11 justify-center" : "h-11 px-2",
+                      collapsed ? "size-11 short:size-9 justify-center" : "h-11 short:h-9 px-2",
                     )}
                   >
                     <Avatar src={p.avatar} name={p.name} size="sm" />
@@ -168,7 +168,7 @@ export function NavBody({ collapsed, onNavigate }: { collapsed: boolean; onNavig
       ) : null}
 
       {!collapsed ? (
-        <Link href="/help" onClick={onNavigate} className="mt-6 flex h-11 items-center gap-3 rounded-full px-3 text-sm text-muted transition-colors hover:bg-sunken hover:text-ink">
+        <Link href="/help" onClick={onNavigate} className="mt-6 flex h-11 short:h-9 short:mt-3 items-center gap-3 rounded-full px-3 text-sm text-muted transition-colors hover:bg-sunken hover:text-ink">
           <Question size={20} />
           Help &amp; shortcuts
         </Link>
@@ -196,7 +196,7 @@ function NavLink({ item, collapsed, active, onNavigate, locked }: { item: NavIte
       aria-current={active ? "page" : undefined}
       className={cn(
         "relative flex items-center rounded-full text-sm transition-colors duration-200",
-        collapsed ? "mx-auto size-11 justify-center" : "h-11 gap-3 px-3",
+        collapsed ? "mx-auto size-11 short:size-9 justify-center" : "h-11 short:h-9 gap-3 px-3",
         active ? "text-white" : locked ? "text-faint hover:bg-sunken hover:text-muted" : "text-ink-2 hover:bg-sunken hover:text-ink",
       )}
     >
@@ -235,7 +235,7 @@ function NavGroup({ item, collapsed, pathname, onNavigate, has }: { item: NavIte
               type="button"
               aria-label={item.label}
               className={cn(
-                "relative mx-auto flex size-11 items-center justify-center rounded-full transition-colors duration-200",
+                "relative mx-auto flex size-11 short:size-9 items-center justify-center rounded-full transition-colors duration-200",
                 inside ? "text-white" : "text-ink-2 hover:bg-sunken hover:text-ink data-[state=open]:bg-sunken",
               )}
             >
@@ -272,7 +272,7 @@ function NavGroup({ item, collapsed, pathname, onNavigate, has }: { item: NavIte
         aria-expanded={open}
         aria-controls={panelId}
         className={cn(
-          "relative flex h-11 w-full items-center gap-3 rounded-full px-3 text-sm transition-colors duration-200",
+          "relative flex h-11 short:h-9 w-full items-center gap-3 rounded-full px-3 text-sm transition-colors duration-200",
           inside && !open ? "text-white" : inside ? "text-ink" : "text-ink-2 hover:bg-sunken hover:text-ink",
         )}
       >
@@ -335,7 +335,7 @@ function BranchSwitcher({ collapsed }: { collapsed: boolean }) {
         aria-label={`Branch: ${current.name}. Change branch`}
         className={cn(
           "flex items-center gap-3 rounded-full bg-sunken text-sm text-ink transition-colors hover:bg-sunken-2 data-[state=open]:bg-sunken-2",
-          collapsed ? "mx-auto size-11 justify-center" : "h-11 w-full px-3",
+          collapsed ? "mx-auto size-11 short:size-9 justify-center" : "h-11 short:h-9 w-full px-3",
         )}
       >
         <MapPin size={18} className="shrink-0" aria-hidden="true" />

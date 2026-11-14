@@ -34,7 +34,8 @@ import { REFERRALS, TASKS } from "@/data/care";
 import { NUTRITION_PLANS, PLAN_STATUS_LABEL } from "@/data/programs";
 import type { Appointment, NutritionPlanSummary, PlanStatus } from "@/data/types";
 import { NOW_LABEL, NOW_MIN, TODAY_KEY, appointmentsFor, daysSince, istDayKey, istMinutes, minutesUntil, nowIndex, shortDate, spanLabel, untilLabel, whenLabel } from "./data";
-import { AppointmentRow, DashGrid, DashboardHeader, FocalCard, FocalFact, FocalHead, NowMarker, Panel, PanelEmpty, Reveal, RowLink, StageTrack } from "./ui";
+import { AppointmentRow, DashGrid, DashboardHeader, FocalCard, FocalFact, FocalHead, NowMarker, Panel, PanelEmpty, Reveal, RowLink, StageTrack, Rail} from "./ui";
+import { cn } from "@/lib/cn";
 import { LogDots, PlanTargets } from "./nutrition-visuals";
 import { organFor } from "./derive";
 import { OrganBadge } from "./viz";
@@ -101,7 +102,7 @@ export function NutritionistHome() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <DashboardHeader
         summary={`${pluralize(schedule.length, "consultation")} today · ${pluralize(toAccept, "referral")} to accept · ${pluralize(plansToAct.length, "plan")} to publish or review`}
         actions={
@@ -143,7 +144,7 @@ export function NutritionistHome() {
           <PlanTargets authorId={ME} defaultPlanId={NEXT_PLAN_ID} />
         </Reveal>
 
-        <Reveal index={3} className="flex flex-col gap-4 lg:row-span-2">
+        <Rail index={3} className="lg:row-span-2" innerClassName="flex flex-col gap-4">
           <Panel
             icon={<ArrowsLeftRight />}
             title="Referrals to accept"
@@ -209,9 +210,9 @@ export function NutritionistHome() {
           </Panel>
 
           <NotRebookedPanel />
-        </Reveal>
+        </Rail>
 
-        <Reveal index={4}>
+        <Rail index={4}>
           <Panel icon={<ClipboardText />} title="Plans to publish or review" subtitle={`${pluralize(plansToAct.length, "plan")} need you`} href="/nutrition" actionLabel="Open nutrition plans">
             {plansToAct.map((plan) => {
               const p = patientById(plan.patientId);
@@ -237,7 +238,7 @@ export function NutritionistHome() {
               );
             })}
           </Panel>
-        </Reveal>
+        </Rail>
 
         <Reveal index={5}>
           <Panel

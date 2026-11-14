@@ -4,11 +4,12 @@ import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useId, type ReactNode } from "react";
 import { Drop, Heartbeat, Scales, TestTube, Wind } from "@phosphor-icons/react";
+import { cn } from "@/lib/cn";
 import { spring } from "@/lib/motion";
 import { pluralize } from "@/lib/format";
 import { staffById } from "@/data/staff";
 import { MediaStatCard, SectionLabel } from "@/components/viz/cards";
-import { BarsSpark, DotsSpark, SparkValue, ValuePill, VitalTile, WaveSpark } from "@/components/viz/condition";
+import { BarsSpark, SparkValue, ValuePill, VitalTile, WaveSpark } from "@/components/viz/condition";
 import { ScanThumb } from "@/features/patient/scan-thumb";
 import {
   IMAGING,
@@ -135,7 +136,7 @@ function MetricTile({ metric, points, wide }: { metric: Metric; points: MetricPo
     chart = dated(<WaveSpark values={values} label={`Resting heart rate, ${range}: ${values.join(", ")} bpm`} />);
     aside = <ValuePill value={lastText} unit="bpm" />;
   } else if (metric.id === "weight" && points.length > 1) {
-    chart = dated(<DotsSpark values={values} label={`Weight, ${range}: ${values.join(", ")} kg`} />);
+    chart = dated(<DotsTrend values={values} label={`Weight, ${range}: ${values.join(", ")} kg`} />);
   } else if (points.length > 1) {
     chart = dated(<WaveSpark values={values} label={`${metric.label}, ${range}: ${values.map((v) => formatValue(metric, v)).join(", ")} ${unit}`} />);
   } else {
@@ -181,6 +182,32 @@ function MetricTile({ metric, points, wide }: { metric: Metric; points: MetricPo
         </span>
       </figcaption>
     </figure>
+  );
+}
+
+/**
+ * One dot per reading, latest in primary — the same colours as the BP bars. HTML dots stay round and
+ * legible in the stretched well (the shared SVG sparkline squashed them into faint 2px specks).
+ */
+function DotsTrend({ values, label }: { values: number[]; label: string }) {
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  return (
+    <div className="size-full p-1" role="img" aria-label={label}>
+      <div className="relative size-full">
+        {values.map((v, i) => {
+          const last = i === values.length - 1;
+          return (
+            <span
+              key={i}
+              aria-hidden="true"
+              className={cn("absolute -translate-x-1/2 -translate-y-1/2 rounded-full", last ? "size-2.5 bg-primary ring-2 ring-surface" : "size-2 bg-faint")}
+              style={{ left: `${(i / Math.max(1, values.length - 1)) * 100}%`, top: `${100 - ((v - min) / (max - min || 1)) * 100}%` }}
+            />
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

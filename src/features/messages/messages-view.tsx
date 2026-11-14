@@ -120,7 +120,9 @@ export function MessagesView() {
 
       <div
         className={cn(
-          "grid min-h-0 grid-cols-1 gap-4 md:h-[calc(100dvh-268px)] md:min-h-[540px] md:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]",
+          // fills the window down to a 24px margin (the page heading above is ~158px; main's 64px
+          // bottom padding is pulled back to 16px so the page itself never scrolls)
+          "grid min-h-0 grid-cols-1 gap-4 md:-mb-12 md:h-[calc(100dvh-182px)] md:min-h-[540px] md:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]",
           isPatient ? "xl:grid-cols-[380px_minmax(0,1fr)]" : "xl:grid-cols-[320px_minmax(0,1fr)_288px]",
         )}
       >

@@ -10,16 +10,19 @@ import { AllergyAlert, CareTeamStack, FlagPills, NextVisitLine, PatientStatusBad
 import { OrganGlyph } from "./organ-glyph";
 import { RowActions } from "./row-actions";
 
-const th = "sticky top-0 z-[2] h-11 bg-surface px-3 text-left text-xs font-normal text-muted shadow-[inset_0_-1px_0_var(--color-line)] whitespace-nowrap";
+const th = "h-11 bg-surface px-3 text-left text-xs font-normal text-muted shadow-[inset_0_-1px_0_var(--color-line)] whitespace-nowrap";
 const td = "px-3 py-3 align-middle shadow-[inset_0_-1px_0_var(--color-line)] [tr:last-child>&]:shadow-none";
 
 /** Ignore clicks that land on a control inside the row (links, buttons, checkboxes, menus). */
 const fromControl = (e: MouseEvent) => !!(e.target as HTMLElement).closest("a,button,input,label,[role='checkbox'],[role='menuitem'],[tabindex]");
 
 /**
- * Desktop table. Fixed layout so the columns fit the content area with the sidebar open
- * (≈1140px); the programme gets its own column only when there is room (≥1240px container),
- * otherwise it sits under the concern. Allergy "not recorded" shows as a marker by the name.
+ * Desktop table (shown from an 880px container). Fixed layout sized so the columns fit the content
+ * area with the sidebar open (≥960px; narrower containers scroll sideways): Patient is wide enough for
+ * full names ("Ananya Srinivasan"), the programme gets its own column from a 1240px container (otherwise
+ * it sits under the concern) and flags from 1400px (otherwise they sit under the status). The page is
+ * the only vertical scroller — no inner height cap, so no sticky header. Allergy "not recorded" shows
+ * as a marker by the name.
  */
 export function RegistryTable({
   rows,
@@ -48,21 +51,23 @@ export function RegistryTable({
   const headerState = pageSelected === 0 ? false : pageSelected === rows.length ? true : "indeterminate";
 
   return (
-    <div className="scrollbar-thin relative max-h-[max(480px,calc(100dvh-208px))] overflow-auto">
-      <table className="w-full min-w-[1000px] table-fixed border-separate border-spacing-0 text-sm">
+    <div className="scrollbar-thin relative overflow-x-auto">
+      <table className="w-full min-w-[960px] table-fixed border-separate border-spacing-0 text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead>
           <tr>
             <th scope="col" className={cn(th, "w-[52px] pl-5 pr-2")}>
               <Checkbox aria-label="Select all patients on this page" checked={headerState} onCheckedChange={(v) => onTogglePage(v === true)} />
             </th>
-            <th scope="col" className={th}>Patient</th>
-            <th scope="col" className={cn(th, "w-[21%]")}>Primary concern</th>
-            <th scope="col" className={cn(th, "w-[124px]")}>Care team</th>
+            <th scope="col" className={cn(th, "w-[224px]")}>Patient</th>
+            <th scope="col" className={th}>Primary concern</th>
+            <th scope="col" className={cn(th, "w-[128px]")}>Care team</th>
             <th scope="col" className={cn(th, "hidden w-[13%] @[1240px]:table-cell")}>Programme</th>
-            <th scope="col" className={cn(th, "w-[164px]")}>Status</th>
-            <th scope="col" className={cn(th, "w-[148px]")}>Next appointment</th>
-            <th scope="col" className={cn(th, "w-[164px]")}>Flags</th>
+            <th scope="col" className={cn(th, "w-[184px]")}>
+              Status<span className="@[1400px]:hidden"> · flags</span>
+            </th>
+            <th scope="col" className={cn(th, "w-[144px]")}>Next appointment</th>
+            <th scope="col" className={cn(th, "hidden w-[168px] @[1400px]:table-cell")}>Flags</th>
             <th scope="col" className={cn(th, "w-[56px] pr-4")}>
               <span className="sr-only">Actions</span>
             </th>
@@ -129,11 +134,15 @@ export function RegistryTable({
                 </td>
                 <td className={td}>
                   <PatientStatusBadge status={p.status} />
+                  {/* below 1400px the flags column folds in here */}
+                  <div className="mt-1 empty:hidden @[1400px]:hidden">
+                    <FlagPills flags={r.flags.filter((f) => f !== "allergies")} patient={p} showBalance={showBalance} quietWhenEmpty />
+                  </div>
                 </td>
                 <td className={td}>
                   <NextVisitLine visit={r.next} last={r.last} />
                 </td>
-                <td className={td}>
+                <td className={cn(td, "hidden @[1400px]:table-cell")}>
                   <FlagPills flags={r.flags.filter((f) => f !== "allergies")} patient={p} showBalance={showBalance} />
                 </td>
                 <td className={cn(td, "pr-4 text-right")}>

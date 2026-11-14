@@ -34,22 +34,17 @@ export function BillingView() {
   const left = PACKAGE ? PACKAGE.total - PACKAGE.used : 0;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <PortalHeader
         title="Billing"
         description={`${BALANCE_DUE ? `${formatINR(BALANCE_DUE)} to pay` : "Nothing to pay right now"}${PACKAGE ? ` · ${left} of ${PACKAGE.total} sessions left · package expires ${longDate(`${PACKAGE.expires}T12:00:00+05:30`)}` : ""}.`}
         actions={
-          <>
-            <Button variant="dark" leading={<CreditCard />} onClick={() => setPayOpen(true)}>
-              Pay online
-            </Button>
-            <Button asChild variant="secondary">
-              <Link href="/messages?new=1">
-                <ChatCircleDots />
-                Ask about a bill
-              </Link>
-            </Button>
-          </>
+          <Button asChild variant="secondary">
+            <Link href="/messages?new=1">
+              <ChatCircleDots />
+              Ask about a bill
+            </Link>
+          </Button>
         }
       />
 
@@ -68,6 +63,11 @@ export function BillingView() {
                 {nextCharge ? ` Next: ${formatINR(nextCharge.amount)} after your ${nextCharge.label.toLowerCase()} ${dayLabel(nextCharge.at).toLowerCase()}.` : ""}
               </p>
             </div>
+            {/* Quiet on purpose: there's nothing to pay online here (no gateway in the demo). It used to be a
+                dark primary in the header, which contradicted a ₹0 balance; it now only explains. */}
+            <Button variant="secondary" size="sm" className="self-start text-muted" leading={<CreditCard />} onClick={() => setPayOpen(true)}>
+              Online payment · not available
+            </Button>
           </section>
 
           <Panel icon={<Receipt />} title="Coming up" subtitle={charges.length ? `${pluralize(charges.length, "visit")} with a charge` : "Nothing scheduled to be charged"}>

@@ -54,7 +54,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header onOpenSearch={() => setSearchOpen(true)} onOpenMobileNav={() => setMobileOpen(true)} />
-        <main id="main" className="min-w-0 flex-1 px-4 pb-16 pt-4 lg:px-6 lg:pt-6">
+        <main id="main" className="min-w-0 flex-1 px-4 pb-16 pt-3 lg:px-6 lg:pt-3">
           {locked && gated ? <LockedFeature feature={gated} /> : children}
         </main>
       </div>

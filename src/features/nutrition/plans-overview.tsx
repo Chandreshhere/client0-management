@@ -151,7 +151,7 @@ export function NutritionPlans() {
   );
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <PageHeader
         title="Nutrition plans"
         description="Every plan is versioned. Patients only see the published version — drafts and reviews stay with the care team."
@@ -194,13 +194,14 @@ export function NutritionPlans() {
           href="/schedule"
           actionLabel="Open schedule"
         />
+        {/* Wrapping flex, not a fixed grid: every row fills, so an odd card count never leaves an empty cell. */}
         {dueToday.length || waitingReferrals.length ? (
-          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-4">
+          <ul className="flex flex-wrap gap-2">
             {dueToday.map((p) => {
               const patient = patientById(p.patientId);
               const missed = new Date(p.nextReview).getTime() < TODAY.getTime();
               return (
-                <li key={p.id} className="flex flex-col gap-4 rounded-inner bg-surface p-4">
+                <li key={p.id} className="flex min-w-0 grow basis-[320px] flex-col gap-4 rounded-inner bg-surface p-4">
                   <div className="flex items-center gap-3">
                     <Avatar src={patient?.avatar} name={patient?.name ?? "Patient"} size="md" />
                     <div className="min-w-0 flex-1">
@@ -231,7 +232,7 @@ export function NutritionPlans() {
               const from = staffById(r.fromId);
               const overdue = new Date(r.dueBy).getTime() < TODAY.getTime();
               return (
-                <li key={r.id} className="flex flex-col gap-4 rounded-inner bg-surface p-4">
+                <li key={r.id} className="flex min-w-0 grow basis-[320px] flex-col gap-4 rounded-inner bg-surface p-4">
                   <div className="flex items-center gap-3">
                     <Avatar src={patient?.avatar} name={patient?.name ?? "Patient"} size="md" />
                     <div className="min-w-0 flex-1">
@@ -329,7 +330,7 @@ export function NutritionPlans() {
             )}
           </Card>
 
-          <aside aria-label="Selected plan" className="flex min-w-0 flex-col gap-4 @[1040px]:sticky @[1040px]:top-24 @[1040px]:self-start">
+          <aside aria-label="Selected plan" className="flex min-w-0 flex-col gap-4 @[1040px]:sticky @[1040px]:top-20 @[1040px]:self-start">
             {focusPlan ? (
               <PlanFocusPanel plan={focusPlan} plans={rows} logs={logs} onSelect={setSelectedId} />
             ) : (

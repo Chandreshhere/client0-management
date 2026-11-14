@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { CalendarPlus, ChatCircleDots, Info } from "@phosphor-icons/react";
+import { CalendarPlus, ChatCircleDots } from "@phosphor-icons/react";
 import { formatTime, pluralize } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import type { PortalAppt } from "./data";
-import { PAST, POLICY, REQUESTED, UPCOMING, buildIcs } from "./data";
+import { PAST, REQUESTED, UPCOMING, buildIcs } from "./data";
 import { apptStore, clearChange, withdrawRequest } from "./store";
 import { AppointmentList, type ApptActions } from "./appointment-list";
 import { BookModal } from "./book-modal";
@@ -74,7 +73,7 @@ export function AppointmentsView() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <Suspense fallback={null}>
         <BookParam onBook={() => openBook()} />
       </Suspense>
@@ -121,27 +120,13 @@ export function AppointmentsView() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <Reveal index={2} className="flex flex-col gap-6">
+        {/* Both filters (person, month) form a short rail beside the long list; it rides along (sticky)
+            instead of leaving a blank column under it. */}
+        <Reveal index={2} className="flex min-w-0 flex-col gap-6 xl:sticky xl:top-20 xl:self-start">
           <CareTeamList appts={everything} selected={person} onSelect={setPerson} />
-          <Card className="flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-full bg-sunken text-ink" aria-hidden="true">
-                <Info size={18} />
-              </span>
-              <h2 className="text-lg font-normal tracking-[-0.01em] text-ink">Changing a visit</h2>
-            </div>
-            <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-ink-2 marker:text-faint">
-              <li>{POLICY.free}</li>
-              <li>{POLICY.late}</li>
-              <li>Requests you make here are confirmed by the front desk within 1 working day.</li>
-            </ul>
-            <Link href="/messages?new=1" className="text-sm text-ink underline underline-offset-4 hover:text-primary-ink">
-              Running late? Tell the front desk
-            </Link>
-          </Card>
-        </Reveal>
-        <Reveal index={3} className="flex min-w-0 flex-col gap-6">
           <VisitMonths appts={everything} active={month} onSelect={(k) => setMonth((m) => (m === k ? "" : k))} />
+        </Reveal>
+        <Reveal index={3} className="min-w-0">
           <AppointmentList
             upcoming={upcoming}
             waiting={waiting}

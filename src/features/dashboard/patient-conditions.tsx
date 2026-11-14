@@ -40,6 +40,9 @@ const HEADLINE: Partial<Record<SystemKey, { id: string; label: string }>> = {
   respiratory: { id: "spo2", label: "Oxygen saturation" },
 };
 
+/** Systolic scale (mmHg) for the blood-pressure bar spark; widened if a reading goes above it. */
+const BP_SCALE: [number, number] = [100, 150];
+
 const SYSTEM_ICON: Partial<Record<SystemKey, typeof Heart>> = { cardiovascular: Heart, neurological: Brain, respiratory: Wind };
 
 const sourceLabel = (p: VitalPoint) => (p.self ? "home reading · self-reported" : "clinic reading");
@@ -284,7 +287,12 @@ export function ConditionTiles({ record, className }: { record: PatientRecord; c
             caption={`${shortDate(bpLast.d)} · ${bpLast.self ? "self-reported" : "clinic"} · ${bp.length} readings`}
             chart={
               <div className="h-full [&>div]:justify-between">
-                <BarsSpark values={bp.map((p) => p.v)} label={`Systolic blood pressure, ${bp.length} readings from ${shortDate(bp[0].d)} to ${shortDate(bpLast.d)}: ${bp.map((p) => p.v).join(", ")} mmHg. Latest highlighted.`} />
+                {/* Systolic on a 100–150 mmHg scale: drawn from zero, 126–142 all read as full-height bars. */}
+                <BarsSpark
+                  values={bp.map((p) => p.v)}
+                  domain={[BP_SCALE[0], Math.max(BP_SCALE[1], ...bp.map((p) => p.v))]}
+                  label={`Systolic blood pressure, ${bp.length} readings from ${shortDate(bp[0].d)} to ${shortDate(bpLast.d)}: ${bp.map((p) => p.v).join(", ")} mmHg, bars drawn from ${BP_SCALE[0]} mmHg. Latest highlighted.`}
+                />
               </div>
             }
             aside={<SparkValue value={bpLast.v} sub={`/${bpLast.v2}`} />}

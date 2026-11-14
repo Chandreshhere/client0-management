@@ -315,9 +315,11 @@ function Waitlist() {
         <section aria-labelledby="wl-people" className="flex flex-col gap-2 rounded-card bg-surface p-2">
           <div className="flex flex-col gap-1 px-2 pt-2">
             <h2 id="wl-people" className="text-sm text-ink">
-              Requested practitioners <span className="text-muted">· open requests each</span>
+              Requested practitioners
             </h2>
-            <p className="text-xs text-muted">{who ? "Showing one practitioner's requests — select them again to show everyone." : "Select someone to see only their requests."}</p>
+            <p className="text-xs text-muted">
+              {who ? "Showing one practitioner's requests — select them again to show everyone." : "Open requests for each. Select someone to see only their requests."}
+            </p>
           </div>
           {people.length ? (
             <PeopleList className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1" people={people} selected={who ?? undefined} onSelect={(id) => setWho((cur) => (cur === id ? null : id))} />
@@ -351,7 +353,7 @@ function Waitlist() {
       </div>
 
       <div className="flex flex-col gap-4">
-        <Card padded={false} className="min-w-0 overflow-hidden">
+        <Card padded={false} className="@container min-w-0 overflow-hidden">
           {rows.length === 0 ? (
             <EmptyState
               icon={<HourglassMedium />}
@@ -371,19 +373,19 @@ function Waitlist() {
             />
           ) : (
             <>
-              {/* desktop table */}
-              <div className="relative hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[880px] text-left text-sm">
+              {/* table from a 960px container: fixed columns sized to their content; "On list" folds under the patient below 1120px */}
+              <div className="relative hidden overflow-x-auto @[960px]:block">
+                <table className="w-full table-fixed text-left text-sm">
                   <caption className="sr-only">Waitlist</caption>
                   <thead>
                     <tr className="text-xs text-muted">
-                      <th scope="col" className="py-4 pl-6 pr-3 font-normal">Patient</th>
+                      <th scope="col" className="w-[216px] py-4 pl-6 pr-3 font-normal">Patient</th>
                       <th scope="col" className="px-3 py-4 font-normal">Request</th>
-                      <th scope="col" className="px-3 py-4 font-normal">Priority</th>
-                      <th scope="col" className="px-3 py-4 font-normal">On list</th>
-                      <th scope="col" className="px-3 py-4 font-normal">Free by {shortDay(DIARY_TO).replace(/ \w+$/, "")}</th>
-                      <th scope="col" className="px-3 py-4 font-normal">Status</th>
-                      <th scope="col" className="py-4 pl-3 pr-6 text-right font-normal">
+                      <th scope="col" className="w-[96px] px-3 py-4 font-normal">Priority</th>
+                      <th scope="col" className="hidden w-[104px] px-3 py-4 font-normal @[1120px]:table-cell">On list</th>
+                      <th scope="col" className="w-[184px] whitespace-nowrap px-3 py-4 font-normal">Free by {shortDay(DIARY_TO).replace(/ \w+$/, "")}</th>
+                      <th scope="col" className="w-[128px] px-3 py-4 font-normal">Status</th>
+                      <th scope="col" className="w-[176px] py-4 pl-2 pr-6 text-right font-normal">
                         <span className="sr-only">Actions</span>
                       </th>
                     </tr>
@@ -402,25 +404,25 @@ function Waitlist() {
                           className={cn("border-t border-line align-middle transition-opacity", w.status === "booked" && "opacity-60")}
                         >
                           <td className="py-4 pl-6 pr-3">
-                            <PatientCell w={w} />
+                            <PatientCell w={w} foldWait />
                           </td>
-                          <td className="max-w-[280px] px-3 py-4">
+                          <td className="px-3 py-4">
                             <WantCell w={w} />
                           </td>
                           <td className="px-3 py-4">
                             <StatusBadge tone={priorityTone(w.priority)}>{PRIORITY_LABEL[w.priority]}</StatusBadge>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4">
+                          <td className="hidden whitespace-nowrap px-3 py-4 @[1120px]:table-cell">
                             <span className="block text-ink-2">{relativeTime(w.addedAt).replace(" ago", "")}</span>
                             <span className="block text-xs text-muted">since {formatDate(w.addedAt, { day: "numeric", month: "short" })}</span>
                           </td>
-                          <td className="max-w-[220px] px-3 py-4">
+                          <td className="px-3 py-4">
                             <MatchCell m={matches.get(w.id)!} discipline={w.discipline} />
                           </td>
                           <td className="px-3 py-4">
                             <StatusCell w={w} />
                           </td>
-                          <td className="py-4 pl-3 pr-6">
+                          <td className="py-4 pl-2 pr-6">
                             <RowActions w={w} emphasise={offerable(matches.get(w.id)!)} onOffer={() => setOfferFor(w.id)} onAccept={() => accept(w)} onDecline={() => decline(w)} onRemove={() => remove(w)} />
                           </td>
                         </motion.tr>
@@ -430,8 +432,8 @@ function Waitlist() {
                 </table>
               </div>
 
-              {/* mobile cards */}
-              <ul className="flex flex-col md:hidden">
+              {/* cards below a 960px container */}
+              <ul className="flex flex-col @[960px]:hidden">
                 {rows.map((w) => (
                   <li key={w.id} data-wait-row={w.id} className="flex flex-col gap-3 border-t border-line p-4 first:border-t-0">
                     <div className="flex items-start justify-between gap-2">
@@ -474,15 +476,21 @@ function Waitlist() {
   );
 }
 
-function PatientCell({ w }: { w: WaitEntry }) {
+/** `foldWait`: in the table below 1120px the "On list" column is hidden, so its value moves under the clinic number. */
+function PatientCell({ w, foldWait }: { w: WaitEntry; foldWait?: boolean }) {
   const { person } = useSchedule();
   const p = person(w.patientId);
   return (
     <span className="flex min-w-0 items-center gap-3">
       <Avatar src={p?.avatar} name={p?.name ?? "Patient"} size="md" />
       <span className="min-w-0">
-        <span className="block truncate text-sm text-ink">{p?.name ?? "Unknown patient"}</span>
+        <span className="block truncate text-sm text-ink" title={p?.name}>{p?.name ?? "Unknown patient"}</span>
         <span className="block truncate font-mono text-xs text-muted">{p?.clinicNo}</span>
+        {foldWait ? (
+          <span className="block truncate text-xs text-muted @[1120px]:hidden" title={`On the list since ${formatDate(w.addedAt, { day: "numeric", month: "short" })}`}>
+            On list {relativeTime(w.addedAt).replace(" ago", "")}
+          </span>
+        ) : null}
       </span>
     </span>
   );
@@ -493,9 +501,15 @@ function WantCell({ w }: { w: WaitEntry }) {
   const cls = w.classId ? CLASSES.find((c) => c.id === w.classId) : undefined;
   return (
     <span className="flex min-w-0 flex-col">
-      <span className="flex items-center gap-2 text-ink">
-        <DisciplineDot discipline={w.discipline} />
-        <span className="truncate">{w.want}</span>
+      {/* the request may take two lines in a narrow column; the dot stays centred on the first */}
+      <span className="flex items-start gap-2 text-ink">
+        <span className="flex h-5 shrink-0 items-center">
+          <DisciplineDot discipline={w.discipline} />
+        </span>
+        <span className="line-clamp-2 min-w-0 text-pretty" title={w.want}>
+          {/* keep "Dr." on the same line as the name */}
+          {w.want.replace(/\bDr\. /g, "Dr. ")}
+        </span>
       </span>
       <span className="truncate pl-4 text-xs text-muted">
         {cls ? `${cls.title} · ${shortDay(dateOf(cls.start))}, ${hhmm(minOf(cls.start))}` : staff ? staff.name : `Any ${DISCIPLINE_LABEL[w.discipline].toLowerCase()} practitioner`}
@@ -518,7 +532,7 @@ function MatchCell({ m, discipline }: { m: WaitMatch; discipline: WaitEntry["dis
             {m.count} matching {m.count === 1 ? "slot" : "slots"}
           </span>
           <span className="block truncate text-xs text-muted">
-            next {shortDay(m.next.date)} · {hhmm(m.next.start)}
+            next <span className="whitespace-nowrap">{shortDay(m.next.date)}</span> · {hhmm(m.next.start)}
           </span>
         </span>
       </span>
@@ -534,8 +548,14 @@ function MatchCell({ m, discipline }: { m: WaitMatch; discipline: WaitEntry["dis
       <span className="flex items-start gap-2">
         <Warning size={16} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
         <span className="min-w-0">
-          <span className="block text-warning">On leave until {m.until}</span>
-          <span className="block text-xs text-muted">{m.anyCount ? `${m.anyCount} with another ${DISCIPLINE_LABEL[discipline].toLowerCase()} practitioner` : "No other practitioner matches their times"}</span>
+          <span className="block text-warning">
+            On leave until <span className="whitespace-nowrap">{m.until}</span>
+          </span>
+          <span className="block text-xs text-muted">
+            {m.anyCount
+              ? `${m.anyCount} free ${m.anyCount === 1 ? "slot" : "slots"} with other ${DISCIPLINE_LABEL[discipline].toLowerCase()} practitioners`
+              : "No other practitioner matches their times"}
+          </span>
         </span>
       </span>
     );
@@ -558,20 +578,42 @@ function MatchCell({ m, discipline }: { m: WaitMatch; discipline: WaitEntry["dis
   );
 }
 
+/** The offer as short lines (when, then who/what) so a narrow Status column never splits "Dr." from the name. */
+function OfferLines({ offer }: { offer: WaitOffer }) {
+  const [first, ...rest] = offerLabel(offer).split(" · ");
+  const lines = offer.kind === "class" ? [rest.join(" · "), first] : [first, rest.join(" · ")];
+  return (
+    <>
+      {lines.filter(Boolean).map((l) => (
+        <span key={l} className="block max-w-full truncate" title={l}>
+          {l}
+        </span>
+      ))}
+    </>
+  );
+}
+
 function StatusCell({ w }: { w: WaitEntry }) {
   if (w.status === "booked") {
     return (
-      <span className="flex flex-col items-start gap-1">
+      <span className="flex min-w-0 flex-col items-start gap-1">
         <StatusBadge tone="success">Booked</StatusBadge>
-        {w.offer ? <span className="text-xs text-muted">{offerLabel(w.offer)}</span> : null}
+        {w.offer ? (
+          <span className="max-w-full text-xs text-muted">
+            <OfferLines offer={w.offer} />
+          </span>
+        ) : null}
       </span>
     );
   }
   if (w.status === "offered" && w.offer) {
     return (
-      <span className="flex flex-col items-start gap-1">
-        <StatusBadge tone="info">Offered · awaiting reply</StatusBadge>
-        <span className="text-xs text-muted">{offerLabel(w.offer)}</span>
+      <span className="flex min-w-0 flex-col items-start gap-1">
+        <StatusBadge tone="info">Offered</StatusBadge>
+        <span className="max-w-full text-xs text-muted">
+          <span className="block">Awaiting reply</span>
+          <OfferLines offer={w.offer} />
+        </span>
       </span>
     );
   }
@@ -581,7 +623,7 @@ function StatusCell({ w }: { w: WaitEntry }) {
 function RowActions({ w, emphasise, onOffer, onAccept, onDecline, onRemove }: { w: WaitEntry; emphasise: boolean; onOffer: () => void; onAccept: () => void; onDecline: () => void; onRemove: () => void }) {
   const p = useSchedule().person(w.patientId);
   return (
-    <span className="flex items-center justify-end gap-2">
+    <span className="flex flex-wrap items-center justify-end gap-2">
       {w.status === "waiting" ? (
         <Button size="sm" variant={emphasise ? "dark" : "secondary"} leading={<CalendarPlus />} onClick={onOffer}>
           Offer slot

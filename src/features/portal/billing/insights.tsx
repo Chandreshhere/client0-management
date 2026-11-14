@@ -7,7 +7,7 @@ import { linear } from "@/components/charts/geometry";
 import { Tip } from "@/components/ui/tooltip";
 import { SectionLabel } from "@/components/viz/cards";
 import type { PortalAppt } from "../appointments/data";
-import { dayLabel, daysFromToday, longDate, nowIso, shortDate } from "../time";
+import { dayLabel, daysFromToday, longDate, nowIso, shortDate, threeLetterMonths } from "../time";
 import {
   BURN,
   CLASS_DAY_NAMES,
@@ -81,7 +81,7 @@ export function PackageBurnDown() {
     d.setUTCDate(1);
     d.setUTCMonth(d.getUTCMonth() + 1);
     while (d.getTime() <= x1) {
-      months.push({ at: d.getTime(), label: new Intl.DateTimeFormat("en-IN", { month: "short", timeZone: "Asia/Kolkata" }).format(d) });
+      months.push({ at: d.getTime(), label: threeLetterMonths(new Intl.DateTimeFormat("en-IN", { month: "short", timeZone: "Asia/Kolkata" }).format(d)) });
       d.setUTCMonth(d.getUTCMonth() + 1);
     }
   }

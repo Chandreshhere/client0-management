@@ -25,6 +25,22 @@ import {
 
 const CHANGE_WORD: Record<string, string> = { "+": "Added", "−": "Removed", "-": "Removed", "~": "Changed" };
 
+const MAIN_MEALS: ReadonlySet<string> = new Set(["breakfast", "lunch", "dinner"]);
+/** Time-of-day position, used on phones where the meal stacks collapse into one column. */
+const TIME_ORDER = ["order-1", "order-2", "order-3", "order-4", "order-5", "order-6"];
+
+function MealList({ slots, label }: { slots: MealSlot[]; label: string }) {
+  return (
+    <ul className="contents sm:flex sm:flex-col sm:gap-2" aria-label={label}>
+      {slots.map((s) => (
+        <li key={s.id} className={cn(TIME_ORDER[MEAL_SLOTS.indexOf(s)], "sm:order-none")}>
+          <SlotCard slot={s} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Nutrition plan (published version) as meal slots in plain words, with the day's totals vs targets. */
 export function MealsPanel() {
   if (!NUTRITION || !MEAL_SLOTS.length) {
@@ -46,17 +62,38 @@ export function MealsPanel() {
       href="/messages?new=1"
       actionLabel={`Message ${author?.name ?? "your nutritionist"} about your plan`}
     >
-      <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-3" aria-label="Meals in your plan">
-          {MEAL_SLOTS.map((s) => (
-            <li key={s.id}>
-              <SlotCard slot={s} />
-            </li>
-          ))}
-        </ul>
-
-        <div className="flex flex-col gap-2">
-          <section aria-labelledby="meal-day" className="rounded-inner bg-surface p-4">
+      {/* Three stacks instead of a row-aligned grid, so no card is stretched to a taller neighbour:
+          small meals + what changed · main meals · day totals, guidance and logs. They come out within a
+          few px of each other. On phones the stacks dissolve (contents) and order-* restores time order. */}
+      <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:items-start xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_340px]">
+        <div className="contents sm:flex sm:flex-col sm:gap-2">
+          <MealList slots={MEAL_SLOTS.filter((s) => !MAIN_MEALS.has(s.id))} label="Small meals and snacks" />
+          {CURRENT_VERSION ? (
+            <section aria-labelledby="meal-changed" className="order-8 rounded-inner bg-surface p-4 sm:order-none">
+              <h3 id="meal-changed" className="flex items-center gap-2 text-sm text-ink">
+                <ClockCounterClockwise size={16} className="text-muted" aria-hidden="true" />
+                What changed in v{CURRENT_VERSION.version}
+              </h3>
+              <p className="mt-1 text-xs text-muted">
+                {longDate(CURRENT_VERSION.at)} · {CURRENT_VERSION.why}
+              </p>
+              <ul className="mt-3 flex flex-col gap-2">
+                {CURRENT_VERSION.changes.map((c) => {
+                  const sym = c.trim().charAt(0);
+                  return (
+                    <li key={c} className="flex items-start gap-2 text-sm text-ink-2">
+                      <span className="mt-0.5 shrink-0 rounded-full bg-sunken px-2 text-[11px] text-ink-2">{CHANGE_WORD[sym] ?? "Note"}</span>
+                      <span>{CHANGE_WORD[sym] ? c.trim().slice(1).trim() : c}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
+        </div>
+        <MealList slots={MEAL_SLOTS.filter((s) => MAIN_MEALS.has(s.id))} label="Main meals" />
+        <div className="contents sm:col-span-2 sm:flex sm:flex-col sm:gap-2 xl:col-span-1">
+          <section aria-labelledby="meal-day" className="order-7 rounded-inner bg-surface p-4 sm:order-none">
             <h3 id="meal-day" className="text-sm text-ink">
               {TODAY_IS_OFFICE ? "Today is an office day" : "Today is a home day"}
             </h3>
@@ -84,32 +121,8 @@ export function MealsPanel() {
             </dl>
             <p className="mt-3 text-[11px] text-muted">Totals add up the foods in this plan (rounded reference values). Targets are from your care team.</p>
           </section>
-
-          {CURRENT_VERSION ? (
-            <section aria-labelledby="meal-changed" className="rounded-inner bg-surface p-4">
-              <h3 id="meal-changed" className="flex items-center gap-2 text-sm text-ink">
-                <ClockCounterClockwise size={16} className="text-muted" aria-hidden="true" />
-                What changed in v{CURRENT_VERSION.version}
-              </h3>
-              <p className="mt-1 text-xs text-muted">
-                {longDate(CURRENT_VERSION.at)} · {CURRENT_VERSION.why}
-              </p>
-              <ul className="mt-3 flex flex-col gap-2">
-                {CURRENT_VERSION.changes.map((c) => {
-                  const sym = c.trim().charAt(0);
-                  return (
-                    <li key={c} className="flex items-start gap-2 text-sm text-ink-2">
-                      <span className="mt-0.5 shrink-0 rounded-full bg-sunken px-2 text-[11px] text-ink-2">{CHANGE_WORD[sym] ?? "Note"}</span>
-                      <span>{CHANGE_WORD[sym] ? c.trim().slice(1).trim() : c}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ) : null}
-
           {NUTRITION_GUIDANCE ? (
-            <section aria-labelledby="meal-doctor" className="rounded-inner bg-surface p-4">
+            <section aria-labelledby="meal-doctor" className="order-9 rounded-inner bg-surface p-4 sm:order-none">
               <h3 id="meal-doctor" className="flex items-center gap-2 text-sm text-ink">
                 <Stethoscope size={16} className="text-muted" aria-hidden="true" />
                 Food guidance from {doctor?.name ?? "your doctor"}
@@ -124,38 +137,38 @@ export function MealsPanel() {
               </p>
             </section>
           ) : null}
+          {MY_FOOD_LOGS.length ? (
+            <section aria-labelledby="meal-logs" className="order-10 rounded-inner bg-surface p-4 sm:order-none">
+              <h3 id="meal-logs" className="text-sm text-ink">
+                Your recent food logs
+              </h3>
+              <ul className="mt-2 flex flex-col divide-y divide-line">
+                {MY_FOOD_LOGS.slice(0, 3).map((l) => {
+                  const slot = MEAL_SLOTS.find((s) => s.id === l.slot);
+                  const day = l.eatenAt.slice(0, 10);
+                  const office = isOfficeDay(day);
+                  const planned = slot ? (office ? slot.office : slot.home) : null;
+                  const late = planned ? minutesOf(formatTime(l.eatenAt)) - minutesOf(planned) : 0;
+                  return (
+                    <li key={l.id} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3">
+                      {/* min width: in the narrow xl column the badge drops below instead of squeezing the text */}
+                      <span className="min-w-[12rem] flex-1">
+                        <span className="block text-sm text-ink">“{l.text}”</span>
+                        <span className="block text-xs text-muted">
+                          {slot?.label} · {dayLabel(l.eatenAt)} {formatTime(l.eatenAt)}
+                          {office ? " · office day" : ""} · {LOG_MATCH_LABEL[l.match].toLowerCase()}
+                          {planned && late > 30 ? ` · ${Math.floor(late / 60) ? `${Math.floor(late / 60)} h ` : ""}${late % 60 ? `${late % 60} min ` : ""}after the planned ${planned}` : ""}
+                        </span>
+                      </span>
+                      <SelfReportedBadge reviewed={l.reviewedBy ?? null} />
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
         </div>
       </div>
-
-      {MY_FOOD_LOGS.length ? (
-        <section aria-labelledby="meal-logs" className="rounded-inner bg-surface p-4">
-          <h3 id="meal-logs" className="text-sm text-ink">
-            Your recent food logs
-          </h3>
-          <ul className="mt-2 flex flex-col divide-y divide-line">
-            {MY_FOOD_LOGS.slice(0, 3).map((l) => {
-              const slot = MEAL_SLOTS.find((s) => s.id === l.slot);
-              const day = l.eatenAt.slice(0, 10);
-              const office = isOfficeDay(day);
-              const planned = slot ? (office ? slot.office : slot.home) : null;
-              const late = planned ? minutesOf(formatTime(l.eatenAt)) - minutesOf(planned) : 0;
-              return (
-                <li key={l.id} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3">
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm text-ink">“{l.text}”</span>
-                    <span className="block text-xs text-muted">
-                      {slot?.label} · {dayLabel(l.eatenAt)} {formatTime(l.eatenAt)}
-                      {office ? " · office day" : ""} · {LOG_MATCH_LABEL[l.match].toLowerCase()}
-                      {planned && late > 30 ? ` · ${Math.floor(late / 60) ? `${Math.floor(late / 60)} h ` : ""}${late % 60 ? `${late % 60} min ` : ""}after the planned ${planned}` : ""}
-                    </span>
-                  </span>
-                  <SelfReportedBadge reviewed={l.reviewedBy ?? null} />
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
     </Panel>
   );
 }
@@ -181,7 +194,7 @@ function SlotCard({ slot }: { slot: MealSlot }) {
   const other = TODAY_IS_OFFICE ? slot.home : slot.office;
   const logged = MY_FOOD_LOGS.find((l) => l.slot === slot.id && l.eatenAt.slice(0, 10) === TODAY_KEY);
   return (
-    <article className="flex h-full flex-col gap-3 rounded-inner bg-surface p-4">
+    <article className="flex flex-col gap-3 rounded-inner bg-surface p-4">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm text-ink">{slot.label}</h3>
@@ -211,7 +224,7 @@ function SlotCard({ slot }: { slot: MealSlot }) {
           </li>
         ))}
       </ul>
-      <footer className={cn("mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-[11px] text-muted")}>
+      <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-[11px] text-muted">
         <span className="tabular">
           ≈ {slot.kcal} kcal · {slot.fibre} g fibre
         </span>

@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { BowlFood, CalendarPlus, PersonSimpleTaiChi, Stethoscope } from "@phosphor-icons/react";
+import { BowlFood, CalendarPlus, Info, PersonSimpleTaiChi, Stethoscope } from "@phosphor-icons/react";
 import { formatTime, pluralize } from "@/lib/format";
 import { staffById } from "@/data/staff";
 import type { Discipline } from "@/data/types";
@@ -9,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { MonthStrip } from "@/components/viz/timeline-scrubber";
 import { PeopleList, ScheduleCard, SectionLabel } from "@/components/viz/cards";
 import { ME } from "../record";
-import { NOW_MS, dayLabel, dayOfMonth, istIso, monthShort, weekdayShort } from "../time";
-import { BOOKING_DAYS, BOOK_SERVICES, UPCOMING, slotsFor, type PortalAppt } from "./data";
+import { NOW_MS, dayLabel, dayOfMonth, istIso, monthKeyShort, monthShort, weekdayShort } from "../time";
+import { BOOKING_DAYS, BOOK_SERVICES, POLICY, UPCOMING, slotsFor, type PortalAppt } from "./data";
 
 const DISCIPLINE_ICON: Record<Discipline, typeof Stethoscope> = { medical: Stethoscope, nutrition: BowlFood, movement: PersonSimpleTaiChi, operations: Stethoscope };
 
@@ -81,10 +82,25 @@ export function BookWidget({ onBook }: { onBook: (serviceId: string, staffId: st
           </ul>
         ) : null}
       </div>
-      <Button variant="dark" className="mt-auto justify-between rounded-[16px]" disabled={!sel || !sel.times.length} trailing={<CalendarPlus />} onClick={() => sel && onBook(sel.service.id, sel.staff.id, day)}>
+      <Button variant="dark" className="justify-between rounded-[16px]" disabled={!sel || !sel.times.length} trailing={<CalendarPlus />} onClick={() => sel && onBook(sel.service.id, sel.staff.id, day)}>
         Request a time
       </Button>
-      <p className="text-[11px] text-muted">Times are requests until the front desk confirms them.</p>
+      <p className="text-[11px] text-muted">Times are requests — the front desk confirms them within 1 working day.</p>
+      {/* The change policy sits under the booking it governs (it used to be a separate card that left the
+          side column short); mt-auto keeps it on the card's bottom edge when the row is taller. */}
+      <div className="mt-auto flex flex-col gap-2 border-t border-line pt-3">
+        <h3 className="flex items-center gap-2 text-sm text-ink">
+          <Info size={16} className="shrink-0 text-muted" aria-hidden="true" />
+          Changing a visit
+        </h3>
+        <ul className="flex list-disc flex-col gap-1 pl-5 text-xs text-ink-2 marker:text-faint">
+          <li>{POLICY.free}</li>
+          <li>{POLICY.late}</li>
+        </ul>
+        <Link href="/messages?new=1" className="w-fit text-xs text-ink underline underline-offset-4 hover:text-primary-ink">
+          Running late? Tell the front desk
+        </Link>
+      </div>
     </section>
   );
 }
@@ -109,7 +125,7 @@ export function CareTeamList({ appts, selected, onSelect }: { appts: PortalAppt[
   );
 }
 
-/** Reference 2 month strip: one pill per month with a bubble per visit (by discipline). */
+/** Reference 2 month strip: one pill per month with a bubble per visit (by discipline). Wraps in the xl side rail. */
 export function VisitMonths({ appts, active, onSelect }: { appts: PortalAppt[]; active: string; onSelect: (key: string) => void }) {
   const months = Array.from(new Set(appts.map((a) => a.start.slice(0, 7)))).sort();
   return (
@@ -118,13 +134,14 @@ export function VisitMonths({ appts, active, onSelect }: { appts: PortalAppt[]; 
         <span id="appt-months">Visits by month</span>
       </SectionLabel>
       <MonthStrip
+        className="xl:flex-wrap"
         active={active}
         onSelect={onSelect}
         months={months.map((k) => {
           const inMonth = appts.filter((a) => a.start.startsWith(k)).sort((a, b) => a.start.localeCompare(b.start));
           return {
             key: k,
-            label: `${new Intl.DateTimeFormat("en-IN", { month: "short", timeZone: "Asia/Kolkata" }).format(new Date(`${k}-15T12:00:00+05:30`))} · ${inMonth.length}`,
+            label: `${monthKeyShort(k)} · ${inMonth.length}`,
             items: inMonth.map((a) => {
               const Icon = DISCIPLINE_ICON[a.discipline];
               return { id: a.id, icon: <Icon />, label: `${a.service} · ${dayLabel(a.start)}` };
